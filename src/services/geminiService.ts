@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { FUNDING_OPPORTUNITIES } from "../constants/mockData";
-import { FundingOpportunity, UserProfile } from "../types/career";
+import { FundingOpportunity, UserProfile, CareerPath } from "../types/career";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -204,5 +204,78 @@ export async function generateCoverLetter(institution: any, userProfile: UserPro
   } catch (error) {
     console.error("Cover Letter Generation Error:", error);
     return "Failed to generate cover letter. Please try again.";
+  }
+}
+
+export async function getTopGlobalCareers(): Promise<CareerPath[]> {
+  const model = "gemini-3.1-pro-preview";
+  
+  const systemInstruction = `
+    You are an AI Career Strategist specializing in the 2026 global job market.
+    Your task is to identify the TOP 10 highest-growth, most impactful global career paths for 2026.
+    
+    Output Format:
+    Return an array of 10 objects following this strict JSON schema:
+    [{
+      "id": "slug-id",
+      "title": "Full Career Title",
+      "description": "Short, punchy 1-2 sentence description",
+      "growth": "high" | "medium" | "stable",
+      "category": "Technology" | "Engineering" | "Healthcare" | "Sustainability" | "Economics" | "Creative",
+      "milestones": [
+        {
+          "ageRange": "e.g. 13-17",
+          "title": "Exploratory Phase",
+          "description": "What to do at this age",
+          "requirements": ["Skill 1", "Skill 2"]
+        },
+        ... (provide 3-4 milestones per path)
+      ]
+    }]
+  `;
+
+  const prompt = "Generate the top 10 global career paths for 2026 accurately following the schema.";
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              title: { type: Type.STRING },
+              description: { type: Type.STRING },
+              growth: { type: Type.STRING, enum: ["high", "medium", "stable"] },
+              category: { type: Type.STRING },
+              milestones: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    ageRange: { type: Type.STRING },
+                    title: { type: Type.STRING },
+                    description: { type: Type.STRING },
+                    requirements: { type: Type.ARRAY, items: { type: Type.STRING } }
+                  },
+                  required: ["ageRange", "title", "description", "requirements"]
+                }
+              }
+            },
+            required: ["id", "title", "description", "growth", "category", "milestones"]
+          }
+        }
+      }
+    });
+
+    return JSON.parse(response.text);
+  } catch (error) {
+    console.error("Fetch Careers Error:", error);
+    return [];
   }
 }

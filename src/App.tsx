@@ -53,7 +53,7 @@ import {
 import { cn } from './lib/utils';
 import { CAREER_PATHS, INSTITUTIONS, STUDY_MATERIALS, FUNDING_OPPORTUNITIES } from './constants/mockData';
 import { CareerPath, UserProfile, Institution, FundingOpportunity } from './types/career';
-import { getCareerAdvice, matchScholarships, getRecommendedCourses } from './services/geminiService';
+import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobalCareers, generateCoverLetter } from './services/geminiService';
 
 // --- Components ---
 
@@ -170,28 +170,29 @@ const HeatmapView = () => {
   );
 };
 
-const Dashboard = ({ profile, onSelectPath }: { profile: UserProfile, onSelectPath: (id: string) => void }) => {
+const Dashboard = ({ profile, onSelectPath, careers, isLoading }: { profile: UserProfile, onSelectPath: (id: string) => void, careers: CareerPath[], isLoading: boolean }) => {
   const [activeCategory, setActiveCategory] = useState<string>("All");
-  const categories = ["All", ...Array.from(new Set(CAREER_PATHS.map(p => p.category)))];
+  const categories = ["All", ...Array.from(new Set(careers.map(p => p.category)))];
   
   const filteredPaths = activeCategory === "All" 
-    ? CAREER_PATHS 
-    : CAREER_PATHS.filter(p => p.category === activeCategory);
+    ? careers 
+    : careers.filter(p => p.category === activeCategory);
 
   return (
     <div className="space-y-8 pb-12">
-      <div className="bg-indigo-600 rounded-2xl p-8 text-white relative overflow-hidden shadow-lg">
-        <div className="relative z-10 max-w-2xl">
+      <div className="max-w-4xl bg-indigo-600 rounded-2xl p-8 text-white relative overflow-hidden shadow-lg">
+        <div className="relative z-10">
           <h2 className="text-3xl font-bold mb-3">Hello, {profile.name}! 👋</h2>
-          <p className="text-indigo-100 text-base mb-6 opacity-90">
+          <p className="text-indigo-100 text-base mb-6 opacity-90 max-w-2xl">
             Expert analysis identifies 2026's high-demand global fields. Based on your profile, explore these specialized trajectories.
           </p>
           <div className="flex gap-3">
             <button 
-              onClick={() => onSelectPath(CAREER_PATHS[0].id)}
-              className="bg-white text-indigo-600 px-6 py-2 rounded-lg font-bold hover:bg-indigo-50 transition-all flex items-center gap-2 text-sm shadow-sm"
+              onClick={() => onSelectPath(careers[0]?.id || "")}
+              disabled={isLoading || careers.length === 0}
+              className="bg-white text-indigo-600 px-6 py-2 rounded-lg font-bold hover:bg-indigo-50 transition-all flex items-center gap-2 text-sm shadow-sm disabled:opacity-50"
             >
-              Start Main Path <ChevronRight size={16} />
+              {isLoading ? "Syncing Careers..." : "Start Main Path"} <ChevronRight size={16} />
             </button>
           </div>
         </div>
@@ -220,54 +221,62 @@ const Dashboard = ({ profile, onSelectPath }: { profile: UserProfile, onSelectPa
           </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredPaths.map((path) => (
-            <motion.div
-              key={path.id}
-              whileHover={{ y: -4, borderColor: 'var(--color-indigo-400)' }}
-              onClick={() => onSelectPath(path.id)}
-              className="bg-white border border-slate-200 rounded-2xl p-6 cursor-pointer shadow-sm transition-all flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex justify-between items-start mb-6">
-                  <div className="p-2.5 bg-indigo-50 rounded-xl text-indigo-600">
-                    <TrendingUp size={20} />
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {[1,2,3,4,5,6].map(i => (
+              <div key={i} className="h-64 bg-white border border-slate-100 rounded-2xl animate-pulse shadow-sm" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {filteredPaths.map((path) => (
+              <motion.div
+                key={path.id}
+                whileHover={{ y: -4, borderColor: '#818cf8' }}
+                onClick={() => onSelectPath(path.id)}
+                className="bg-white border border-slate-200 rounded-2xl p-6 cursor-pointer shadow-sm transition-all flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex justify-between items-start mb-6">
+                    <div className="p-2.5 bg-indigo-50 rounded-xl text-indigo-600">
+                      <TrendingUp size={20} />
+                    </div>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <span className={cn(
+                        "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                        path.growth === "high" ? "bg-emerald-50 text-emerald-700" : "bg-indigo-50 text-indigo-700"
+                      )}>
+                        {path.growth} Growth
+                      </span>
+                      <ShareButton title={path.title} type="career path" id={path.id} />
+                    </div>
                   </div>
-                  <div className="flex flex-col items-end gap-1.5">
-                    <span className={cn(
-                      "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                      path.growth === "high" ? "bg-emerald-50 text-emerald-700" : "bg-indigo-50 text-indigo-700"
-                    )}>
-                      {path.growth} Growth
-                    </span>
-                    <ShareButton title={path.title} type="career path" id={path.id} />
+                  <div className="mb-2">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{path.category}</span>
+                    <h3 className="text-lg font-bold text-slate-800 leading-tight">{path.title}</h3>
+                  </div>
+                  <p className="text-slate-500 text-xs mb-6 line-clamp-2 leading-relaxed">{path.description}</p>
+                </div>
+                
+                <div className="flex items-center gap-4 text-[10px] text-slate-400 border-t border-slate-50 pt-4 font-bold uppercase tracking-widest">
+                  <div className="flex items-center gap-1">
+                    <Clock size={12} /> 2026 Focus
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <BookOpen size={12} /> {path.milestones.length} Stages
                   </div>
                 </div>
-                <div className="mb-2">
-                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{path.category}</span>
-                   <h3 className="text-lg font-bold text-slate-800 leading-tight">{path.title}</h3>
-                </div>
-                <p className="text-slate-500 text-xs mb-6 line-clamp-2 leading-relaxed">{path.description}</p>
-              </div>
-              
-              <div className="flex items-center gap-4 text-[10px] text-slate-400 border-t border-slate-50 pt-4 font-bold uppercase tracking-widest">
-                <div className="flex items-center gap-1">
-                  <Clock size={12} /> 2026 Focus
-                </div>
-                <div className="flex items-center gap-1">
-                  <BookOpen size={12} /> {path.milestones.length} Stages
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-const RoadmapView = ({ profile, pathId }: { profile: UserProfile, pathId?: string }) => {
-  const path = CAREER_PATHS.find(p => p.id === pathId) || CAREER_PATHS[0];
+const RoadmapView = ({ profile, pathId, careers }: { profile: UserProfile, pathId?: string, careers: CareerPath[] }) => {
+  const path = careers.find(p => p.id === pathId) || careers[0];
   
   return (
     <div className="space-y-8 max-w-2xl mx-auto">
@@ -880,8 +889,8 @@ const AIAdvisor = ({ profile }: { profile: UserProfile }) => {
   };
 
   return (
-    <div className="flex flex-col h-[600px] bg-slate-800 rounded-3xl overflow-hidden shadow-2xl border border-slate-700">
-      <div className="p-5 bg-slate-900/50 border-b border-slate-700/50 flex items-center justify-between">
+    <div className="flex flex-col h-full bg-slate-800 rounded-3xl overflow-hidden shadow-2xl border border-slate-700">
+      <div className="p-5 bg-slate-900/50 border-b border-slate-700/50 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-indigo-500 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-500/20">
             ⚡
@@ -928,14 +937,14 @@ const AIAdvisor = ({ profile }: { profile: UserProfile }) => {
         )}
       </div>
 
-      <div className="p-4 bg-slate-900/30 border-t border-slate-700/50 flex gap-2">
+      <div className="p-5 bg-slate-900/40 border-t border-slate-700/50 flex gap-3">
         <input 
           type="text" 
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-          placeholder="Ask a question..."
-          className="flex-1 px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl outline-none focus:border-indigo-500 transition-all text-xs text-white placeholder-slate-500"
+          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          placeholder="Type your message..."
+          className="flex-1 px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-sm text-white placeholder-slate-400 font-medium"
         />
         <button 
           onClick={handleSend}
@@ -949,8 +958,8 @@ const AIAdvisor = ({ profile }: { profile: UserProfile }) => {
   );
 };
 
-const ParentalDashboard = ({ profile, onBack }: { profile: UserProfile, onBack: () => void }) => {
-  const currentPath = CAREER_PATHS.find(p => p.id === profile.targetCareerId) || CAREER_PATHS[0];
+const ParentalDashboard = ({ profile, onBack, careers }: { profile: UserProfile, onBack: () => void, careers: CareerPath[] }) => {
+  const currentPath = careers.find(p => p.id === profile.targetCareerId) || careers[0];
   const progressPercent = Math.min(((profile.completedMilestones.length / currentPath.milestones.length) * 100), 100);
 
   return (
@@ -1507,6 +1516,8 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
 export default function App() {
   const [activeView, setActiveView] = useState<'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap'>('dashboard');
   const [selectedPathId, setSelectedPathId] = useState<string>("ai-engineer");
+  const [careers, setCareers] = useState<CareerPath[]>(CAREER_PATHS);
+  const [isCareersLoading, setIsCareersLoading] = useState(false);
   
   const [profile, setProfile] = useState<UserProfile>({
     name: "Alex",
@@ -1544,6 +1555,22 @@ export default function App() {
     setProfile(prev => ({ ...prev, targetCareerId: id }));
     setActiveView('roadmap');
   };
+
+  useEffect(() => {
+    const fetchCareers = async () => {
+      setIsCareersLoading(true);
+      const dynamicCareers = await getTopGlobalCareers();
+      if (dynamicCareers && dynamicCareers.length > 0) {
+        setCareers(dynamicCareers);
+        // Ensure default selected is valid
+        if (!dynamicCareers.some(p => p.id === selectedPathId)) {
+          setSelectedPathId(dynamicCareers[0].id);
+        }
+      }
+      setIsCareersLoading(false);
+    };
+    fetchCareers();
+  }, []);
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
@@ -1590,7 +1617,7 @@ export default function App() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-slate-500">Target Path</span>
-                <span className="text-xs font-bold text-slate-800">{CAREER_PATHS.find(p => p.id === selectedPathId)?.title.split(' ')[0]}...</span>
+                <span className="text-xs font-bold text-slate-800">{careers.find(p => p.id === selectedPathId)?.title.split(' ')[0]}...</span>
               </div>
             </div>
           </div>
@@ -1612,12 +1639,12 @@ export default function App() {
               transition={{ duration: 0.15 }}
               className="flex-1"
             >
-              {activeView === 'dashboard' && <Dashboard profile={profile} onSelectPath={handleSelectPath} />}
-              {activeView === 'roadmap' && <RoadmapView profile={profile} pathId={selectedPathId} />}
+              {activeView === 'dashboard' && <Dashboard profile={profile} onSelectPath={handleSelectPath} careers={careers} isLoading={isCareersLoading} />}
+              {activeView === 'roadmap' && <RoadmapView profile={profile} pathId={selectedPathId} careers={careers} />}
               {activeView === 'institutions' && <InstitutionsView profile={profile} />}
               {activeView === 'heatmap' && <HeatmapView />}
               {activeView === 'materials' && <MaterialsView />}
-              {activeView === 'parent' && <ParentalDashboard profile={profile} onBack={() => setActiveView('dashboard')} />}
+              {activeView === 'parent' && <ParentalDashboard profile={profile} onBack={() => setActiveView('dashboard')} careers={careers} />}
               {activeView === 'expenses' && <FinancialView profile={profile} setProfile={setProfile} />}
             </motion.div>
           </AnimatePresence>
