@@ -12,6 +12,13 @@ import {
   TrendingUp,
   Clock,
   ExternalLink,
+  Target,
+  Landmark,
+  PiggyBank,
+  Wallet,
+  TrendingDown,
+  BarChart3,
+  PieChart as PieIcon,
   Search,
   Filter,
   PlayCircle,
@@ -21,13 +28,32 @@ import {
   UserCheck,
   Activity,
   ArrowLeft,
-  ShieldCheck
+  ShieldCheck,
+  X,
+  MapPin,
+  Zap,
+  Heart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  Legend
+} from 'recharts';
 import { cn } from './lib/utils';
-import { CAREER_PATHS, INSTITUTIONS, STUDY_MATERIALS } from './constants/mockData';
-import { CareerPath, UserProfile, Institution } from './types/career';
-import { getCareerAdvice } from './services/geminiService';
+import { CAREER_PATHS, INSTITUTIONS, STUDY_MATERIALS, FUNDING_OPPORTUNITIES } from './constants/mockData';
+import { CareerPath, UserProfile, Institution, FundingOpportunity } from './types/career';
+import { getCareerAdvice, matchScholarships, getRecommendedCourses } from './services/geminiService';
 
 // --- Components ---
 
@@ -44,6 +70,8 @@ const NavItem = ({ label, active, onClick }: { label: string, active: boolean, o
     {label}
   </button>
 );
+
+import { InstitutionComparator } from './components/InstitutionComparator';
 
 const SectionTitle = ({ title, subtitle }: { title: string, subtitle?: string }) => (
   <div className="mb-8">
@@ -82,52 +110,149 @@ const ShareButton = ({ title, type, id }: { title: string, type: string, id: str
 
 // --- Pages ---
 
+const HeatmapView = () => {
+  const hubs = [
+    { city: "Silicon Valley", country: "USA", intensity: 100, careers: ["AI Engineer", "Software Dev", "UX Design"] },
+    { city: "Zurich", country: "Switzerland", intensity: 85, careers: ["Robotics", "FinTech", "Biotech"] },
+    { city: "London", country: "UK", intensity: 92, careers: ["Data Analytics", "Law", "Finance"] },
+    { city: "Mumbai", country: "India", intensity: 78, careers: ["Cybersecurity", "Cloud Arch", "Mobile Dev"] },
+    { city: "Bangalore", country: "India", intensity: 95, careers: ["AI Engineer", "Full Stack", "Data Science"] },
+    { city: "Berlin", country: "Germany", intensity: 82, careers: ["Creative Tech", "SaaS", "E-commerce"] }
+  ];
+
+  return (
+    <div className="space-y-8">
+      <SectionTitle title="Career Hub Heatmap" subtitle="Active Geospatial Density: High" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {hubs.map((hub, idx) => (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: idx * 0.05 }}
+            key={hub.city} 
+            className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm hover:shadow-md transition-all relative overflow-hidden group"
+          >
+            <div 
+              className="absolute top-0 right-0 w-32 h-32 -mr-16 -mt-16 rounded-full opacity-10 group-hover:opacity-20 transition-opacity"
+              style={{ background: `radial-gradient(circle, #6366f1 0%, transparent 70%)`, filter: "blur(20px)" }}
+            />
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h4 className="text-xl font-black text-slate-800 tracking-tight">{hub.city}</h4>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{hub.country}</p>
+              </div>
+              <div className="bg-indigo-50 px-2 py-1 rounded-lg">
+                <span className="text-indigo-600 text-xs font-black">{hub.intensity}% Intensity</span>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {hub.careers.map(c => (
+                  <span key={c} className="text-[9px] font-bold px-2 py-0.5 bg-slate-50 border border-slate-100 rounded text-slate-500 uppercase tracking-wider">
+                    {c}
+                  </span>
+                ))}
+              </div>
+              <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${hub.intensity}%` }}
+                  transition={{ duration: 1, delay: 0.5 }}
+                  className="h-full bg-indigo-500 rounded-full"
+                />
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const Dashboard = ({ profile, onSelectPath }: { profile: UserProfile, onSelectPath: (id: string) => void }) => {
+  const [activeCategory, setActiveCategory] = useState<string>("All");
+  const categories = ["All", ...Array.from(new Set(CAREER_PATHS.map(p => p.category)))];
+  
+  const filteredPaths = activeCategory === "All" 
+    ? CAREER_PATHS 
+    : CAREER_PATHS.filter(p => p.category === activeCategory);
+
   return (
     <div className="space-y-8 pb-12">
       <div className="bg-indigo-600 rounded-2xl p-8 text-white relative overflow-hidden shadow-lg">
         <div className="relative z-10 max-w-2xl">
           <h2 className="text-3xl font-bold mb-3">Hello, {profile.name}! 👋</h2>
           <p className="text-indigo-100 text-base mb-6 opacity-90">
-            Based on your interests in {profile.interests.join(", ")}, we've found 3 high-growth career paths for you to explore.
+            Expert analysis identifies 2026's high-demand global fields. Based on your profile, explore these specialized trajectories.
           </p>
-          <button 
-            onClick={() => onSelectPath(CAREER_PATHS[0].id)}
-            className="bg-white text-indigo-600 px-6 py-2 rounded-lg font-bold hover:bg-indigo-50 transition-all flex items-center gap-2 text-sm shadow-sm"
-          >
-            Start Your Journey <ChevronRight size={16} />
-          </button>
+          <div className="flex gap-3">
+            <button 
+              onClick={() => onSelectPath(CAREER_PATHS[0].id)}
+              className="bg-white text-indigo-600 px-6 py-2 rounded-lg font-bold hover:bg-indigo-50 transition-all flex items-center gap-2 text-sm shadow-sm"
+            >
+              Start Main Path <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
       </div>
 
       <div>
-        <SectionTitle title="Recommended Paths" subtitle="Market Analysis: O*NET + BLS Real-time" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {CAREER_PATHS.map((path) => (
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+          <SectionTitle title="Global Career Options" subtitle="Cross-Border Mobility & Tech-Centric Demand" />
+          <div className="relative w-full md:w-auto overflow-hidden">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" size={14} />
+            <select
+              value={activeCategory}
+              onChange={(e) => setActiveCategory(e.target.value)}
+              className="w-full md:w-56 pl-9 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 hover:border-indigo-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none appearance-none cursor-pointer shadow-sm relative z-0"
+            >
+              {categories.map(cat => (
+                <option key={cat} value={cat}>
+                  {cat === "All" ? "All Careers" : cat}
+                </option>
+              ))}
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 z-10">
+              <ChevronRight size={14} className="rotate-90 transition-transform" />
+            </div>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {filteredPaths.map((path) => (
             <motion.div
               key={path.id}
               whileHover={{ y: -4, borderColor: 'var(--color-indigo-400)' }}
               onClick={() => onSelectPath(path.id)}
-              className="bg-white border border-slate-200 rounded-2xl p-6 cursor-pointer shadow-sm transition-all"
+              className="bg-white border border-slate-200 rounded-2xl p-6 cursor-pointer shadow-sm transition-all flex flex-col justify-between"
             >
-              <div className="flex justify-between items-start mb-6">
-                <div className="p-2.5 bg-indigo-50 rounded-xl text-indigo-600">
-                  <TrendingUp size={20} />
+              <div>
+                <div className="flex justify-between items-start mb-6">
+                  <div className="p-2.5 bg-indigo-50 rounded-xl text-indigo-600">
+                    <TrendingUp size={20} />
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5">
+                    <span className={cn(
+                      "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                      path.growth === "high" ? "bg-emerald-50 text-emerald-700" : "bg-indigo-50 text-indigo-700"
+                    )}>
+                      {path.growth} Growth
+                    </span>
+                    <ShareButton title={path.title} type="career path" id={path.id} />
+                  </div>
                 </div>
-                <span className={cn(
-                  "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                  path.growth === "high" ? "bg-emerald-50 text-emerald-700" : "bg-indigo-50 text-indigo-700"
-                )}>
-                  {path.growth} Growth
-                </span>
-                <ShareButton title={path.title} type="career path" id={path.id} />
+                <div className="mb-2">
+                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{path.category}</span>
+                   <h3 className="text-lg font-bold text-slate-800 leading-tight">{path.title}</h3>
+                </div>
+                <p className="text-slate-500 text-xs mb-6 line-clamp-2 leading-relaxed">{path.description}</p>
               </div>
-              <h3 className="text-lg font-bold text-slate-800 mb-2">{path.title}</h3>
-              <p className="text-slate-500 text-xs mb-6 line-clamp-2 leading-relaxed">{path.description}</p>
+              
               <div className="flex items-center gap-4 text-[10px] text-slate-400 border-t border-slate-50 pt-4 font-bold uppercase tracking-widest">
                 <div className="flex items-center gap-1">
-                  <Clock size={12} /> 3-5 Years
+                  <Clock size={12} /> 2026 Focus
                 </div>
                 <div className="flex items-center gap-1">
                   <BookOpen size={12} /> {path.milestones.length} Stages
@@ -188,108 +313,554 @@ const RoadmapView = ({ profile, pathId }: { profile: UserProfile, pathId?: strin
   );
 };
 
-const InstitutionsView = ({ budget }: { budget: number }) => {
+const InstitutionsView = ({ profile }: { profile: UserProfile }) => {
   const [search, setSearch] = useState("");
-  const filtered = INSTITUTIONS.filter(inst => 
-    inst.name.toLowerCase().includes(search.toLowerCase()) || 
-    inst.location.toLowerCase().includes(search.toLowerCase())
-  );
+  const [intlOnly, setIntlOnly] = useState(false);
+  const [maxCost, setMaxCost] = useState(100000);
+  const [selectedProgram, setSelectedProgram] = useState("All Programs");
+  const [radius, setRadius] = useState<"Local" | "National" | "Global">("Global");
+  const [showComparator, setShowComparator] = useState(false);
+  const [compareIds, setCompareIds] = useState<string[]>([]);
+
+  const budget = profile.budget;
+
+  const toggleCompare = (id: string) => {
+    if (compareIds.includes(id)) {
+      setCompareIds(compareIds.filter(i => i !== id));
+    } else if (compareIds.length < 3) {
+      setCompareIds([...compareIds, id]);
+    }
+  };
+
+  // Mock user location for radius filtering simulation
+  const userCountry = "USA"; 
+
+  const programs = ["All Programs", ...Array.from(new Set(INSTITUTIONS.flatMap(inst => inst.programs)))].map(p => ({
+    name: p,
+    count: p === "All Programs" 
+      ? INSTITUTIONS.length 
+      : INSTITUTIONS.filter(i => i.programs.includes(p)).length
+  }));
+
+  const filtered = INSTITUTIONS.filter(inst => {
+    const matchesSearch = inst.name.toLowerCase().includes(search.toLowerCase()) || 
+                         inst.country.toLowerCase().includes(search.toLowerCase()) ||
+                         inst.city.toLowerCase().includes(search.toLowerCase()) ||
+                         inst.programs.some(p => p.toLowerCase().includes(search.toLowerCase()));
+    const matchesIntl = !intlOnly || inst.allowsInternationalStudents;
+    const matchesCost = inst.avgCost <= maxCost;
+    const matchesProgram = selectedProgram === "All Programs" || inst.programs.includes(selectedProgram);
+    
+    // Radius Filter Logic
+    let matchesRadius = true;
+    if (radius === "Local") {
+       matchesRadius = inst.city === "Cambridge" || inst.city === "Stanford"; // Simulated local hub
+    } else if (radius === "National") {
+       matchesRadius = inst.country === userCountry;
+    }
+
+    return matchesSearch && matchesIntl && matchesCost && matchesProgram && matchesRadius;
+  });
+
+  useEffect(() => {
+    // Simulated IP Geolocation Sync
+    const timer = setTimeout(() => {
+      console.log("Geospatial Layer: User detected in London, UK region. Calibrating local hub radius.");
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <SectionTitle title="Educational Ecosystem" subtitle="International Institution Dataset" />
-        <div className="relative w-full md:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input 
-            type="text" 
-            placeholder="Search institutions..." 
-            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all outline-none text-sm"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      <div className="bg-slate-900 text-white p-4 rounded-2xl flex items-center justify-between border border-slate-800 shadow-xl overflow-hidden relative group">
+        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-transparent pointer-events-none" />
+        <div className="flex items-center gap-3 relative z-10">
+          <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-400">
+             <MapPin size={18} className="animate-bounce" />
+          </div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Geospatial Intelligence</p>
+            <p className="text-xs font-medium text-slate-300">Calibration Complete: High-density career hubs identified in <span className="text-white font-bold">your current region</span>.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 relative z-10 hidden md:flex">
+           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
+           <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">Teleport API Sync Active</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {filtered.map(inst => (
-          <div key={inst.id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden group hover:border-indigo-200 shadow-sm hover:shadow-md transition-all">
-            <div className="h-40 relative">
-              <img 
-                src={inst.image} 
-                className="w-full h-full object-cover grayscale-[20%] group-hover:grayscale-0 transition-all duration-700" 
-                referrerPolicy="no-referrer"
+      <div className="space-y-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <SectionTitle title="Educational Ecosystem" subtitle="International Institution Dataset" />
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            <button 
+              onClick={() => setShowComparator(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100"
+            >
+              <TrendingUp size={14} /> Compare Anywhere
+            </button>
+            <button 
+              onClick={() => setIntlOnly(!intlOnly)}
+              className={cn(
+                "whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold border transition-all",
+                intlOnly 
+                  ? "bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-100" 
+                  : "bg-white border-slate-200 text-slate-500 hover:border-emerald-300"
+              )}
+            >
+              Int'l Student Only
+            </button>
+            <div className="relative w-full md:w-64 group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={16} />
+              <input 
+                type="text" 
+                placeholder="Search name, program, or location..." 
+                className="w-full pl-10 pr-10 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all outline-none text-sm shadow-sm"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
               />
-              <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm px-2 py-0.5 rounded text-[10px] font-black shadow-sm">
-                RANK #{inst.ranking}
-              </div>
-            </div>
-            <div className="p-5">
-              <div className="flex justify-between items-start mb-1">
-                <h3 className="text-base font-bold text-slate-800 leading-tight">{inst.name}</h3>
-                <div className="flex flex-col items-end gap-2">
-                  <span className="text-indigo-600 font-black text-sm">${(inst.avgCost/1000).toFixed(0)}K</span>
-                  <ShareButton title={inst.name} type="institution" id={inst.id} />
-                </div>
-              </div>
-              <p className="text-slate-400 text-[11px] font-medium mb-4 flex items-center gap-1">
-                <Map size={12} /> {inst.location} • {inst.type}
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {inst.programs.slice(0, 2).map((p, i) => (
-                  <span key={i} className="text-[9px] uppercase font-bold tracking-widest text-slate-400 bg-slate-50 border border-slate-100 px-2 py-1 rounded">
-                    {p}
-                  </span>
-                ))}
-              </div>
-              {inst.avgCost > budget && (
-                <div className="mt-4 flex items-center gap-2 bg-amber-50 p-2 rounded-xl border border-amber-100">
-                  <div className="h-1 flex-1 bg-amber-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-amber-500 w-[70%]"></div>
-                  </div>
-                   <span className="text-amber-700 text-[9px] font-bold whitespace-nowrap">BUDGET EXCEEDED</span>
-                </div>
+              {search && (
+                <button 
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <X size={14} />
+                </button>
               )}
             </div>
           </div>
-        ))}
+        </div>
+
+        <AnimatePresence>
+          {showComparator && (
+            <InstitutionComparator 
+              onClose={() => setShowComparator(false)} 
+              selectedIds={compareIds}
+              onRemove={(id) => setCompareIds(compareIds.filter(i => i !== id))}
+              onAddMore={() => setShowComparator(false)}
+              profile={profile}
+            />
+          )}
+        </AnimatePresence>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+          <div className="space-y-3">
+             <div className="flex justify-between items-end">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-loose">Geospatial Scope</label>
+             </div>
+             <div className="flex bg-slate-50 p-1 rounded-xl gap-1">
+                {(["Local", "National", "Global"] as const).map(r => (
+                  <button
+                    key={r}
+                    onClick={() => setRadius(r)}
+                    className={cn(
+                      "flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all",
+                      radius === r ? "bg-white text-indigo-600 shadow-sm border border-slate-100" : "text-slate-400 hover:text-slate-600"
+                    )}
+                  >
+                    {r}
+                  </button>
+                ))}
+             </div>
+          </div>
+
+          <div className="space-y-3">
+             <div className="flex justify-between items-end">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-loose">Max Annual Cost</label>
+                <span className="text-sm font-bold text-indigo-600">${maxCost.toLocaleString()}</span>
+             </div>
+             <input 
+               type="range" 
+               min="0" 
+               max="100000" 
+               step="5000"
+               value={maxCost}
+               onChange={(e) => setMaxCost(parseInt(e.target.value))}
+               className="w-full h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+             />
+          </div>
+
+          <div className="space-y-3">
+             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-loose">Academic Program</label>
+             <div className="relative">
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                <select 
+                  value={selectedProgram}
+                  onChange={(e) => setSelectedProgram(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-slate-50 border-none rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none appearance-none cursor-pointer"
+                >
+                  {programs.map(p => (
+                    <option key={p.name} value={p.name}>
+                      {p.name} ({p.count})
+                    </option>
+                  ))}
+                </select>
+                <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 rotate-90 pointer-events-none" size={14} />
+             </div>
+          </div>
+        </div>
       </div>
+
+      {filtered.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {filtered.map(inst => (
+            <div key={inst.id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden group hover:border-indigo-200 shadow-sm hover:shadow-md transition-all">
+              <div className="h-40 relative">
+                <img 
+                  src={inst.image} 
+                  className="w-full h-full object-cover grayscale-[20%] group-hover:grayscale-0 transition-all duration-700" 
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute top-3 right-3 flex gap-2">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); toggleCompare(inst.id); }}
+                    className={cn(
+                      "p-1.5 rounded-lg backdrop-blur-sm transition-all shadow-sm",
+                      compareIds.includes(inst.id) 
+                        ? "bg-indigo-600 text-white" 
+                        : "bg-white/90 text-slate-400 hover:text-indigo-600"
+                    )}
+                    title={compareIds.includes(inst.id) ? "Remove from comparison" : "Add to comparison"}
+                  >
+                    <TrendingUp size={14} />
+                  </button>
+                  <div className="bg-white/95 backdrop-blur-sm px-2 py-0.5 rounded text-[10px] font-black shadow-sm">
+                    RANK #{inst.ranking}
+                  </div>
+                </div>
+              </div>
+              <div className="p-5">
+                <div className="flex justify-between items-start mb-1">
+                  <h3 className="text-base font-bold text-slate-800 leading-tight">{inst.name}</h3>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className="text-indigo-600 font-black text-sm">${(inst.avgCost/1000).toFixed(0)}K</span>
+                    <ShareButton title={inst.name} type="institution" id={inst.id} />
+                  </div>
+                </div>
+                <p className="text-slate-400 text-[11px] font-medium mb-4 flex items-center gap-1">
+                  <MapPin size={12} className="text-indigo-500" /> {inst.city}, {inst.country} • {inst.type}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="text-[9px] uppercase font-bold tracking-widest text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-1 rounded">
+                    COL Index: {inst.costOfLivingIndex}x
+                  </span>
+                  {inst.programs.map((p, i) => (
+                    <span key={i} className="text-[9px] uppercase font-bold tracking-widest text-slate-400 bg-slate-50 border border-slate-100 px-2 py-1 rounded">
+                      {p}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {inst.allowsInternationalStudents && (
+                    <span className="flex items-center gap-1 bg-emerald-50 text-emerald-700 text-[9px] font-bold px-2 py-0.5 rounded-full border border-emerald-100">
+                      <UserCheck size={10} /> Int'l Students Accepted
+                    </span>
+                  )}
+                  <span className={cn(
+                    "flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full border",
+                    inst.visaSupport === "Full" ? "bg-indigo-50 text-indigo-700 border-indigo-100" :
+                    inst.visaSupport === "Partial" ? "bg-amber-50 text-amber-700 border-amber-100" :
+                    "bg-slate-50 text-slate-700 border-slate-100"
+                  )}>
+                    Visa Support: {inst.visaSupport}
+                  </span>
+                </div>
+                
+                <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-100">
+                  <div className="flex flex-col">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-tight">DEADLINE</span>
+                      <span className="text-[11px] font-bold text-rose-600 flex items-center gap-1">
+                        <Clock size={10} /> {inst.applicationDeadline}
+                      </span>
+                  </div>
+                  <a 
+                    href={inst.website} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-[10px] font-black uppercase text-indigo-600 hover:text-indigo-700 transition-colors flex items-center gap-1 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-100"
+                  >
+                    Visit Official Site <ExternalLink size={10} />
+                  </a>
+                </div>
+
+                {inst.avgCost > budget && (
+                  <div className="mt-4 flex items-center gap-2 bg-amber-50 p-2 rounded-xl border border-amber-100">
+                    <div className="h-1 flex-1 bg-amber-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-amber-500 w-[70%]"></div>
+                    </div>
+                    <span className="text-amber-700 text-[9px] font-bold whitespace-nowrap">BUDGET EXCEEDED</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center"
+        >
+          <div className="bg-white w-16 h-16 rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-4 text-slate-300">
+            <Search size={32} />
+          </div>
+          <h3 className="text-lg font-bold text-slate-800 mb-1">No Institutions Found</h3>
+          <p className="text-slate-500 text-sm mb-6 max-w-xs mx-auto">
+            We couldn't find any institutions matching your current search parameters.
+          </p>
+          <button 
+            onClick={() => {
+              setSearch("");
+              setIntlOnly(false);
+              setMaxCost(100000);
+              setSelectedProgram("All Programs");
+            }}
+            className="text-indigo-600 text-xs font-black uppercase tracking-widest hover:underline"
+          >
+            Reset All Filters
+          </button>
+        </motion.div>
+      )}
+
+      {/* Floating Comparison Bar */}
+      <AnimatePresence>
+        {compareIds.length > 0 && (
+          <motion.div 
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40"
+          >
+            <div className="bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-6 border border-slate-800 backdrop-blur-lg">
+               <div className="flex -space-x-3 overflow-hidden">
+                 {compareIds.map(id => {
+                   const inst = INSTITUTIONS.find(i => i.id === id);
+                   return (
+                     <div key={id} className="inline-block h-8 w-8 rounded-full ring-2 ring-slate-900 bg-slate-800 overflow-hidden">
+                       <img src={inst?.image} className="h-full w-full object-cover" />
+                     </div>
+                   );
+                 })}
+               </div>
+               <div className="h-6 w-px bg-slate-700" />
+               <div className="flex flex-col">
+                  <span className="text-[10px] font-black uppercase text-indigo-400 tracking-widest">Comparison Hub</span>
+                  <span className="text-xs font-bold">{compareIds.length} Institutions Selected</span>
+               </div>
+               <div className="flex gap-2">
+                 <button 
+                  onClick={() => setShowComparator(true)}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-900/40"
+                 >
+                   Compare Side-by-Side
+                 </button>
+                 <button 
+                   onClick={() => setCompareIds([])}
+                   className="p-2 hover:bg-white/10 rounded-xl transition-all"
+                 >
+                   <X size={16} className="text-slate-500" />
+                 </button>
+               </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
 
-const MaterialsView = () => (
-  <div className="space-y-8">
-    <SectionTitle title="Learning Hub" subtitle="Micro-learning Sync: Active" />
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      {STUDY_MATERIALS.map(mat => (
-        <div key={mat.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-100 transition-all">
-          <div className="relative aspect-video rounded-xl overflow-hidden mb-4 bg-slate-100 group">
-            <img src={mat.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition-transform" referrerPolicy="no-referrer" />
-            <div className="absolute inset-0 bg-slate-900/10 flex items-center justify-center">
-              <div className="bg-white p-2.5 rounded-full shadow-lg text-indigo-600 group-hover:scale-110 transition-transform">
-                {mat.type === 'video' ? <PlayCircle size={24} /> : <Headphones size={24} />}
-              </div>
-            </div>
-            <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center">
-               <span className="bg-black/60 backdrop-blur-md text-white text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">{mat.type}</span>
-               <span className="bg-black/60 backdrop-blur-md text-white text-[9px] font-bold px-1.5 py-0.5 rounded">{mat.duration}</span>
-            </div>
+const MaterialsView = () => {
+  const [activeType, setActiveType] = useState<string>("All Types");
+  const [activeProvider, setActiveProvider] = useState<string>("All Providers");
+  const [activeRegion, setActiveRegion] = useState<string>("Global");
+  
+  const [selectedSector, setSelectedSector] = useState<string>("Healthcare");
+  const [aiCourses, setAiCourses] = useState<any[]>([]);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+
+  const sectors = ["Healthcare", "Technology", "Finance", "Education", "Creative", "Sustainability"];
+  const types = ["All Types", "video", "audio", "course"];
+  const providers = ["All Providers", ...Array.from(new Set(STUDY_MATERIALS.map(m => m.provider)))];
+  const regions = ["Global", "NA", "EU", "ASIA", "UK"];
+
+  const fetchAiCourses = async (sector: string) => {
+    setIsAiLoading(true);
+    const results = await getRecommendedCourses(sector);
+    setAiCourses(results);
+    setIsAiLoading(false);
+  };
+
+  useEffect(() => {
+    fetchAiCourses(selectedSector);
+  }, [selectedSector]);
+
+  const filtered = STUDY_MATERIALS.filter(mat => {
+    const matchesType = activeType === "All Types" || mat.type === activeType;
+    const matchesProvider = activeProvider === "All Providers" || mat.provider === activeProvider;
+    const matchesRegion = activeRegion === "Global" || mat.region === activeRegion || mat.region === "Global";
+    return matchesType && matchesProvider && matchesRegion;
+  });
+
+  return (
+    <div className="space-y-12">
+      {/* Sector Recommendations Section */}
+      <div className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+          <div>
+            <h3 className="text-xl font-bold text-slate-800">2026 Sector Intelligence</h3>
+            <p className="text-slate-500 text-sm">AI-Curated Top 10 Learning Paths</p>
           </div>
-          <h4 className="font-bold text-slate-800 text-sm mb-1">{mat.title}</h4>
-          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-3">{mat.provider}</p>
-          <a 
-            href={mat.url} 
-            target="_blank" 
-            className="flex items-center justify-between text-indigo-600 text-[10px] font-black uppercase tracking-widest hover:underline pt-2 border-t border-slate-50"
-          >
-            Access Now <ExternalLink size={10} />
-          </a>
+          <div className="flex bg-slate-100 p-1.5 rounded-2xl gap-1 overflow-x-auto max-w-full no-scrollbar">
+            {sectors.map(s => (
+              <button
+                key={s}
+                onClick={() => setSelectedSector(s)}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap",
+                  selectedSector === s ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                )}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
         </div>
-      ))}
+
+        {isAiLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            {[...Array(10)].map((_, i) => (
+              <div key={i} className="bg-slate-50 border border-slate-100 h-32 rounded-2xl animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <AnimatePresence mode="popLayout">
+              {aiCourses.map((course, i) => (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  key={course.title + i}
+                  className="bg-slate-50 hover:bg-indigo-50/30 border border-slate-200 hover:border-indigo-100 rounded-2xl p-4 transition-all group"
+                >
+                  <div className="flex flex-col h-full justify-between gap-3">
+                    <div>
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest">{course.duration}</span>
+                        <div className="bg-slate-900 text-white p-1 rounded-md">
+                          <Zap size={8} />
+                        </div>
+                      </div>
+                      <h5 className="text-[10px] font-bold text-slate-800 leading-tight mb-1 line-clamp-2">{course.title}</h5>
+                      <p className="text-[9px] text-slate-400 font-medium mb-2">{course.provider}</p>
+                    </div>
+                    <div className="pt-2 border-t border-slate-200/50">
+                       <p className="text-[8px] text-slate-500 italic leading-tight line-clamp-2">"{course.reason}"</p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        <SectionTitle title="Standard Learning Library" subtitle="Micro-learning Sync: Active" />
+        <div className="flex flex-wrap gap-4 w-full md:w-auto items-center">
+          <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
+             {regions.map(r => (
+               <button
+                 key={r}
+                 onClick={() => setActiveRegion(r)}
+                 className={cn(
+                   "px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all",
+                   activeRegion === r ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                 )}
+               >
+                 {r}
+               </button>
+             ))}
+          </div>
+          <div className="w-[1px] h-6 bg-slate-200" />
+          <div className="relative">
+             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+             <select 
+               value={activeType}
+               onChange={(e) => setActiveType(e.target.value)}
+               className="pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none appearance-none cursor-pointer"
+             >
+               {types.map(t => <option key={t} value={t} className="capitalize">{t}</option>)}
+             </select>
+             <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 rotate-90 pointer-events-none" size={12} />
+          </div>
+
+          <div className="relative">
+             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                <BookOpen size={14} />
+             </div>
+             <select 
+               value={activeProvider}
+               onChange={(e) => setActiveProvider(e.target.value)}
+               className="pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none appearance-none cursor-pointer min-w-[160px]"
+             >
+               {providers.map(p => <option key={p} value={p}>{p}</option>)}
+             </select>
+             <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 rotate-90 pointer-events-none" size={12} />
+          </div>
+        </div>
+      </div>
+
+      {filtered.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {filtered.map(mat => (
+            <motion.div 
+              layout
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              key={mat.id} 
+              className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-100 transition-all group"
+            >
+              <div className="relative aspect-video rounded-xl overflow-hidden mb-4 bg-slate-100">
+                <img src={mat.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" referrerPolicy="no-referrer" />
+                <div className="absolute inset-0 bg-slate-900/10 flex items-center justify-center">
+                  <div className="bg-white p-2.5 rounded-full shadow-lg text-indigo-600 group-hover:scale-110 transition-transform">
+                    {mat.type === 'video' ? <PlayCircle size={24} /> : mat.type === 'audio' ? <Headphones size={24} /> : <BookOpen size={24} />}
+                  </div>
+                </div>
+                <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center">
+                   <span className="bg-black/60 backdrop-blur-md text-white text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">{mat.type}</span>
+                   <span className="bg-black/60 backdrop-blur-md text-white text-[9px] font-bold px-1.5 py-0.5 rounded">{mat.duration}</span>
+                </div>
+              </div>
+              <h4 className="font-bold text-slate-800 text-sm mb-1 line-clamp-1">{mat.title}</h4>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-4">{mat.provider}</p>
+              <a 
+                href={mat.url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center justify-between text-indigo-600 text-[10px] font-black uppercase tracking-widest hover:underline pt-3 border-t border-slate-50"
+              >
+                Access Module <ExternalLink size={10} />
+              </a>
+            </motion.div>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center">
+           <p className="text-slate-400 text-sm font-bold">No materials match your filter criteria.</p>
+           <button 
+             onClick={() => { setActiveType("All Types"); setActiveProvider("All Providers"); }}
+             className="mt-4 text-indigo-600 text-[10px] font-black uppercase tracking-widest hover:underline"
+           >
+             Clear Filters
+           </button>
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 const AIAdvisor = ({ profile }: { profile: UserProfile }) => {
   const [messages, setMessages] = useState<{role: 'user' | 'ai', text: string}[]>([]);
@@ -478,10 +1049,463 @@ const ParentalDashboard = ({ profile, onBack }: { profile: UserProfile, onBack: 
   );
 };
 
+const FundingOpportunitiesView = ({ profile }: { profile: UserProfile }) => {
+  const [opportunities, setOpportunities] = useState<FundingOpportunity[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [showSavedOnly, setShowSavedOnly] = useState(false);
+
+  const performMatch = async () => {
+    setIsLoading(true);
+    const matches = await matchScholarships(profile);
+    setOpportunities(matches);
+    setIsLoading(false);
+  };
+
+  const toggleSave = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSavedIds(prev => 
+      prev.includes(id) ? prev.filter(savedId => savedId !== id) : [...prev, id]
+    );
+  };
+
+  useEffect(() => {
+    performMatch();
+  }, [profile.targetCareerId]);
+
+  const filteredOpportunities = opportunities.filter(opp => {
+    const matchesSearch = opp.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                         opp.provider.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSaved = !showSavedOnly || savedIds.includes(opp.id);
+    return matchesSearch && matchesSaved;
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h4 className="text-sm font-bold text-slate-800">Consolidated Funding Opportunities</h4>
+          <p className="text-[10px] text-slate-400 font-medium">Manage your financial portfolio and bookmarked aids.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          <button 
+            onClick={() => setShowSavedOnly(!showSavedOnly)}
+            className={cn(
+              "flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border",
+              showSavedOnly 
+                ? "bg-rose-50 border-rose-100 text-rose-600" 
+                : "bg-white border-slate-200 text-slate-400 hover:text-slate-600"
+            )}
+          >
+            <Heart size={12} fill={showSavedOnly ? "currentColor" : "none"} />
+            {showSavedOnly ? `Saved (${savedIds.length})` : "View Saved"}
+          </button>
+          <div className="relative flex-1 md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+            <input 
+              type="text"
+              placeholder="Search by name or provider..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none shadow-sm"
+            />
+          </div>
+          <button 
+            onClick={performMatch}
+            disabled={isLoading}
+            className="text-[10px] font-black uppercase text-indigo-600 hover:underline flex items-center gap-1 disabled:opacity-50 shrink-0"
+          >
+            <Activity size={12} /> {isLoading ? "Syncing..." : "Sync Funding Hub"}
+          </button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="bg-white border border-slate-100 rounded-3xl p-6 space-y-4 animate-pulse">
+               <div className="h-4 w-3/4 bg-slate-100 rounded" />
+               <div className="h-3 w-1/2 bg-slate-50 rounded" />
+               <div className="h-12 bg-slate-50 rounded-2xl" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <>
+          {opportunities.length === 0 ? (
+            <div className="bg-white border-2 border-dashed border-slate-100 rounded-3xl p-12 text-center">
+              <div className="bg-indigo-50 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 text-indigo-500">
+                <Landmark size={32} />
+              </div>
+              <h3 className="text-lg font-bold text-slate-800 mb-1">Financial Intelligence Dormant</h3>
+              <p className="text-slate-500 text-sm mb-6 max-w-xs mx-auto">Click 'Sync Funding Hub' to run the AI matching engine based on your profile and academic standing.</p>
+            </div>
+          ) : filteredOpportunities.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center">
+              <div className="bg-slate-50 w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4 text-slate-400">
+                <Search size={24} />
+              </div>
+              <h3 className="text-sm font-bold text-slate-800 mb-1">No matches found</h3>
+              <p className="text-slate-500 text-xs mb-6 max-w-xs mx-auto">
+                {showSavedOnly ? "You haven't bookmarked any opportunities matching these criteria yet." : "Try adjusting your search query to find relevant funding."}
+              </p>
+              {showSavedOnly && (
+                <button 
+                  onClick={() => setShowSavedOnly(false)}
+                  className="text-indigo-600 text-xs font-black uppercase tracking-widest hover:underline"
+                >
+                  Show all opportunities
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <AnimatePresence mode="popLayout">
+                {filteredOpportunities.map((opp, i) => (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: i * 0.1 }}
+                    key={opp.id}
+                    className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all relative overflow-hidden group flex flex-col justify-between"
+                  >
+                    {/* ... rest of the card content ... */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={cn(
+                          "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest",
+                          opp.type === 'Scholarship' ? "bg-emerald-50 text-emerald-600" : 
+                          opp.type === 'Grant' ? "bg-amber-50 text-amber-600" : "bg-indigo-50 text-indigo-600"
+                        )}>
+                          {opp.type}
+                        </span>
+                        <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest truncate">{opp.category}</span>
+                      </div>
+                      <h5 className="font-bold text-slate-800 leading-tight line-clamp-2 min-h-[2.5rem]">{opp.name}</h5>
+                      <p className="text-[9px] text-slate-400 font-medium truncate">Provider: {opp.provider}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <button 
+                        onClick={(e) => toggleSave(opp.id, e)}
+                        className={cn(
+                          "p-2 rounded-xl border transition-all",
+                          savedIds.includes(opp.id) 
+                            ? "bg-rose-50 border-rose-100 text-rose-500 shadow-sm shadow-rose-100" 
+                            : "bg-white border-slate-100 text-slate-300 hover:text-slate-400 hover:border-slate-200"
+                        )}
+                      >
+                        <Heart size={14} fill={savedIds.includes(opp.id) ? "currentColor" : "none"} />
+                      </button>
+                      <div className={cn(
+                        "px-2 py-1 rounded-lg text-[10px] font-black flex flex-col items-center justify-center min-w-[3.5rem]",
+                        (opp.matchScore || 0) > 80 ? "bg-emerald-50 text-emerald-600" : "bg-indigo-50 text-indigo-600"
+                      )}>
+                        <span>{opp.matchScore || 0}%</span>
+                        <span className="text-[7px] uppercase -mt-0.5 opacity-60">Match</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between py-2 bg-slate-50/50 rounded-xl px-3 border border-slate-100">
+                    <div>
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">Value</p>
+                      <p className="text-sm font-black text-slate-800">${opp.amount.toLocaleString()}</p>
+                    </div>
+                    <div className="w-px h-6 bg-slate-200" />
+                    <div className="text-right">
+                      <p className="text-[8px] font-black text-rose-400 uppercase tracking-tighter mb-0.5 text-center">Deadline</p>
+                      <p className="text-[10px] font-bold text-rose-900">{new Date(opp.deadline).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+
+                  {opp.terms && (
+                    <div className="p-2 bg-amber-50 rounded-lg border border-amber-100">
+                       <p className="text-[9px] font-bold text-amber-700 uppercase flex items-center gap-1">
+                         <Target size={10} /> {opp.terms}
+                       </p>
+                    </div>
+                  )}
+
+                  {opp.matchReasoning && (
+                    <p className="text-[10px] text-slate-500 italic leading-snug line-clamp-2 px-1">
+                      "{opp.matchReasoning}"
+                    </p>
+                  )}
+                </div>
+
+                <button className="mt-4 w-full py-1.5 bg-slate-900 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all flex items-center justify-center gap-2">
+                  <ExternalLink size={12} /> Apply now
+                </button>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
+    </>
+  )}
+</div>
+  );
+};
+
+const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfile: React.Dispatch<React.SetStateAction<UserProfile>> }) => {
+  const [activeTab, setActiveTab] = useState<'planner' | 'projections' | 'calculator' | 'funding'>('planner');
+  
+  const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+  const expenseData = profile.financialProfile?.monthlyExpenses.map(e => ({ name: e.category, value: e.amount })) || [];
+  const totalMonthlyExpenses = profile.financialProfile?.monthlyExpenses.reduce((acc, curr) => acc + curr.amount, 0) || 0;
+  
+  // Retirement Projection Mock Logic
+  const currentAge = profile.age;
+  const retireAge = 65;
+  const yearsToRetire = retireAge - currentAge;
+  const monthlySavings = (profile.financialProfile?.annualIncome || 0) / 12 - totalMonthlyExpenses;
+  const projectedReturn = 0.07; // 7% annual
+  
+  const projectionData = Array.from({ length: yearsToRetire / 5 + 1 }, (_, i) => {
+    const years = i * 5;
+    const futureValue = (profile.financialProfile?.currentSavings || 0) * Math.pow(1 + projectedReturn, years) +
+      (monthlySavings * 12 * (Math.pow(1 + projectedReturn, years) - 1)) / projectedReturn;
+    return {
+      year: currentAge + years,
+      balance: Math.round(futureValue)
+    };
+  });
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <SectionTitle title="Financial Intelligence" subtitle="System Integrated Capital Planning" />
+        <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+           {['planner', 'projections', 'calculator', 'funding'].map((t) => (
+             <button
+               key={t}
+               onClick={() => setActiveTab(t as any)}
+               className={cn(
+                 "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                 activeTab === t ? "bg-indigo-600 text-white shadow-md shadow-indigo-100" : "text-slate-500 hover:text-indigo-600"
+               )}
+             >
+               {t}
+             </button>
+           ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Left: Interactive Controls / Forms */}
+        <div className="lg:col-span-4 space-y-6">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-2">
+              <Wallet size={16} className="text-indigo-600" /> Income & Savings
+            </h4>
+            <div className="space-y-6">
+               <div className="space-y-2">
+                 <label className="text-[10px] font-bold text-slate-400 uppercase">Annual Income</label>
+                 <div className="flex items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                   <span className="text-slate-400 font-mono italic">$</span>
+                   <input 
+                     type="number" 
+                     className="bg-transparent outline-none w-full font-bold text-slate-800 text-sm"
+                     value={profile.financialProfile?.annualIncome}
+                     onChange={(e) => setProfile(prev => ({ 
+                       ...prev, 
+                       financialProfile: { ...prev.financialProfile!, annualIncome: parseInt(e.target.value) || 0 } 
+                     }))}
+                   />
+                 </div>
+               </div>
+               <div className="space-y-2">
+                 <label className="text-[10px] font-bold text-slate-400 uppercase">Total Savings</label>
+                 <div className="flex items-center gap-2 bg-indigo-50/30 p-3 rounded-xl border border-indigo-100/50">
+                   <PiggyBank size={14} className="text-indigo-600" />
+                   <input 
+                     type="number" 
+                     className="bg-transparent outline-none w-full font-bold text-indigo-900 text-sm"
+                     value={profile.financialProfile?.currentSavings}
+                     onChange={(e) => setProfile(prev => ({ 
+                       ...prev, 
+                       financialProfile: { ...prev.financialProfile!, currentSavings: parseInt(e.target.value) || 0 } 
+                     }))}
+                   />
+                 </div>
+               </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-900 rounded-3xl p-6 text-white text-xs leading-relaxed shadow-xl border border-slate-800">
+             <div className="flex items-center gap-2 text-indigo-400 font-black uppercase tracking-widest mb-4">
+                <ShieldCheck size={14} /> AI Recommendation
+             </div>
+             <p className="text-slate-300 italic mb-4">
+               "Based on your savings rate and {profile.targetCareerId} trajectory, you have a 
+               <span className="text-white font-bold"> matched contribution</span> opportunity. 
+               Move $1,200 of current savings into an index-linked tax-shelter."
+             </p>
+             <button className="w-full py-2 bg-indigo-600 rounded-xl font-black uppercase tracking-widest text-[9px] hover:bg-indigo-500 transition-all">
+                Execute AI Portfolio Sync
+             </button>
+          </div>
+        </div>
+
+        {/* Right: Visualization Viewport */}
+        <div className="lg:col-span-8 flex flex-col gap-6">
+          {activeTab === 'planner' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col">
+                <h4 className="text-sm font-bold text-slate-800 mb-6 flex justify-between items-center">
+                  Expense Distribution <span className="text-xs text-slate-400 font-mono tracking-tighter">${totalMonthlyExpenses}/mo</span>
+                </h4>
+                <div className="flex-1 min-h-[250px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={expenseData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {expenseData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                   {expenseData.map((e, idx) => (
+                     <div key={idx} className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
+                        <span className="text-[10px] font-bold text-slate-500 truncate uppercase">{e.name}</span>
+                     </div>
+                   ))}
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                <h4 className="text-sm font-bold text-slate-800 mb-6">Financial Goals</h4>
+                <div className="space-y-6">
+                  {profile.financialProfile?.goals.map(goal => (
+                    <div key={goal.id} className="space-y-2">
+                       <div className="flex justify-between items-center">
+                         <span className="text-xs font-bold text-slate-800">{goal.title}</span>
+                         <span className="text-[10px] font-mono font-bold text-indigo-600">${goal.current.toLocaleString()} / ${goal.target.toLocaleString()}</span>
+                       </div>
+                       <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                         <motion.div 
+                           initial={{ width: 0 }}
+                           animate={{ width: `${(goal.current / goal.target) * 100}%` }}
+                           className="h-full bg-indigo-500" 
+                         />
+                       </div>
+                       <p className="text-[9px] text-slate-400 font-bold uppercase">Deadline: {goal.deadline}</p>
+                    </div>
+                  ))}
+                  <button className="w-full py-2 border border-dashed border-slate-200 rounded-xl text-[10px] font-bold text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2">
+                    <Target size={12} /> Add New Financial Goal
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'projections' && (
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex-1 flex flex-col">
+               <h4 className="text-sm font-bold text-slate-800 mb-6">Retirement & Net Worth Projection</h4>
+               <div className="flex-1 min-h-[350px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={projectionData}>
+                      <defs>
+                        <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
+                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="year" fontSize={10} axisLine={false} tickLine={false} tick={{fill: '#94a3b8'}} />
+                      <YAxis fontSize={10} axisLine={false} tickLine={false} tick={{fill: '#94a3b8'}} tickFormatter={(v) => `$${(v/1000)}k`} />
+                      <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }} />
+                      <Area type="monotone" dataKey="balance" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorBalance)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+               </div>
+               <div className="mt-6 p-4 bg-indigo-50 rounded-2xl flex items-center justify-between border border-indigo-100">
+                  <div>
+                    <p className="text-[10px] font-black text-indigo-400 uppercase">Est. Nest Egg at 65</p>
+                    <p className="text-2xl font-black text-indigo-900">${projectionData[projectionData.length-1].balance.toLocaleString()}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-tighter">Growth Formula</p>
+                    <p className="text-xs font-bold text-indigo-700">7% Ann. Returns + ${monthlySavings.toLocaleString()}/mo Savings</p>
+                  </div>
+               </div>
+            </div>
+          )}
+
+          {activeTab === 'calculator' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
+               <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                  <h4 className="text-sm font-bold text-slate-800 mb-6 flex items-center gap-2">
+                     <TrendingDown size={16} className="text-rose-500" /> Debt Paydown Tracker
+                  </h4>
+                  <div className="space-y-4">
+                    {profile.financialProfile?.debt.map(d => (
+                      <div key={d.id} className="p-4 bg-rose-50/30 rounded-2xl border border-rose-100">
+                         <div className="flex justify-between items-start mb-2">
+                            <span className="text-xs font-bold text-rose-900 uppercase tracking-tighter">{d.title}</span>
+                            <span className="text-[10px] font-black text-rose-600 bg-white px-2 py-0.5 rounded shadow-sm">{d.interestRate}% APR</span>
+                         </div>
+                         <div className="flex justify-between items-end">
+                            <p className="text-lg font-black text-rose-900">${d.amount.toLocaleString()}</p>
+                            <button className="text-[9px] font-black uppercase text-rose-500 hover:underline">One-time payment</button>
+                         </div>
+                      </div>
+                    ))}
+                    <button className="w-full py-3 border border-dashed border-rose-200 rounded-2xl text-[10px] font-bold text-rose-400 hover:text-rose-600 hover:bg-rose-50 transition-all">
+                      Add New Debt Account
+                    </button>
+                  </div>
+               </div>
+
+               <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-800 mb-6 flex items-center gap-2">
+                       <Landmark size={16} className="text-indigo-600" /> Savings Yield Forecast
+                    </h4>
+                    <p className="text-xs text-slate-500 mb-6 leading-relaxed">
+                      Your current liquid savings are generating <span className="font-bold text-indigo-600">4.1% APY</span> in a high-yield account.
+                    </p>
+                    <div className="space-y-3">
+                       {['HYS Account', 'Direct CD', 'T-Bills (3-mo)'].map((acc, i) => (
+                         <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+                           <span className="text-[10px] font-bold capitalize text-slate-700">{acc}</span>
+                           <span className="text-[10px] font-black text-indigo-600 tracking-widest">{4.1 + i*0.2}%</span>
+                         </div>
+                       ))}
+                    </div>
+                  </div>
+                  <p className="mt-6 text-[9px] text-slate-400 font-mono italic">Market Data via Fed-Sync 2026 API.</p>
+               </div>
+            </div>
+          )}
+
+          {activeTab === 'funding' && <FundingOpportunitiesView profile={profile} />}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- Main App ---
 
 export default function App() {
-  const [activeView, setActiveView] = useState<'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap'>('dashboard');
   const [selectedPathId, setSelectedPathId] = useState<string>("ai-engineer");
   
   const [profile, setProfile] = useState<UserProfile>({
@@ -491,7 +1515,28 @@ export default function App() {
     interests: ["Coding", "Robotics", "Space"],
     budget: 50000,
     targetCareerId: "ai-engineer",
-    completedMilestones: ["ai-engineer-0"] // Pre-populated progress
+    completedMilestones: ["ai-engineer-0"], // Pre-populated progress
+    academicPerformance: {
+      gpa: 3.9,
+      achievements: ["Winner of Regional Robotics Hackathon", "Gold Medal in Creative Tech Math Olympiad"]
+    },
+    financialProfile: {
+      annualIncome: 65000,
+      currentSavings: 12000,
+      monthlyExpenses: [
+        { category: "Housing", amount: 1200 },
+        { category: "Food", amount: 400 },
+        { category: "Transport", amount: 300 },
+        { category: "Entertainment", amount: 200 }
+      ],
+      goals: [
+        { id: '1', title: 'Emergency Fund', target: 20000, current: 8000, deadline: '2026-12-31' },
+        { id: '2', title: 'Tech Equipment', target: 5000, current: 2000, deadline: '2026-06-30' }
+      ],
+      debt: [
+        { id: '1', title: 'Student Loan', amount: 15000, interestRate: 4.5 }
+      ]
+    }
   });
 
   const handleSelectPath = (id: string) => {
@@ -512,6 +1557,7 @@ export default function App() {
           <NavItem label="Dashboard" active={activeView === 'dashboard'} onClick={() => setActiveView('dashboard')} />
           <NavItem label="Personalized Roadmap" active={activeView === 'roadmap'} onClick={() => setActiveView('roadmap')} />
           <NavItem label="Institutions" active={activeView === 'institutions'} onClick={() => setActiveView('institutions')} />
+          <NavItem label="Career Hubs" active={activeView === 'heatmap'} onClick={() => setActiveView('heatmap')} />
           <NavItem label="Learning Hub" active={activeView === 'materials'} onClick={() => setActiveView('materials')} />
           <NavItem label="Financial Simulator" active={activeView === 'expenses'} onClick={() => setActiveView('expenses')} />
         </nav>
@@ -568,44 +1614,11 @@ export default function App() {
             >
               {activeView === 'dashboard' && <Dashboard profile={profile} onSelectPath={handleSelectPath} />}
               {activeView === 'roadmap' && <RoadmapView profile={profile} pathId={selectedPathId} />}
-              {activeView === 'institutions' && <InstitutionsView budget={profile.budget} />}
+              {activeView === 'institutions' && <InstitutionsView profile={profile} />}
+              {activeView === 'heatmap' && <HeatmapView />}
               {activeView === 'materials' && <MaterialsView />}
               {activeView === 'parent' && <ParentalDashboard profile={profile} onBack={() => setActiveView('dashboard')} />}
-              {activeView === 'expenses' && (
-                <div className="space-y-8">
-                  <SectionTitle title="Financial Simulator" subtitle="ROI Analysis Engine" />
-                  <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-8">
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-end">
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Adjust Annual Budget</label>
-                        <span className="text-2xl font-black text-indigo-600 font-mono">${profile.budget.toLocaleString()}</span>
-                      </div>
-                      <input 
-                        type="range" 
-                        min="5000" 
-                        max="150000" 
-                        step="5000"
-                        value={profile.budget}
-                        onChange={(e) => setProfile({...profile, budget: parseInt(e.target.value)})}
-                        className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                      />
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                       <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-4">
-                          <span className="text-[10px] font-black text-indigo-400 uppercase">Top Efficiency Region</span>
-                          <p className="mt-1 text-sm font-bold text-indigo-900">Switzerland / ETH</p>
-                          <p className="text-[10px] text-indigo-600 font-medium">92% Cost-to-Value Ratio</p>
-                       </div>
-                       <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
-                          <span className="text-[10px] font-black text-emerald-400 uppercase">Scholarship Fit</span>
-                          <p className="mt-1 text-sm font-bold text-emerald-900">High Match Rate</p>
-                          <p className="text-[10px] text-emerald-600 font-medium">12 Active Programs found</p>
-                       </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {activeView === 'expenses' && <FinancialView profile={profile} setProfile={setProfile} />}
             </motion.div>
           </AnimatePresence>
         </section>
