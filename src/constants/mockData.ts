@@ -289,7 +289,9 @@ export const STUDY_MATERIALS: StudyMaterial[] = [
     duration: "45 mins",
     thumbnail: "https://picsum.photos/seed/ai1/400/225",
     region: "NA",
-    language: "English"
+    language: "English",
+    rating: 4.8,
+    skillLevel: "Beginner"
   },
   {
     id: "ai-audio-1",
@@ -301,7 +303,9 @@ export const STUDY_MATERIALS: StudyMaterial[] = [
     duration: "15 mins",
     thumbnail: "https://picsum.photos/seed/ai2/400/225",
     region: "Global",
-    language: "English"
+    language: "English",
+    rating: 4.9,
+    skillLevel: "Intermediate"
   },
   {
     id: "ux-course-1",
@@ -313,7 +317,9 @@ export const STUDY_MATERIALS: StudyMaterial[] = [
     duration: "12 hours",
     thumbnail: "https://picsum.photos/seed/ux1/400/225",
     region: "Global",
-    language: "English"
+    language: "English",
+    rating: 4.7,
+    skillLevel: "Advanced"
   },
   {
     id: "green-energy-video-1",
@@ -325,7 +331,9 @@ export const STUDY_MATERIALS: StudyMaterial[] = [
     duration: "28 mins",
     thumbnail: "https://picsum.photos/seed/green1/400/225",
     region: "Global",
-    language: "English"
+    language: "English",
+    rating: 4.6,
+    skillLevel: "Beginner"
   },
   {
     id: "finance-audio-1",
@@ -337,6 +345,8 @@ export const STUDY_MATERIALS: StudyMaterial[] = [
     duration: "35 mins",
     thumbnail: "https://picsum.photos/seed/fin1/400/225",
     region: "Global",
-    language: "English"
+    language: "English",
+    rating: 4.8,
+    skillLevel: "Intermediate"
   }
 ];

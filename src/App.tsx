@@ -32,7 +32,13 @@ import {
   X,
   MapPin,
   Zap,
-  Heart
+  Heart,
+  Paperclip,
+  Linkedin,
+  FileText,
+  Link,
+  Star,
+  Globe
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -54,6 +60,9 @@ import { cn } from './lib/utils';
 import { CAREER_PATHS, INSTITUTIONS, STUDY_MATERIALS, FUNDING_OPPORTUNITIES } from './constants/mockData';
 import { CareerPath, UserProfile, Institution, FundingOpportunity } from './types/career';
 import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobalCareers, generateCoverLetter } from './services/geminiService';
+import ReactMarkdown from 'react-markdown';
+
+import { LandingPage } from './components/LandingPage';
 
 // --- Components ---
 
@@ -683,6 +692,9 @@ const MaterialsView = () => {
   const [activeType, setActiveType] = useState<string>("All Types");
   const [activeProvider, setActiveProvider] = useState<string>("All Providers");
   const [activeRegion, setActiveRegion] = useState<string>("Global");
+  const [activeLanguage, setActiveLanguage] = useState<string>("All Languages");
+  const [activeRating, setActiveRating] = useState<number>(0);
+  const [activeSkillLevel, setActiveSkillLevel] = useState<string>("All Levels");
   
   const [selectedSector, setSelectedSector] = useState<string>("Healthcare");
   const [aiCourses, setAiCourses] = useState<any[]>([]);
@@ -692,6 +704,9 @@ const MaterialsView = () => {
   const types = ["All Types", "video", "audio", "course"];
   const providers = ["All Providers", ...Array.from(new Set(STUDY_MATERIALS.map(m => m.provider)))];
   const regions = ["Global", "NA", "EU", "ASIA", "UK"];
+  const languages = ["All Languages", ...Array.from(new Set(STUDY_MATERIALS.map(m => m.language)))];
+  const ratings = [0, 4, 4.5];
+  const skillLevels = ["All Levels", "Beginner", "Intermediate", "Advanced"];
 
   const fetchAiCourses = async (sector: string) => {
     setIsAiLoading(true);
@@ -708,7 +723,10 @@ const MaterialsView = () => {
     const matchesType = activeType === "All Types" || mat.type === activeType;
     const matchesProvider = activeProvider === "All Providers" || mat.provider === activeProvider;
     const matchesRegion = activeRegion === "Global" || mat.region === activeRegion || mat.region === "Global";
-    return matchesType && matchesProvider && matchesRegion;
+    const matchesLanguage = activeLanguage === "All Languages" || mat.language === activeLanguage;
+    const matchesRating = mat.rating >= activeRating;
+    const matchesSkill = activeSkillLevel === "All Levels" || mat.skillLevel === activeSkillLevel;
+    return matchesType && matchesProvider && matchesRegion && matchesLanguage && matchesRating && matchesSkill;
   });
 
   return (
@@ -812,9 +830,47 @@ const MaterialsView = () => {
              <select 
                value={activeProvider}
                onChange={(e) => setActiveProvider(e.target.value)}
-               className="pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none appearance-none cursor-pointer min-w-[160px]"
+               className="pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none appearance-none cursor-pointer min-w-[140px]"
              >
                {providers.map(p => <option key={p} value={p}>{p}</option>)}
+             </select>
+             <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 rotate-90 pointer-events-none" size={12} />
+          </div>
+
+          <div className="relative">
+             <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+             <select 
+               value={activeLanguage}
+               onChange={(e) => setActiveLanguage(e.target.value)}
+               className="pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none appearance-none cursor-pointer min-w-[130px]"
+             >
+               {languages.map(l => <option key={l} value={l}>{l}</option>)}
+             </select>
+             <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 rotate-90 pointer-events-none" size={12} />
+          </div>
+
+          <div className="relative">
+             <Star className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+             <select 
+               value={activeRating}
+               onChange={(e) => setActiveRating(Number(e.target.value))}
+               className="pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none appearance-none cursor-pointer min-w-[110px]"
+             >
+               <option value={0}>All Ratings</option>
+               <option value={4}>4.0+ Stars</option>
+               <option value={4.5}>4.5+ Stars</option>
+             </select>
+             <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 rotate-90 pointer-events-none" size={12} />
+          </div>
+
+          <div className="relative">
+             <Target className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+             <select 
+               value={activeSkillLevel}
+               onChange={(e) => setActiveSkillLevel(e.target.value)}
+               className="pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none appearance-none cursor-pointer min-w-[120px]"
+             >
+               {skillLevels.map(s => <option key={s} value={s}>{s}</option>)}
              </select>
              <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 rotate-90 pointer-events-none" size={12} />
           </div>
@@ -844,7 +900,20 @@ const MaterialsView = () => {
                 </div>
               </div>
               <h4 className="font-bold text-slate-800 text-sm mb-1 line-clamp-1">{mat.title}</h4>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-4">{mat.provider}</p>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-2">{mat.provider}</p>
+              
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                <div className="flex items-center gap-1 px-2 py-0.5 bg-slate-50 border border-slate-100 rounded-lg text-[8px] font-black uppercase text-slate-500">
+                  <Star size={8} className="text-amber-500 fill-amber-500" /> {mat.rating}
+                </div>
+                <div className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 rounded-lg text-[8px] font-black uppercase text-indigo-600">
+                  {mat.skillLevel}
+                </div>
+                <div className="px-2 py-0.5 bg-slate-50 border border-slate-100 rounded-lg text-[8px] font-black uppercase text-slate-400">
+                  {mat.language}
+                </div>
+              </div>
+
               <a 
                 href={mat.url} 
                 target="_blank" 
@@ -860,7 +929,14 @@ const MaterialsView = () => {
         <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center">
            <p className="text-slate-400 text-sm font-bold">No materials match your filter criteria.</p>
            <button 
-             onClick={() => { setActiveType("All Types"); setActiveProvider("All Providers"); }}
+             onClick={() => { 
+                setActiveType("All Types"); 
+                setActiveProvider("All Providers"); 
+                setActiveRegion("Global");
+                setActiveLanguage("All Languages");
+                setActiveRating(0);
+                setActiveSkillLevel("All Levels");
+             }}
              className="mt-4 text-indigo-600 text-[10px] font-black uppercase tracking-widest hover:underline"
            >
              Clear Filters
@@ -875,17 +951,46 @@ const AIAdvisor = ({ profile }: { profile: UserProfile }) => {
   const [messages, setMessages] = useState<{role: 'user' | 'ai', text: string}[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [resumeText, setResumeText] = useState<string | null>(null);
+  const [linkedinUrl, setLinkedinUrl] = useState<string>("");
+  const [showContextOptions, setShowContextOptions] = useState(false);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type === "text/plain") {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        setResumeText(text);
+        alert("Resume successfully synced to Spark.E context.");
+      };
+      reader.readAsText(file);
+    } else {
+      // Simulate PDF/Doc parsing for prototype
+      setResumeText(`[SIMULATED PARSE: ${file.name}] Candidate shows strong background in STEM and leadership.`);
+      alert(`Spark.E has indexed your file: ${file.name}. Data will be used for personalization.`);
+    }
+    setShowContextOptions(false);
+  };
 
   const handleSend = async () => {
-    if (!input.trim()) return;
-    const userMsg = input;
+    if (!input.trim() && !linkedinUrl && !resumeText) return;
+    
+    const userMsg = input || (linkedinUrl ? `Analyze my LinkedIn profile: ${linkedinUrl}` : "Analyze my uploaded resume for career advice.");
     setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
     setInput("");
     setIsLoading(true);
 
-    const advice = await getCareerAdvice(userMsg, profile);
+    const advice = await getCareerAdvice(userMsg, profile, {
+      resume: resumeText || undefined,
+      linkedIn: linkedinUrl || undefined
+    });
+    
     setMessages(prev => [...prev, { role: 'ai', text: advice || "Error fetching advice." }]);
     setIsLoading(false);
+    setShowContextOptions(false);
   };
 
   return (
@@ -900,58 +1005,179 @@ const AIAdvisor = ({ profile }: { profile: UserProfile }) => {
             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">AI Career Mentor</span>
           </div>
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex gap-2">
+           {resumeText && <FileText size={14} className="text-emerald-400" />}
+           {linkedinUrl && <Linkedin size={14} className="text-blue-400" />}
            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-           <div className="w-1.5 h-1.5 rounded-full bg-slate-700"></div>
-           <div className="w-1.5 h-1.5 rounded-full bg-slate-700"></div>
         </div>
       </div>
       
       <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide">
         {messages.length === 0 && (
-          <div className="text-center py-20 px-10">
+          <div className="text-center py-12 px-6">
             <div className="bg-indigo-500/10 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-6 text-indigo-400">
                <MessageSquare size={32} />
             </div>
             <h4 className="text-lg font-bold text-white mb-2">Connect with your future</h4>
-            <p className="text-slate-500 text-xs leading-relaxed max-w-xs mx-auto">"What is the ROI of a Data Science degree in Canada?" or "What's the best first step for an AI enthusiast?"</p>
+            <p className="text-slate-500 text-[10px] leading-relaxed max-w-xs mx-auto uppercase tracking-widest font-black mb-6">Personalize with your data</p>
+            
+            <div className="grid grid-cols-2 gap-3 mb-6">
+               <label className="flex flex-col items-center gap-2 p-4 bg-slate-700/30 border border-dashed border-slate-600 rounded-2xl cursor-pointer hover:bg-slate-700/50 transition-all group">
+                  <Paperclip size={20} className="text-slate-400 group-hover:text-indigo-400" />
+                  <span className="text-[9px] font-black text-slate-400 uppercase">Upload Resume</span>
+                  <input type="file" className="hidden" onChange={handleFileUpload} accept=".txt,.pdf,.doc,.docx" />
+               </label>
+               <button 
+                onClick={() => setShowContextOptions(!showContextOptions)}
+                className="flex flex-col items-center gap-2 p-4 bg-slate-700/30 border border-dashed border-slate-600 rounded-2xl hover:bg-slate-700/50 transition-all group"
+               >
+                  <Linkedin size={20} className="text-slate-400 group-hover:text-blue-400" />
+                  <span className="text-[9px] font-black text-slate-400 uppercase">Link LinkedIn</span>
+               </button>
+            </div>
           </div>
         )}
+        
+        {showContextOptions && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="p-4 bg-slate-900/80 rounded-2xl border border-indigo-500/30 mb-4"
+          >
+            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">LinkedIn Integration</p>
+            <div className="flex gap-2">
+              <input 
+                type="url" 
+                value={linkedinUrl}
+                onChange={(e) => setLinkedinUrl(e.target.value)}
+                placeholder="https://linkedin.com/in/username"
+                className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-[10px] text-white outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+              <button 
+                onClick={() => setShowContextOptions(false)}
+                className="bg-indigo-600 px-3 rounded-xl text-[9px] font-black uppercase text-white"
+              >
+                Sync
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {messages.map((m, i) => (
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             key={i} 
             className={cn(
-              "max-w-[85%] p-4 rounded-2xl text-xs leading-relaxed",
-              m.role === 'user' ? "bg-indigo-600 text-white ml-auto font-medium" : "bg-slate-700/50 text-slate-100"
+              "max-w-[95%] p-5 rounded-3xl text-[11px] leading-relaxed",
+              m.role === 'user' ? "bg-indigo-600 text-white ml-auto font-medium shadow-lg" : "bg-slate-700/50 text-slate-100 border border-slate-600/50"
             )}
           >
-            {m.text}
+            <div className="prose prose-invert prose-xs max-w-none">
+              <ReactMarkdown
+                components={{
+                  code({ node, inline, className, children, ...props }: any) {
+                    const match = /language-(\w+)/.exec(className || '');
+                    if (!inline && match && match[1] === 'career-data') {
+                      try {
+                        const careerData = JSON.parse(String(children).replace(/\n/g, ''));
+                        if (careerData.type === 'growth') {
+                          return (
+                            <div className="my-4 p-4 bg-slate-900 rounded-2xl border border-slate-700 shadow-xl overflow-hidden">
+                              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <TrendingUp size={12} /> Market Growth Projection
+                              </p>
+                              <div className="h-40 w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <AreaChart data={careerData.data}>
+                                    <defs>
+                                      <linearGradient id="careerGrowth" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
+                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                                      </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
+                                    <XAxis dataKey="year" fontSize={8} axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
+                                    <YAxis fontSize={8} axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
+                                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', fontSize: '10px' }} />
+                                    <Area type="monotone" dataKey="val" stroke="#818cf8" strokeWidth={2} fillOpacity={1} fill="url(#careerGrowth)" />
+                                  </AreaChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </div>
+                          );
+                        }
+                        if (careerData.type === 'skills') {
+                          return (
+                            <div className="my-4 p-4 bg-slate-900 rounded-2xl border border-slate-700 shadow-xl">
+                              <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <Target size={12} /> Competency Matrix
+                              </p>
+                              <div className="space-y-3">
+                                {careerData.data.map((skill: any, idx: number) => (
+                                  <div key={idx} className="space-y-1">
+                                    <div className="flex justify-between text-[9px] font-bold text-slate-400">
+                                      <span>{skill.name}</span>
+                                      <span>{skill.val}%</span>
+                                    </div>
+                                    <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                                      <motion.div 
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${skill.val}%` }}
+                                        className="h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]" 
+                                      />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+                      } catch (e) {
+                        return <code className={className} {...props}>{children}</code>;
+                      }
+                    }
+                    return <code className={className} {...props}>{children}</code>;
+                  }
+                }}
+              >
+                {m.text}
+              </ReactMarkdown>
+            </div>
           </motion.div>
         ))}
         {isLoading && (
-          <div className="bg-slate-700/30 text-slate-500 p-4 rounded-2xl text-[10px] font-bold tracking-widest uppercase animate-pulse w-fit">
-            Spark.E is analyzing...
+          <div className="flex items-center gap-3 bg-slate-700/30 p-4 rounded-2xl w-fit">
+            <div className="flex gap-1">
+              <motion.div animate={{ scale: [1, 1.5, 1] }} transition={{ repeat: Infinity, duration: 1 }} className="w-1 h-1 bg-indigo-500 rounded-full" />
+              <motion.div animate={{ scale: [1, 1.5, 1] }} transition={{ repeat: Infinity, duration: 1, delay: 0.2 }} className="w-1 h-1 bg-indigo-500 rounded-full" />
+              <motion.div animate={{ scale: [1, 1.5, 1] }} transition={{ repeat: Infinity, duration: 1, delay: 0.4 }} className="w-1 h-1 bg-indigo-500 rounded-full" />
+            </div>
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest tracking-tighter">Analyzing Context</span>
           </div>
         )}
       </div>
 
-      <div className="p-5 bg-slate-900/40 border-t border-slate-700/50 flex gap-3">
+      <div className="p-5 bg-slate-900/40 border-t border-slate-700/50 flex gap-3 relative">
+        {resumeText && (
+          <div className="absolute -top-8 left-5 bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded text-[8px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1">
+            <Check size={8} /> Resume Synced
+          </div>
+        )}
         <input 
           type="text" 
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder="Type your message..."
-          className="flex-1 px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-sm text-white placeholder-slate-400 font-medium"
+          placeholder="Ask Spark.E anything..."
+          className="flex-1 px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-xs text-white placeholder-slate-500 font-medium"
         />
         <button 
           onClick={handleSend}
           disabled={isLoading}
-          className="bg-indigo-600 text-white px-4 rounded-xl hover:bg-indigo-500 transition-all disabled:opacity-50 font-bold text-xs"
+          className="bg-indigo-600 text-white px-4 rounded-xl hover:bg-indigo-500 transition-all disabled:opacity-50 font-bold text-[10px] uppercase tracking-widest"
         >
-          SEND
+          {isLoading ? "..." : "Send"}
         </button>
       </div>
     </div>
@@ -1514,7 +1740,7 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
 // --- Main App ---
 
 export default function App() {
-  const [activeView, setActiveView] = useState<'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap'>('dashboard');
+  const [activeView, setActiveView] = useState<'landing' | 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap'>('landing');
   const [selectedPathId, setSelectedPathId] = useState<string>("ai-engineer");
   const [careers, setCareers] = useState<CareerPath[]>(CAREER_PATHS);
   const [isCareersLoading, setIsCareersLoading] = useState(false);
@@ -1571,6 +1797,10 @@ export default function App() {
     };
     fetchCareers();
   }, []);
+
+  if (activeView === 'landing') {
+    return <LandingPage onStart={() => setActiveView('dashboard')} />;
+  }
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">

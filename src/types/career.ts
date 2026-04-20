@@ -47,6 +47,8 @@ export interface StudyMaterial {
   thumbnail: string;
   region: "Global" | "NA" | "EU" | "ASIA" | "UK";
   language: string;
+  rating: number;
+  skillLevel: "Beginner" | "Intermediate" | "Advanced";
 }
 
 export interface FundingOpportunity {

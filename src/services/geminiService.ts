@@ -114,7 +114,7 @@ export async function getRecommendedCourses(sector: string): Promise<any[]> {
   }
 }
 
-export async function getCareerAdvice(prompt: string, userContext: any) {
+export async function getCareerAdvice(prompt: string, userContext: any, additionalContext: { resume?: string, linkedIn?: string } = {}) {
   const model = "gemini-3.1-pro-preview";
   
   const systemInstruction = `
@@ -126,6 +126,8 @@ export async function getCareerAdvice(prompt: string, userContext: any) {
     - Education: ${userContext.education}
     - Primary Interests: ${userContext.interests.join(", ")}
     - Financial Buffer: $${userContext.budget}
+    ${additionalContext.resume ? `- Resume Content: ${additionalContext.resume}` : ""}
+    ${additionalContext.linkedIn ? `- LinkedIn Profile: ${additionalContext.linkedIn}` : ""}
 
     Core Advice Parameters:
     1. PATH ANALYSIS: Identify 2-3 emerging high-growth career paths (2026 focus) that intersect with the user's interests.
@@ -137,7 +139,15 @@ export async function getCareerAdvice(prompt: string, userContext: any) {
     Tone & Formatting:
     - Supportive, authoritative, and futuristic.
     - Use Markdown: Headings, bold text for key terms, and bullet points.
-    - Keep responses around 250-300 words.
+    - INTERACTIVE BLOCKS: If you mention growth percentages or skill distributions, wrap a JSON data structure in a code block with the language label \`career-data\`.
+      Examples:
+      \`\`\`career-data
+      { "type": "growth", "data": [ { "year": 2024, "val": 10 }, { "year": 2026, "val": 25 } ] }
+      \`\`\`
+      \`\`\`career-data
+      { "type": "skills", "data": [ { "name": "Python", "val": 90 }, { "name": "AI Ops", "val": 75 } ] }
+      \`\`\`
+    - Keep responses around 300-400 words.
   `;
 
   try {
@@ -204,6 +214,57 @@ export async function generateCoverLetter(institution: any, userProfile: UserPro
   } catch (error) {
     console.error("Cover Letter Generation Error:", error);
     return "Failed to generate cover letter. Please try again.";
+  }
+}
+
+export async function getLatestCareerNews(): Promise<{ career: string, country: string, aiTech: string }[]> {
+  const model = "gemini-3.1-pro-preview";
+  
+  const systemInstruction = `
+    You are an AI News Curator for the year 2026.
+    Your task is to provide 5 brief "News Flash" items regarding:
+    1. The most in-demand career in a specific country right now.
+    2. A brand-new, cutting-edge AI technology that was just launched.
+    
+    Output Format:
+    Return an array of 5 objects:
+    [
+      { "career": "Cyber-Physical Auditor", "country": "Singapore", "aiTech": "Neural-Link GPT-X" },
+      ...
+    ]
+  `;
+
+  const prompt = "Generate 5 latest global career and AI technology news flashes for 2026.";
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              career: { type: Type.STRING },
+              country: { type: Type.STRING },
+              aiTech: { type: Type.STRING }
+            },
+            required: ["career", "country", "aiTech"]
+          }
+        }
+      }
+    });
+
+    return JSON.parse(response.text);
+  } catch (error) {
+    console.error("News Flash Error:", error);
+    return [
+      { career: "AI Systems Architect", country: "United States", aiTech: "Gemini 4.0 Ultra" },
+      { career: "Renewable Energy Specialist", country: "Germany", aiTech: "Fusion-Core Logic" }
+    ];
   }
 }
 
