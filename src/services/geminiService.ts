@@ -61,8 +61,12 @@ export async function matchScholarships(profile: UserProfile): Promise<FundingOp
       }
       return opp;
     }).sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
-  } catch (error) {
-    console.error("Funding Matching Error:", error);
+  } catch (error: any) {
+    if (error?.message?.includes("429") || error?.status === "RESOURCE_EXHAUSTED") {
+      console.warn("Gemini Quota Exceeded (429) for Funding. Using static database.");
+    } else {
+      console.error("Funding Matching Error:", error);
+    }
     return FUNDING_OPPORTUNITIES;
   }
 }
@@ -77,11 +81,22 @@ export async function getRecommendedCourses(sector: string): Promise<any[]> {
     Output Format:
     Return an array of objects:
     [
-      { "title": "Course Title", "provider": "University/Platform", "type": "course", "duration": "e.g. 12 weeks", "reason": "Why this is top-tier in 2026" }
+      { 
+        "title": "Course Title", 
+        "provider": "University/Platform", 
+        "type": "course", 
+        "duration": "e.g. 12 weeks", 
+        "reason": "Why this is top-tier in 2026",
+        "institution": {
+          "name": "Full Institution Name",
+          "globalRanking": "e.g. top 50",
+          "location": "City, Country"
+        }
+      }
     ]
   `;
 
-  const prompt = `Recommend the top 10 courses for the following sector: ${sector}`;
+  const prompt = `Recommend the top 10 courses for the following sector: ${sector}. For each course, provide brief intelligence about the providing institution.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -99,7 +114,15 @@ export async function getRecommendedCourses(sector: string): Promise<any[]> {
               provider: { type: Type.STRING },
               type: { type: Type.STRING },
               duration: { type: Type.STRING },
-              reason: { type: Type.STRING }
+              reason: { type: Type.STRING },
+              institution: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  globalRanking: { type: Type.STRING },
+                  location: { type: Type.STRING }
+                }
+              }
             },
             required: ["title", "provider", "type", "duration", "reason"]
           }
@@ -108,8 +131,12 @@ export async function getRecommendedCourses(sector: string): Promise<any[]> {
     });
 
     return JSON.parse(response.text);
-  } catch (error) {
-    console.error("Course Recommendation Error:", error);
+  } catch (error: any) {
+    if (error?.message?.includes("429") || error?.status === "RESOURCE_EXHAUSTED") {
+      console.warn("Gemini Quota Exceeded (429) for Courses. Using empty cache.");
+    } else {
+      console.error("Course Recommendation Error:", error);
+    }
     return [];
   }
 }
@@ -161,7 +188,11 @@ export async function getCareerAdvice(prompt: string, userContext: any, addition
     });
 
     return response.text;
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message?.includes("429") || error?.status === "RESOURCE_EXHAUSTED") {
+      console.warn("Gemini Quota Exceeded (429) for Advisor. Providing cached logic.");
+      return "I'm currently operating in offline mode due to high demand. Based on your profile, I recommend focusing on core AI literacy and specialized certifications from the 'Learning Hub' section until my full reasoning engine is back online.";
+    }
     console.error("Gemini API Error:", error);
     return "I'm sorry, I'm having trouble connecting to my knowledge base right now. Please try again in a moment.";
   }
@@ -211,13 +242,17 @@ export async function generateCoverLetter(institution: any, userProfile: UserPro
     });
 
     return response.text;
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message?.includes("429") || error?.status === "RESOURCE_EXHAUSTED") {
+      console.warn("Gemini Quota Exceeded (429) for Documents. Using template.");
+      return "Failed to generate custom document due to capacity limits. Please try again later.";
+    }
     console.error("Cover Letter Generation Error:", error);
     return "Failed to generate cover letter. Please try again.";
   }
 }
 
-export async function getLatestCareerNews(): Promise<{ career: string, country: string, aiTech: string }[]> {
+export async function getLatestCareerNews(preferredCountry?: string): Promise<{ career: string, country: string, aiTech: string }[]> {
   const model = "gemini-3.1-pro-preview";
   
   const systemInstruction = `
@@ -234,7 +269,9 @@ export async function getLatestCareerNews(): Promise<{ career: string, country: 
     ]
   `;
 
-  const prompt = "Generate 5 latest global career and AI technology news flashes for 2026.";
+  const prompt = preferredCountry 
+    ? `Generate 5 latest global career and AI technology news flashes for 2026. Prioritize news for ${preferredCountry}.`
+    : "Generate 5 latest global career and AI technology news flashes for 2026.";
 
   try {
     const response = await ai.models.generateContent({
@@ -259,11 +296,18 @@ export async function getLatestCareerNews(): Promise<{ career: string, country: 
     });
 
     return JSON.parse(response.text);
-  } catch (error) {
-    console.error("News Flash Error:", error);
+  } catch (error: any) {
+    if (error?.message?.includes("429") || error?.status === "RESOURCE_EXHAUSTED") {
+      console.warn("Gemini Quota Exceeded (429) for News Flash. Using localized intelligence fallback.");
+    } else {
+      console.error("News Flash Error:", error);
+    }
     return [
       { career: "AI Systems Architect", country: "United States", aiTech: "Gemini 4.0 Ultra" },
-      { career: "Renewable Energy Specialist", country: "Germany", aiTech: "Fusion-Core Logic" }
+      { career: "Renewable Energy Specialist", country: "Germany", aiTech: "Fusion-Core Logic" },
+      { career: "Quantum Cryptographer", country: "Singapore", aiTech: "Neural-Link GPT-X" },
+      { career: "Cyber-Physical Auditor", country: "South Korea", aiTech: "Blue-Sense V2" },
+      { career: "Clean-Tech Engineer", country: "Norway", aiTech: "Solaris Prime" }
     ];
   }
 }
@@ -282,7 +326,10 @@ export async function getTopGlobalCareers(): Promise<CareerPath[]> {
       "title": "Full Career Title",
       "description": "Short, punchy 1-2 sentence description",
       "growth": "high" | "medium" | "stable",
-      "category": "Technology" | "Engineering" | "Healthcare" | "Sustainability" | "Economics" | "Creative",
+      "category": "Technology & Digital" | "Healthcare & Life Sciences" | "Business, Finance & Management" | "Engineering, Science & Environment" | "Arts, Design & Media" | "Education, Law & Public Service" | "Skilled Trades & Technical Services",
+      "subCategory": "The specific field (e.g. Data & AI, Clinical Practice, etc.)",
+      "workType": "Remote" | "On-site" | "Hybrid" | "Mobile",
+      "tags": ["AI Integration", "Green Transition", "Remote Economy", "Global Demand"],
       "milestones": [
         {
           "ageRange": "e.g. 13-17",
@@ -295,7 +342,7 @@ export async function getTopGlobalCareers(): Promise<CareerPath[]> {
     }]
   `;
 
-  const prompt = "Generate the top 10 global career paths for 2026 accurately following the schema.";
+  const prompt = "Generate the top 10 global career paths for 2026 accurately following the schema. Ensure categories match the defined industry sectors.";
 
   try {
     const response = await ai.models.generateContent({
@@ -314,6 +361,9 @@ export async function getTopGlobalCareers(): Promise<CareerPath[]> {
               description: { type: Type.STRING },
               growth: { type: Type.STRING, enum: ["high", "medium", "stable"] },
               category: { type: Type.STRING },
+              subCategory: { type: Type.STRING },
+              workType: { type: Type.STRING, enum: ["Remote", "On-site", "Hybrid", "Mobile"] },
+              tags: { type: Type.ARRAY, items: { type: Type.STRING } },
               milestones: {
                 type: Type.ARRAY,
                 items: {
@@ -335,8 +385,13 @@ export async function getTopGlobalCareers(): Promise<CareerPath[]> {
     });
 
     return JSON.parse(response.text);
-  } catch (error) {
-    console.error("Fetch Careers Error:", error);
+  } catch (error: any) {
+    if (error?.message?.includes("429") || error?.status === "RESOURCE_EXHAUSTED") {
+      console.warn("Gemini Quota Exceeded (429) for Careers. Using static dataset fallback.");
+    } else {
+      console.error("Fetch Careers Error:", error);
+    }
+    // Fallback to locally defined mock data if API fails or quota hit
     return [];
   }
 }

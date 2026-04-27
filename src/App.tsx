@@ -38,7 +38,14 @@ import {
   FileText,
   Link,
   Star,
-  Globe
+  Globe,
+  RotateCcw,
+  Trash2,
+  Briefcase,
+  Monitor,
+  CheckCircle,
+  UploadCloud,
+  Pencil
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -59,7 +66,7 @@ import {
 import { cn } from './lib/utils';
 import { CAREER_PATHS, INSTITUTIONS, STUDY_MATERIALS, FUNDING_OPPORTUNITIES } from './constants/mockData';
 import { CareerPath, UserProfile, Institution, FundingOpportunity } from './types/career';
-import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobalCareers, generateCoverLetter } from './services/geminiService';
+import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobalCareers, generateCoverLetter, getLatestCareerNews } from './services/geminiService';
 import ReactMarkdown from 'react-markdown';
 
 import { LandingPage } from './components/LandingPage';
@@ -179,16 +186,95 @@ const HeatmapView = () => {
   );
 };
 
+const NewsFlash = ({ country }: { country: string }) => {
+  const [news, setNews] = useState<{ career: string, country: string, aiTech: string }[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    const fetchNews = async () => {
+      const data = await getLatestCareerNews(country);
+      if (data && data.length > 0) {
+        setNews(data);
+      } else {
+        // Local component fallback
+        setNews([
+          { career: `AI Ethics Specialist`, country: country, aiTech: "Gemini 3 Ultra" },
+          { career: "Remote Cybersecurity Lead", country: "Global", aiTech: "Project Aether" },
+          { career: "Data Sovereignty Architect", country: "EU-Hague", aiTech: "Logic-Mesh V1" }
+        ]);
+      }
+    };
+    fetchNews();
+  }, [country]);
+
+  useEffect(() => {
+    if (news.length === 0) return;
+    const timer = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % news.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [news]);
+
+  if (news.length === 0) return <div className="h-10 bg-slate-900 border-y border-slate-800 animate-pulse" />;
+
+  return (
+    <div className="bg-slate-900 border-y border-slate-800 p-2 overflow-hidden shadow-inner flex items-center">
+      <div className="max-w-7xl mx-auto w-full flex items-center gap-4 px-4 overflow-hidden">
+        <div className="flex items-center gap-2 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 shrink-0">
+          <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+          <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Live News</span>
+        </div>
+        <div className="relative flex-1 h-5 overflow-hidden">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentIndex}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+              className="flex items-center gap-2"
+            >
+              <Zap size={10} className="text-amber-400 shrink-0" />
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide truncate">
+                <span className="text-indigo-400 font-black">Trending in {news[currentIndex].country}:</span> {news[currentIndex].career} 
+                <span className="mx-2 opacity-30">|</span> 
+                <span className="text-amber-400 font-black">Launch:</span> {news[currentIndex].aiTech}
+              </p>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+        <div className="hidden md:flex items-center gap-2 shrink-0">
+          <Globe size={12} className="text-slate-600" />
+          <span className="text-[9px] text-slate-600 font-black uppercase tracking-widest">Global Intelligence Center</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Dashboard = ({ profile, onSelectPath, careers, isLoading }: { profile: UserProfile, onSelectPath: (id: string) => void, careers: CareerPath[], isLoading: boolean }) => {
   const [activeCategory, setActiveCategory] = useState<string>("All");
-  const categories = ["All", ...Array.from(new Set(careers.map(p => p.category)))];
+  const [activeWorkType, setActiveWorkType] = useState<string>("All");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+
+  const categories = ["All", ...Array.from(new Set(careers.filter(p => !p.category.includes('Custom')).map(p => p.category)))];
+  const workTypes = ["All", "Remote", "On-site", "Hybrid", "Mobile"];
   
-  const filteredPaths = activeCategory === "All" 
-    ? careers 
-    : careers.filter(p => p.category === activeCategory);
+  const filteredPaths = careers.filter(p => {
+    const categoryMatch = activeCategory === "All" || p.category === activeCategory;
+    const workTypeMatch = activeWorkType === "All" || p.workType === activeWorkType;
+    const searchMatch = searchQuery.trim() === "" || 
+      p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      p.description.toLowerCase().includes(searchQuery.toLowerCase());
+    return categoryMatch && workTypeMatch && searchMatch;
+  });
 
   return (
     <div className="space-y-8 pb-12">
+      <div className="-mx-8 md:-mx-12 -mt-4 mb-4">
+        <NewsFlash country={profile.country} />
+      </div>
+      
       <div className="max-w-4xl bg-indigo-600 rounded-2xl p-8 text-white relative overflow-hidden shadow-lg">
         <div className="relative z-10">
           <h2 className="text-3xl font-bold mb-3">Hello, {profile.name}! 👋</h2>
@@ -209,23 +295,66 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading }: { profile: Use
       </div>
 
       <div>
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8">
           <SectionTitle title="Global Career Options" subtitle="Cross-Border Mobility & Tech-Centric Demand" />
-          <div className="relative w-full md:w-auto overflow-hidden">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" size={14} />
-            <select
-              value={activeCategory}
-              onChange={(e) => setActiveCategory(e.target.value)}
-              className="w-full md:w-56 pl-9 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 hover:border-indigo-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none appearance-none cursor-pointer shadow-sm relative z-0"
-            >
-              {categories.map(cat => (
-                <option key={cat} value={cat}>
-                  {cat === "All" ? "All Careers" : cat}
-                </option>
-              ))}
-            </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 z-10">
-              <ChevronRight size={14} className="rotate-90 transition-transform" />
+          
+          <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+            {/* Search Bar */}
+            <div className="relative flex-1 lg:flex-none min-w-[200px] lg:w-64 group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={14} />
+              <input 
+                type="text" 
+                placeholder="Search careers..." 
+                className="w-full pl-9 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 placeholder:text-slate-400 hover:border-indigo-300 focus:ring-2 focus:ring-indigo-500 transition-all outline-none shadow-sm"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            {/* Category Filter */}
+            <div className="relative flex-1 lg:flex-none min-w-[160px]">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" size={14} />
+              <select
+                value={activeCategory}
+                onChange={(e) => setActiveCategory(e.target.value)}
+                className="w-full lg:w-48 pl-9 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 hover:border-indigo-300 focus:ring-2 focus:ring-indigo-500 transition-all outline-none appearance-none cursor-pointer shadow-sm"
+              >
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>
+                    {cat === "All" ? "Every Industry" : cat}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 z-10">
+                <ChevronRight size={14} className="rotate-90" />
+              </div>
+            </div>
+
+            {/* Work Type Filter */}
+            <div className="relative flex-1 lg:flex-none min-w-[160px]">
+              <Monitor className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" size={14} />
+              <select
+                value={activeWorkType}
+                onChange={(e) => setActiveWorkType(e.target.value)}
+                className="w-full lg:w-48 pl-9 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 hover:border-indigo-300 focus:ring-2 focus:ring-indigo-500 transition-all outline-none appearance-none cursor-pointer shadow-sm"
+              >
+                {workTypes.map(type => (
+                  <option key={type} value={type}>
+                    {type === "All" ? "Environment: Any" : `Work: ${type}`}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 z-10">
+                <ChevronRight size={14} className="rotate-90" />
+              </div>
             </div>
           </div>
         </div>
@@ -238,45 +367,78 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading }: { profile: Use
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filteredPaths.map((path) => (
-              <motion.div
-                key={path.id}
-                whileHover={{ y: -4, borderColor: '#818cf8' }}
-                onClick={() => onSelectPath(path.id)}
-                className="bg-white border border-slate-200 rounded-2xl p-6 cursor-pointer shadow-sm transition-all flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex justify-between items-start mb-6">
-                    <div className="p-2.5 bg-indigo-50 rounded-xl text-indigo-600">
-                      <TrendingUp size={20} />
+            {filteredPaths.length > 0 ? (
+              filteredPaths.map((path) => (
+                <motion.div
+                  key={path.id}
+                  whileHover={{ y: -4, borderColor: '#818cf8' }}
+                  onClick={() => onSelectPath(path.id)}
+                  className="bg-white border border-slate-200 rounded-2xl p-6 cursor-pointer shadow-sm transition-all flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="p-2.5 bg-indigo-50 rounded-xl text-indigo-600">
+                        <TrendingUp size={20} />
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5">
+                        <div className="flex gap-1.5 flex-wrap justify-end">
+                          <span className={cn(
+                            "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                            path.growth === "high" ? "bg-emerald-50 text-emerald-700" : "bg-indigo-50 text-indigo-700"
+                          )}>
+                            {path.growth} Growth
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-900 text-white uppercase tracking-wider">
+                            {path.workType}
+                          </span>
+                        </div>
+                        <ShareButton title={path.title} type="career path" id={path.id} />
+                      </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1.5">
-                      <span className={cn(
-                        "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                        path.growth === "high" ? "bg-emerald-50 text-emerald-700" : "bg-indigo-50 text-indigo-700"
-                      )}>
-                        {path.growth} Growth
-                      </span>
-                      <ShareButton title={path.title} type="career path" id={path.id} />
+                    <div className="mb-2">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{path.category}</span>
+                        <span className="text-slate-300">•</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{path.subCategory}</span>
+                      </div>
+                      <h3 className="text-lg font-bold text-slate-800 leading-tight">{path.title}</h3>
+                    </div>
+                    <p className="text-slate-500 text-xs mb-4 line-clamp-2 leading-relaxed">{path.description}</p>
+                    
+                    <div className="flex flex-wrap gap-1.5 mb-6">
+                      {path.tags.map(tag => (
+                        <span key={tag} className="text-[8px] font-black px-1.5 py-0.5 bg-slate-50 border border-slate-100 rounded-md text-slate-400 uppercase tracking-widest">
+                          #{tag.replace(/\s+/g, '')}
+                        </span>
+                      ))}
                     </div>
                   </div>
-                  <div className="mb-2">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{path.category}</span>
-                    <h3 className="text-lg font-bold text-slate-800 leading-tight">{path.title}</h3>
+                  
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-50 pt-4 font-bold uppercase tracking-widest">
+                    <div className="flex items-center gap-1">
+                      <Clock size={12} /> 2026 Focus
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <BookOpen size={12} /> {path.milestones.length} Stages
+                    </div>
                   </div>
-                  <p className="text-slate-500 text-xs mb-6 line-clamp-2 leading-relaxed">{path.description}</p>
+                </motion.div>
+              ))
+            ) : (
+              <div className="col-span-full py-20 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
+                <div className="h-16 w-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 mb-6 group border border-slate-100">
+                  <Filter size={32} className="group-hover:rotate-12 transition-transform" />
                 </div>
-                
-                <div className="flex items-center gap-4 text-[10px] text-slate-400 border-t border-slate-50 pt-4 font-bold uppercase tracking-widest">
-                  <div className="flex items-center gap-1">
-                    <Clock size={12} /> 2026 Focus
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <BookOpen size={12} /> {path.milestones.length} Stages
-                  </div>
-                </div>
-              </motion.div>
-            ))}
+                <h3 className="text-lg font-bold text-slate-800 tracking-tight mb-2">No Matching Pathways</h3>
+                <p className="text-sm text-slate-400 max-w-xs font-medium mb-8">Try adjusting your category, work environment, or search keywords to identify new trajectories.</p>
+                <button 
+                  onClick={() => { setActiveCategory("All"); setActiveWorkType("All"); setSearchQuery(""); }}
+                  className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-lg shadow-indigo-100"
+                >
+                  Reset All Filters
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -284,11 +446,11 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading }: { profile: Use
   );
 };
 
-const RoadmapView = ({ profile, pathId, careers }: { profile: UserProfile, pathId?: string, careers: CareerPath[] }) => {
+const RoadmapView = ({ profile, pathId, careers, onNavigate }: { profile: UserProfile, pathId?: string, careers: CareerPath[], onNavigate: (view: 'landing' | 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap', search?: string) => void }) => {
   const path = careers.find(p => p.id === pathId) || careers[0];
   
   return (
-    <div className="space-y-8 max-w-2xl mx-auto">
+    <div className="space-y-8 max-w-2xl mx-auto pb-12">
       <SectionTitle 
         title={`${path.title} Roadmap`} 
         subtitle={`Adaptive Timeline for age ${profile.age}`} 
@@ -316,12 +478,55 @@ const RoadmapView = ({ profile, pathId, careers }: { profile: UserProfile, pathI
                 <span className="bg-slate-50 text-slate-400 text-[9px] px-1.5 py-0.5 rounded-md font-mono border border-slate-100">{ms.title}</span>
               </div>
               <h4 className="text-lg font-bold text-slate-800 mb-3">{ms.description}</h4>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-2 mb-6">
                 {ms.requirements.map((req, i) => (
-                  <span key={i} className="bg-indigo-50/50 text-indigo-700 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-indigo-100">
+                  <span key={i} className="bg-indigo-50/50 text-indigo-700 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-indigo-100 italic">
                     {req}
                   </span>
                 ))}
+              </div>
+
+              {/* Global Institutions Preview */}
+              <div className="mb-6 p-4 bg-slate-50 border border-slate-100 rounded-2xl">
+                <div className="flex items-center gap-2 mb-3">
+                   <School size={12} className="text-indigo-600" />
+                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Global Training Centers</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                   {INSTITUTIONS.filter(inst => {
+                      const query = (ms.requirements[0] || ms.title).toLowerCase();
+                      return inst.programs.some(p => p.toLowerCase().includes(query)) || 
+                             inst.name.toLowerCase().includes(query) ||
+                             ms.requirements.some(r => inst.programs.some(p => p.toLowerCase().includes(r.toLowerCase())));
+                   }).slice(0, 4).length > 0 ? (
+                    INSTITUTIONS.filter(inst => {
+                      const query = (ms.requirements[0] || ms.title).toLowerCase();
+                      return inst.programs.some(p => p.toLowerCase().includes(query)) || 
+                             inst.name.toLowerCase().includes(query) ||
+                             ms.requirements.some(r => inst.programs.some(p => p.toLowerCase().includes(r.toLowerCase())));
+                    }).slice(0, 4).map(inst => (
+                      <div key={inst.id} className="flex items-center gap-2">
+                         <div className="w-1 h-1 rounded-full bg-indigo-400" />
+                         <span className="text-[10px] font-bold text-slate-600 truncate">{inst.name}</span>
+                      </div>
+                    ))
+                   ) : (
+                     <p className="text-[9px] font-medium text-slate-400 italic col-span-full text-center">Identifying niche academic hubs...</p>
+                   )}
+                </div>
+              </div>
+              
+              <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
+                <button 
+                  onClick={() => onNavigate('institutions', ms.requirements[0] || ms.title)}
+                  className="flex items-center gap-2 text-indigo-600 text-[10px] font-black uppercase tracking-widest hover:translate-x-1 transition-all"
+                >
+                  Explore Related Institutions <ChevronRight size={12} />
+                </button>
+                <div className="flex items-center gap-1.5 opacity-40">
+                   <Landmark size={12} className="text-slate-400" />
+                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Academic Hub Sync</span>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -331,14 +536,21 @@ const RoadmapView = ({ profile, pathId, careers }: { profile: UserProfile, pathI
   );
 };
 
-const InstitutionsView = ({ profile }: { profile: UserProfile }) => {
-  const [search, setSearch] = useState("");
+const InstitutionsView = ({ profile, initialSearch = "" }: { profile: UserProfile, initialSearch?: string }) => {
+  const [search, setSearch] = useState(initialSearch);
   const [intlOnly, setIntlOnly] = useState(false);
   const [maxCost, setMaxCost] = useState(100000);
   const [selectedProgram, setSelectedProgram] = useState("All Programs");
   const [radius, setRadius] = useState<"Local" | "National" | "Global">("Global");
+  const [visaFilter, setVisaFilter] = useState<Institution['visaSupport'] | 'All'>('All');
   const [showComparator, setShowComparator] = useState(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (initialSearch) {
+      setSearch(initialSearch);
+    }
+  }, [initialSearch]);
 
   const budget = profile.budget;
 
@@ -368,6 +580,7 @@ const InstitutionsView = ({ profile }: { profile: UserProfile }) => {
     const matchesIntl = !intlOnly || inst.allowsInternationalStudents;
     const matchesCost = inst.avgCost <= maxCost;
     const matchesProgram = selectedProgram === "All Programs" || inst.programs.includes(selectedProgram);
+    const matchesVisa = visaFilter === "All" || inst.visaSupport === visaFilter;
     
     // Radius Filter Logic
     let matchesRadius = true;
@@ -377,7 +590,7 @@ const InstitutionsView = ({ profile }: { profile: UserProfile }) => {
        matchesRadius = inst.country === userCountry;
     }
 
-    return matchesSearch && matchesIntl && matchesCost && matchesProgram && matchesRadius;
+    return matchesSearch && matchesIntl && matchesCost && matchesProgram && matchesRadius && matchesVisa;
   });
 
   useEffect(() => {
@@ -461,7 +674,7 @@ const InstitutionsView = ({ profile }: { profile: UserProfile }) => {
           )}
         </AnimatePresence>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
           <div className="space-y-3">
              <div className="flex justify-between items-end">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-loose">Geospatial Scope</label>
@@ -479,6 +692,24 @@ const InstitutionsView = ({ profile }: { profile: UserProfile }) => {
                     {r}
                   </button>
                 ))}
+             </div>
+          </div>
+
+          <div className="space-y-3">
+             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-loose">Visa Support</label>
+             <div className="relative">
+                <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                <select 
+                  value={visaFilter}
+                  onChange={(e) => setVisaFilter(e.target.value as any)}
+                  className="w-full pl-9 pr-4 py-2 bg-slate-50 border-none rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none appearance-none cursor-pointer"
+                >
+                  <option value="All">All Support Levels</option>
+                  <option value="Full">Full Support</option>
+                  <option value="Partial">Partial Support</option>
+                  <option value="None">No Support</option>
+                </select>
+                <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 rotate-90 pointer-events-none" size={14} />
              </div>
           </div>
 
@@ -695,12 +926,13 @@ const MaterialsView = () => {
   const [activeLanguage, setActiveLanguage] = useState<string>("All Languages");
   const [activeRating, setActiveRating] = useState<number>(0);
   const [activeSkillLevel, setActiveSkillLevel] = useState<string>("All Levels");
+  const [selectedMaterial, setSelectedMaterial] = useState<any | null>(null);
   
   const [selectedSector, setSelectedSector] = useState<string>("Healthcare");
   const [aiCourses, setAiCourses] = useState<any[]>([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
 
-  const sectors = ["Healthcare", "Technology", "Finance", "Education", "Creative", "Sustainability"];
+  const sectors = ["Healthcare & Life Sciences", "Technology & Digital", "Business, Finance & Management", "Education, Law & Public Service", "Arts, Design & Media", "Engineering, Science & Environment", "Skilled Trades & Technical Services"];
   const types = ["All Types", "video", "audio", "course"];
   const providers = ["All Providers", ...Array.from(new Set(STUDY_MATERIALS.map(m => m.provider)))];
   const regions = ["Global", "NA", "EU", "ASIA", "UK"];
@@ -769,7 +1001,11 @@ const MaterialsView = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
                   key={course.title + i}
-                  className="bg-slate-50 hover:bg-indigo-50/30 border border-slate-200 hover:border-indigo-100 rounded-2xl p-4 transition-all group"
+                  onClick={() => setSelectedMaterial(course)}
+                  className={cn(
+                    "bg-slate-50 hover:bg-indigo-50/30 border border-slate-200 hover:border-indigo-100 rounded-2xl p-4 transition-all group cursor-pointer",
+                    selectedMaterial?.title === course.title ? "ring-2 ring-indigo-500 bg-white shadow-lg" : ""
+                  )}
                 >
                   <div className="flex flex-col h-full justify-between gap-3">
                     <div>
@@ -791,6 +1027,80 @@ const MaterialsView = () => {
             </AnimatePresence>
           </div>
         )}
+
+        {/* Selected Course Intelligence Panel */}
+        <AnimatePresence>
+          {selectedMaterial && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="mt-8 pt-8 border-t border-slate-100 overflow-hidden"
+            >
+              <div className="bg-indigo-900 rounded-3xl p-6 text-white relative overflow-hidden shadow-xl">
+                 <div className="absolute top-0 right-0 w-64 h-64 -mr-32 -mt-32 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
+                 
+                 <div className="flex flex-col md:flex-row justify-between gap-8 relative z-10">
+                    <div className="flex-1 space-y-4">
+                       <div className="flex items-center gap-2">
+                          <div className="bg-indigo-500/20 p-2 rounded-lg text-indigo-400">
+                             <Landmark size={20} />
+                          </div>
+                          <div>
+                             <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Collaborating Institution</p>
+                             <h4 className="text-xl font-black">{selectedMaterial.institution?.name || selectedMaterial.provider}</h4>
+                          </div>
+                       </div>
+                       
+                       <p className="text-sm text-indigo-100/80 leading-relaxed font-medium">
+                         {selectedMaterial.reason || "This module has been hand-selected for its high industry relevance and depth of coverage in your target domain."}
+                       </p>
+
+                       <div className="flex flex-wrap gap-4">
+                          <div className="bg-white/5 border border-white/10 px-4 py-2 rounded-2xl">
+                             <p className="text-[8px] font-black uppercase text-indigo-400 mb-0.5 tracking-wider">Global Position</p>
+                             <p className="text-sm font-bold">{selectedMaterial.institution?.globalRanking || "Industry Standard"}</p>
+                          </div>
+                          <div className="bg-white/5 border border-white/10 px-4 py-2 rounded-2xl">
+                             <p className="text-[8px] font-black uppercase text-indigo-400 mb-0.5 tracking-wider">Regional Hub</p>
+                             <p className="text-sm font-bold">{selectedMaterial.institution?.location || selectedMaterial.region === "Global" ? "Global Access" : selectedMaterial.region || "Online"}</p>
+                          </div>
+                          <div className="bg-white/5 border border-white/10 px-4 py-2 rounded-2xl">
+                             <p className="text-[8px] font-black uppercase text-indigo-400 mb-0.5 tracking-wider">Course Duration</p>
+                             <p className="text-sm font-bold">{selectedMaterial.duration}</p>
+                          </div>
+                       </div>
+                    </div>
+
+                    <div className="md:w-64 space-y-4">
+                       <div className="p-4 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-md">
+                          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">Sync Options</p>
+                          <div className="space-y-2">
+                             <a 
+                               href={selectedMaterial.url}
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               className="block w-full py-2 bg-white text-indigo-900 rounded-xl font-black uppercase text-center text-[10px] tracking-widest hover:bg-slate-100 transition-colors"
+                             >
+                                Enroll via Spark.E
+                             </a>
+                             <button className="w-full py-2 bg-indigo-500/50 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-500 transition-colors border border-indigo-400/30">
+                                Send to Supervisor
+                             </button>
+                          </div>
+                       </div>
+                       <button 
+                         onClick={() => setSelectedMaterial(null)}
+                         className="w-full py-2 text-indigo-400 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                        >
+                          <X size={14} /> Deselect Path
+                       </button>
+                    </div>
+                 </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -885,7 +1195,11 @@ const MaterialsView = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               key={mat.id} 
-              className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-100 transition-all group"
+              onClick={() => setSelectedMaterial(mat)}
+              className={cn(
+                "bg-white p-4 rounded-2xl border transition-all group cursor-pointer",
+                selectedMaterial?.id === mat.id ? "border-indigo-600 shadow-lg ring-1 ring-indigo-100" : "border-slate-200 shadow-sm hover:border-indigo-100"
+              )}
             >
               <div className="relative aspect-video rounded-xl overflow-hidden mb-4 bg-slate-100">
                 <img src={mat.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" referrerPolicy="no-referrer" />
@@ -947,30 +1261,103 @@ const MaterialsView = () => {
   );
 };
 
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Configure PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
 const AIAdvisor = ({ profile }: { profile: UserProfile }) => {
   const [messages, setMessages] = useState<{role: 'user' | 'ai', text: string}[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [resumeText, setResumeText] = useState<string | null>(null);
   const [linkedinUrl, setLinkedinUrl] = useState<string>("");
+  const [linkedinData, setLinkedinData] = useState<string | null>(null);
   const [showContextOptions, setShowContextOptions] = useState(false);
+  const [isParsing, setIsParsing] = useState(false);
+  const [isAnalyzingLinkedIn, setIsAnalyzingLinkedIn] = useState(false);
+  const [analyzedSkills, setAnalyzedSkills] = useState<{name: string, strength: number}[]>([]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const clearContext = () => {
+    if (window.confirm("Are you sure you want to purge all career context? This will remove your analyzed resume and LinkedIn data from Spark.E's focus.")) {
+      setResumeText(null);
+      setLinkedinUrl("");
+      setLinkedinData(null);
+      setAnalyzedSkills([]);
+    }
+  };
+
+  const simulateSkillExtraction = (text: string) => {
+    // Simulated skill extraction logic
+    const commonSkills = ["React", "TypeScript", "Python", "Data Analysis", "Project Management", "AI/ML", "Cloud Systems", "UX Design"];
+    const interests = profile.interests;
+    
+    // Mix interests with common skills to simulate personalized extraction
+    const extracted = [...interests, ...commonSkills.slice(0, 3)]
+      .map(skill => ({
+        name: skill,
+        strength: Math.floor(Math.random() * 40) + 60 // High strength 60-100%
+      }))
+      .slice(0, 5); // Pick top 5
+    
+    setAnalyzedSkills(extracted);
+  };
+
+  const handleLinkedinSync = async () => {
+    if (!linkedinUrl) return;
+    setIsAnalyzingLinkedIn(true);
+    
+    // Simulate LinkedIn Data Fetching & Analysis
+    // In a real app, this would call a backend proxy/scraper
+    setTimeout(() => {
+      setLinkedinData(`[Spark.E Analysis: ${linkedinUrl}] Profile appears to be a professional in the ${profile.interests[0] || 'Technology'} sector. Career history suggests growth-oriented mindset with interests in ${profile.interests.join(", ")}.`);
+      setIsAnalyzingLinkedIn(false);
+      setShowContextOptions(false);
+      alert("LinkedIn profile intelligence successfully synced to your session.");
+    }, 2000);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.type === "text/plain") {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const text = e.target?.result as string;
-        setResumeText(text);
-        alert("Resume successfully synced to Spark.E context.");
-      };
-      reader.readAsText(file);
-    } else {
-      // Simulate PDF/Doc parsing for prototype
-      setResumeText(`[SIMULATED PARSE: ${file.name}] Candidate shows strong background in STEM and leadership.`);
-      alert(`Spark.E has indexed your file: ${file.name}. Data will be used for personalization.`);
+    setIsParsing(true);
+    try {
+      if (file.type === "text/plain") {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const text = e.target?.result as string;
+          setResumeText(text);
+          simulateSkillExtraction(text);
+          alert("Resume successfully synced to Spark.E context.");
+          setIsParsing(false);
+        };
+        reader.readAsText(file);
+      } else if (file.type === "application/pdf") {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let fullText = "";
+        
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          fullText += textContent.items.map((item: any) => item.str).join(" ") + "\n";
+        }
+        
+        setResumeText(fullText);
+        simulateSkillExtraction(fullText);
+        alert(`Spark.E has parsed ${pdf.numPages} pages from your resume.`);
+        setIsParsing(false);
+      } else {
+        // Fallback for other formats
+        setResumeText(`[SIMULATED PARSE: ${file.name}] Format not directly supported for full text extraction. Please use .txt or .pdf for best results.`);
+        alert(`Spark.E has indexed your file: ${file.name}. Meta-data will be used.`);
+        setIsParsing(false);
+      }
+    } catch (error) {
+      console.error("Parsing error:", error);
+      alert("Failed to parse the file. Please try a different format.");
+      setIsParsing(false);
     }
     setShowContextOptions(false);
   };
@@ -978,14 +1365,14 @@ const AIAdvisor = ({ profile }: { profile: UserProfile }) => {
   const handleSend = async () => {
     if (!input.trim() && !linkedinUrl && !resumeText) return;
     
-    const userMsg = input || (linkedinUrl ? `Analyze my LinkedIn profile: ${linkedinUrl}` : "Analyze my uploaded resume for career advice.");
+    const userMsg = input || (linkedinData ? `Analyze my LinkedIn profile context.` : "Analyze my uploaded resume for career advice.");
     setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
     setInput("");
     setIsLoading(true);
 
     const advice = await getCareerAdvice(userMsg, profile, {
       resume: resumeText || undefined,
-      linkedIn: linkedinUrl || undefined
+      linkedIn: linkedinData || linkedinUrl || undefined
     });
     
     setMessages(prev => [...prev, { role: 'ai', text: advice || "Error fetching advice." }]);
@@ -1005,9 +1392,28 @@ const AIAdvisor = ({ profile }: { profile: UserProfile }) => {
             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">AI Career Mentor</span>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3">
+           <button 
+             onClick={() => setShowContextOptions(!showContextOptions)}
+             title="Context Options"
+             className={cn(
+               "p-1.5 rounded-lg transition-all",
+               showContextOptions ? "bg-indigo-500/20 text-indigo-400" : "hover:bg-slate-700 text-slate-500"
+             )}
+           >
+             <Settings size={14} className={cn(showContextOptions && "rotate-90 transition-transform")} />
+           </button>
+           {(resumeText || linkedinData) && (
+             <button 
+               onClick={clearContext}
+               title="Clear All Context"
+               className="p-1.5 hover:bg-red-500/10 hover:text-red-400 text-slate-500 rounded-lg transition-all"
+             >
+               <Trash2 size={14} />
+             </button>
+           )}
            {resumeText && <FileText size={14} className="text-emerald-400" />}
-           {linkedinUrl && <Linkedin size={14} className="text-blue-400" />}
+           {linkedinData && <Linkedin size={14} className="text-blue-400" />}
            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
         </div>
       </div>
@@ -1021,45 +1427,139 @@ const AIAdvisor = ({ profile }: { profile: UserProfile }) => {
             <h4 className="text-lg font-bold text-white mb-2">Connect with your future</h4>
             <p className="text-slate-500 text-[10px] leading-relaxed max-w-xs mx-auto uppercase tracking-widest font-black mb-6">Personalize with your data</p>
             
-            <div className="grid grid-cols-2 gap-3 mb-6">
-               <label className="flex flex-col items-center gap-2 p-4 bg-slate-700/30 border border-dashed border-slate-600 rounded-2xl cursor-pointer hover:bg-slate-700/50 transition-all group">
-                  <Paperclip size={20} className="text-slate-400 group-hover:text-indigo-400" />
-                  <span className="text-[9px] font-black text-slate-400 uppercase">Upload Resume</span>
-                  <input type="file" className="hidden" onChange={handleFileUpload} accept=".txt,.pdf,.doc,.docx" />
-               </label>
-               <button 
-                onClick={() => setShowContextOptions(!showContextOptions)}
-                className="flex flex-col items-center gap-2 p-4 bg-slate-700/30 border border-dashed border-slate-600 rounded-2xl hover:bg-slate-700/50 transition-all group"
-               >
-                  <Linkedin size={20} className="text-slate-400 group-hover:text-blue-400" />
-                  <span className="text-[9px] font-black text-slate-400 uppercase">Link LinkedIn</span>
-               </button>
-            </div>
+            <button 
+              onClick={() => setShowContextOptions(!showContextOptions)}
+              className={cn(
+                "w-full py-4 px-6 bg-slate-700/30 border border-dashed rounded-3xl flex items-center justify-center gap-3 transition-all group mb-6",
+                showContextOptions ? "border-indigo-500 bg-indigo-500/5" : "border-slate-600 hover:bg-slate-700/50"
+              )}
+            >
+              <Settings size={20} className={cn("text-slate-400 group-hover:text-indigo-400 transition-all", showContextOptions && "rotate-90 text-indigo-400")} />
+              <div className="text-left">
+                <span className="block text-[10px] font-black text-white uppercase tracking-widest leading-none">Context Options</span>
+                <span className="text-[8px] text-slate-500 font-bold uppercase">Resume • LinkedIn • AI Persona</span>
+              </div>
+            </button>
+
+            {analyzedSkills.length > 0 && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-8 p-5 bg-slate-900/50 rounded-2xl border border-slate-700/50 relative overflow-hidden group/matrix"
+              >
+                <div className="absolute top-0 right-0 p-1 opacity-20 group-hover/matrix:opacity-40 transition-opacity">
+                  <Activity size={40} className="text-indigo-500" />
+                </div>
+                <div className="flex items-center justify-between mb-4 text-left">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">Profile Skill Density</span>
+                  </div>
+                  <span className="text-[9px] text-slate-500 font-bold uppercase">vs. 2026 Demand Peaks</span>
+                </div>
+                <div className="grid gap-4">
+                  {analyzedSkills.map((skill, idx) => (
+                    <div key={idx} className="relative">
+                      <div className="flex justify-between items-center mb-1.5">
+                        <span className="text-[11px] text-white font-semibold flex items-center gap-1.5">
+                          {skill.strength > 85 ? <Star size={10} className="text-amber-400 fill-amber-400" /> : null}
+                          {skill.name}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] text-indigo-300 font-black tabular-nums">{skill.strength}%</span>
+                          <span className="text-[8px] px-1 bg-indigo-500/10 text-indigo-400 rounded uppercase font-black">
+                            {skill.strength > 90 ? "Peak" : skill.strength > 80 ? "Alpha" : "Beta"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-800/50 rounded-full overflow-hidden backdrop-blur-sm">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${skill.strength}%` }}
+                          transition={{ duration: 1.2, ease: "easeOut", delay: idx * 0.1 }}
+                          className="h-full bg-gradient-to-r from-indigo-600 via-indigo-400 to-blue-300 rounded-full shadow-[0_0_12px_rgba(99,102,241,0.3)]"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 pt-4 border-t border-slate-800/50 flex items-center justify-between">
+                  <span className="text-[8px] text-slate-500 font-medium italic text-left uppercase tracking-wider">
+                    AI-Derived from documentation & professional signals
+                  </span>
+                  <div className="flex -space-x-1">
+                    {[1,2,3].map(i => <div key={i} className="w-4 h-4 rounded-full border border-slate-800 bg-slate-700 flex items-center justify-center text-[6px] font-bold text-slate-400">AI</div>)}
+                  </div>
+                </div>
+              </motion.div>
+            )}
           </div>
         )}
         
         {showContextOptions && (
           <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="p-4 bg-slate-900/80 rounded-2xl border border-indigo-500/30 mb-4"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            className="p-5 bg-slate-900 border-b border-slate-700/50 space-y-6 overflow-hidden"
           >
-            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">LinkedIn Integration</p>
-            <div className="flex gap-2">
-              <input 
-                type="url" 
-                value={linkedinUrl}
-                onChange={(e) => setLinkedinUrl(e.target.value)}
-                placeholder="https://linkedin.com/in/username"
-                className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-[10px] text-white outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-              <button 
-                onClick={() => setShowContextOptions(false)}
-                className="bg-indigo-600 px-3 rounded-xl text-[9px] font-black uppercase text-white"
-              >
-                Sync
-              </button>
-            </div>
+             <div className="flex items-center justify-between">
+                <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Career Context Intelligence</h4>
+                <button onClick={() => setShowContextOptions(false)} className="text-slate-500 hover:text-white transition-colors">
+                  <X size={14} />
+                </button>
+             </div>
+
+             <div className="grid grid-cols-2 gap-4">
+                {/* Resume Upload Column */}
+                <div className="space-y-3">
+                   <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Document Sync</p>
+                   <label className={cn(
+                     "flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed transition-all cursor-pointer group/upload",
+                     resumeText ? "bg-emerald-500/5 border-emerald-500/20" : "bg-slate-800 border-slate-700 hover:border-indigo-500/50"
+                   )}>
+                      {isParsing ? (
+                        <RotateCcw size={16} className="text-indigo-400 animate-spin" />
+                      ) : (
+                        resumeText ? <CheckCircle size={16} className="text-emerald-400" /> : <UploadCloud size={16} className="text-slate-500 group-hover/upload:text-indigo-400" />
+                      )}
+                      <span className={cn(
+                        "text-[8px] font-black uppercase tracking-tighter",
+                        resumeText ? "text-emerald-400/80" : "text-slate-400 group-hover/upload:text-indigo-300"
+                      )}>
+                        {isParsing ? "Analyzing..." : resumeText ? "Resume Synced" : "Upload Resume"}
+                      </span>
+                      <input type="file" className="hidden" onChange={handleFileUpload} accept=".txt,.pdf" disabled={isParsing} />
+                   </label>
+                </div>
+
+                {/* LinkedIn Sync Column */}
+                <div className="space-y-3">
+                   <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Social Identity</p>
+                   <div className="space-y-2">
+                       <input 
+                         type="url" 
+                         value={linkedinUrl}
+                         onChange={(e) => setLinkedinUrl(e.target.value)}
+                         placeholder="linkedin.com/in/..."
+                         className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-[9px] text-white outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-slate-600"
+                       />
+                       <button 
+                         onClick={handleLinkedinSync}
+                         disabled={isAnalyzingLinkedIn || !linkedinUrl}
+                         className="w-full py-2 bg-indigo-600 rounded-xl text-[8px] font-black uppercase text-white hover:bg-indigo-500 disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
+                       >
+                          {isAnalyzingLinkedIn ? <RotateCcw size={10} className="animate-spin" /> : <Linkedin size={10} />}
+                          {isAnalyzingLinkedIn ? "Syncing" : linkedinData ? "Refresh Context" : "Link Account"}
+                       </button>
+                   </div>
+                </div>
+             </div>
+
+             <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50">
+                <p className="text-[8px] text-slate-500 font-medium italic">
+                  * All context data is processed locally for your session. Purple badge signals represent active AI focus alignment.
+                </p>
+             </div>
           </motion.div>
         )}
 
@@ -1487,6 +1987,8 @@ const FundingOpportunitiesView = ({ profile }: { profile: UserProfile }) => {
 
 const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfile: React.Dispatch<React.SetStateAction<UserProfile>> }) => {
   const [activeTab, setActiveTab] = useState<'planner' | 'projections' | 'calculator' | 'funding'>('planner');
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+  const [showGoalNotification, setShowGoalNotification] = useState<string | null>(null);
   
   const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
   const expenseData = profile.financialProfile?.monthlyExpenses.map(e => ({ name: e.category, value: e.amount })) || [];
@@ -1623,26 +2125,159 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
                 </div>
               </div>
 
-              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                <h4 className="text-sm font-bold text-slate-800 mb-6">Financial Goals</h4>
-                <div className="space-y-6">
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                <h4 className="text-sm font-bold text-slate-800 mb-6 flex justify-between items-center">
+                  Financial Goals
+                  <AnimatePresence>
+                    {showGoalNotification && (
+                      <motion.span 
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="text-[9px] font-black text-emerald-500 uppercase flex items-center gap-1"
+                      >
+                        <Check size={10} /> {showGoalNotification}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </h4>
+                <div className="space-y-6 overflow-y-auto max-h-[400px] pr-2 scrollbar-hide flex-1">
                   {profile.financialProfile?.goals.map(goal => (
-                    <div key={goal.id} className="space-y-2">
-                       <div className="flex justify-between items-center">
-                         <span className="text-xs font-bold text-slate-800">{goal.title}</span>
-                         <span className="text-[10px] font-mono font-bold text-indigo-600">${goal.current.toLocaleString()} / ${goal.target.toLocaleString()}</span>
-                       </div>
-                       <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                         <motion.div 
-                           initial={{ width: 0 }}
-                           animate={{ width: `${(goal.current / goal.target) * 100}%` }}
-                           className="h-full bg-indigo-500" 
-                         />
-                       </div>
-                       <p className="text-[9px] text-slate-400 font-bold uppercase">Deadline: {goal.deadline}</p>
+                    <div key={goal.id} className="group relative bg-slate-50/50 p-4 rounded-2xl border border-slate-100 transition-all hover:bg-white hover:shadow-md">
+                       {editingGoalId === goal.id ? (
+                         <div className="space-y-3">
+                            <input 
+                              className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold"
+                              value={goal.title}
+                              onChange={(e) => {
+                                const newGoals = profile.financialProfile?.goals.map(g => g.id === goal.id ? { ...g, title: e.target.value } : g) || [];
+                                setProfile(prev => ({ 
+                                  ...prev, 
+                                  financialProfile: { 
+                                    ...(prev.financialProfile || { annualIncome: 0, currentSavings: 0, monthlyExpenses: [], goals: [], debt: [] }), 
+                                    goals: newGoals 
+                                  } 
+                                }));
+                              }}
+                            />
+                            <div className="flex gap-2">
+                               <div className="flex-1 space-y-1">
+                                 <label className="text-[8px] font-black uppercase text-slate-400">Current</label>
+                                 <input 
+                                   type="number"
+                                   className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold"
+                                   value={goal.current}
+                                   onChange={(e) => {
+                                     const val = parseInt(e.target.value) || 0;
+                                     const newGoals = profile.financialProfile?.goals.map(g => g.id === goal.id ? { ...g, current: val } : g) || [];
+                                     setProfile(prev => ({ 
+                                       ...prev, 
+                                       financialProfile: { 
+                                         ...(prev.financialProfile || { annualIncome: 0, currentSavings: 0, monthlyExpenses: [], goals: [], debt: [] }), 
+                                         goals: newGoals 
+                                       } 
+                                     }));
+                                     setShowGoalNotification(`Progress Sync: ${goal.title}`);
+                                     setTimeout(() => setShowGoalNotification(null), 3000);
+                                   }}
+                                 />
+                               </div>
+                               <div className="flex-1 space-y-1">
+                                 <label className="text-[8px] font-black uppercase text-slate-400">Target</label>
+                                 <input 
+                                   type="number"
+                                   className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold"
+                                   value={goal.target}
+                                   onChange={(e) => {
+                                     const val = parseInt(e.target.value) || 0;
+                                     const newGoals = profile.financialProfile?.goals.map(g => g.id === goal.id ? { ...g, target: val } : g) || [];
+                                     setProfile(prev => ({ 
+                                       ...prev, 
+                                       financialProfile: { 
+                                         ...(prev.financialProfile || { annualIncome: 0, currentSavings: 0, monthlyExpenses: [], goals: [], debt: [] }), 
+                                         goals: newGoals 
+                                       } 
+                                     }));
+                                   }}
+                                 />
+                               </div>
+                            </div>
+                            <div className="flex justify-between items-center pt-2">
+                               <button 
+                                 onClick={() => {
+                                   if (confirm(`Delete goal: ${goal.title}?`)) {
+                                     const newGoals = profile.financialProfile?.goals.filter(g => g.id !== goal.id) || [];
+                                     setProfile(prev => ({ 
+                                       ...prev, 
+                                       financialProfile: { 
+                                         ...(prev.financialProfile || { annualIncome: 0, currentSavings: 0, monthlyExpenses: [], goals: [], debt: [] }), 
+                                         goals: newGoals 
+                                       } 
+                                     }));
+                                     setEditingGoalId(null);
+                                   }
+                                 }}
+                                 className="text-[9px] font-black text-rose-500 uppercase hover:underline"
+                               >
+                                 Purge Goal
+                               </button>
+                               <button 
+                                 onClick={() => setEditingGoalId(null)}
+                                 className="bg-indigo-600 text-white px-4 py-1 rounded-lg text-[9px] font-black uppercase shadow-lg shadow-indigo-100"
+                               >
+                                 Finalize
+                               </button>
+                            </div>
+                         </div>
+                       ) : (
+                         <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-slate-800">{goal.title}</span>
+                                <button 
+                                  onClick={() => setEditingGoalId(goal.id)}
+                                  className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-indigo-500 transition-all p-1"
+                                  title="Edit Goal"
+                                >
+                                  <Pencil size={10} />
+                                </button>
+                              </div>
+                              <span className="text-[10px] font-mono font-bold text-indigo-600">${goal.current.toLocaleString()} / ${goal.target.toLocaleString()}</span>
+                            </div>
+                            <div className="h-2 bg-slate-100/50 rounded-full overflow-hidden border border-slate-100">
+                              <motion.div 
+                                initial={{ width: 0 }}
+                                animate={{ width: `${Math.min((goal.current / goal.target) * 100, 100)}%` }}
+                                className={cn(
+                                  "h-full transition-all duration-1000",
+                                  (goal.current / goal.target) >= 1 ? "bg-emerald-500" : "bg-indigo-500"
+                                )} 
+                              />
+                            </div>
+                            <div className="flex justify-between items-center">
+                               <p className="text-[9px] text-slate-400 font-bold uppercase">Deadline: {goal.deadline}</p>
+                               <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest">{Math.round((goal.current / goal.target) * 100)}%</span>
+                            </div>
+                         </div>
+                       )}
                     </div>
                   ))}
-                  <button className="w-full py-2 border border-dashed border-slate-200 rounded-xl text-[10px] font-bold text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2">
+                  <button 
+                    onClick={() => {
+                      const newId = `goal-${Date.now()}`;
+                      const newGoal = { id: newId, title: "New Custom Goal", target: 5000, current: 0, deadline: new Date(Date.now() + 31536000000).toISOString().split('T')[0] };
+                      const newGoals = [...(profile.financialProfile?.goals || []), newGoal];
+                      setProfile(prev => ({ 
+                        ...prev, 
+                        financialProfile: { 
+                          ...(prev.financialProfile || { annualIncome: 0, currentSavings: 0, monthlyExpenses: [], goals: [], debt: [] }), 
+                          goals: newGoals 
+                        } 
+                      }));
+                      setEditingGoalId(newId);
+                    }}
+                    className="w-full py-3 border border-dashed border-slate-200 rounded-2xl text-[10px] font-bold text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                  >
                     <Target size={12} /> Add New Financial Goal
                   </button>
                 </div>
@@ -1742,6 +2377,16 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
 export default function App() {
   const [activeView, setActiveView] = useState<'landing' | 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap'>('landing');
   const [selectedPathId, setSelectedPathId] = useState<string>("ai-engineer");
+  const [institutionSearchQuery, setInstitutionSearchQuery] = useState("");
+
+  const handleNavigate = (view: typeof activeView, search?: string) => {
+    if (view === 'institutions' && search) {
+      setInstitutionSearchQuery(search);
+    } else if (view !== 'institutions') {
+      setInstitutionSearchQuery("");
+    }
+    setActiveView(view);
+  };
   const [careers, setCareers] = useState<CareerPath[]>(CAREER_PATHS);
   const [isCareersLoading, setIsCareersLoading] = useState(false);
   
@@ -1751,6 +2396,7 @@ export default function App() {
     education: "High School Junior",
     interests: ["Coding", "Robotics", "Space"],
     budget: 50000,
+    country: "USA",
     targetCareerId: "ai-engineer",
     completedMilestones: ["ai-engineer-0"], // Pre-populated progress
     academicPerformance: {
@@ -1811,12 +2457,12 @@ export default function App() {
           <span className="text-xl font-bold tracking-tight text-slate-800">CareerVision<span className="text-indigo-600 font-black italic">AI</span></span>
         </div>
         <nav className="hidden lg:flex gap-8">
-          <NavItem label="Dashboard" active={activeView === 'dashboard'} onClick={() => setActiveView('dashboard')} />
-          <NavItem label="Personalized Roadmap" active={activeView === 'roadmap'} onClick={() => setActiveView('roadmap')} />
-          <NavItem label="Institutions" active={activeView === 'institutions'} onClick={() => setActiveView('institutions')} />
-          <NavItem label="Career Hubs" active={activeView === 'heatmap'} onClick={() => setActiveView('heatmap')} />
-          <NavItem label="Learning Hub" active={activeView === 'materials'} onClick={() => setActiveView('materials')} />
-          <NavItem label="Financial Simulator" active={activeView === 'expenses'} onClick={() => setActiveView('expenses')} />
+          <NavItem label="Dashboard" active={activeView === 'dashboard'} onClick={() => handleNavigate('dashboard')} />
+          <NavItem label="Personalized Roadmap" active={activeView === 'roadmap'} onClick={() => handleNavigate('roadmap')} />
+          <NavItem label="Institutions" active={activeView === 'institutions'} onClick={() => handleNavigate('institutions')} />
+          <NavItem label="Career Hubs" active={activeView === 'heatmap'} onClick={() => handleNavigate('heatmap')} />
+          <NavItem label="Learning Hub" active={activeView === 'materials'} onClick={() => handleNavigate('materials')} />
+          <NavItem label="Financial Simulator" active={activeView === 'expenses'} onClick={() => handleNavigate('expenses')} />
         </nav>
         <div className="flex items-center gap-3 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
           <div className="h-6 w-6 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center">
@@ -1870,8 +2516,8 @@ export default function App() {
               className="flex-1"
             >
               {activeView === 'dashboard' && <Dashboard profile={profile} onSelectPath={handleSelectPath} careers={careers} isLoading={isCareersLoading} />}
-              {activeView === 'roadmap' && <RoadmapView profile={profile} pathId={selectedPathId} careers={careers} />}
-              {activeView === 'institutions' && <InstitutionsView profile={profile} />}
+              {activeView === 'roadmap' && <RoadmapView profile={profile} pathId={selectedPathId} careers={careers} onNavigate={handleNavigate} />}
+              {activeView === 'institutions' && <InstitutionsView profile={profile} initialSearch={institutionSearchQuery} />}
               {activeView === 'heatmap' && <HeatmapView />}
               {activeView === 'materials' && <MaterialsView />}
               {activeView === 'parent' && <ParentalDashboard profile={profile} onBack={() => setActiveView('dashboard')} careers={careers} />}

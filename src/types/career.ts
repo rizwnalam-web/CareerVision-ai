@@ -4,7 +4,10 @@ export interface CareerPath {
   description: string;
   growth: "high" | "medium" | "stable";
   category: string;
+  subCategory: string;
   milestones: Milestone[];
+  workType: "Remote" | "On-site" | "Hybrid" | "Mobile";
+  tags: string[];
 }
 
 export interface Milestone {
@@ -18,7 +21,7 @@ export interface Institution {
   id: string;
   name: string;
   location: string;
-  type: "University" | "Vocational" | "Polytechnic";
+  type: "University" | "Vocational" | "Polytechnic" | "Medical School" | "Business School";
   avgCost: number;
   programs: string[];
   ranking?: number;
@@ -72,6 +75,7 @@ export interface UserProfile {
   education: string;
   interests: string[];
   budget: number;
+  country: string;
   targetCareerId?: string;
   completedMilestones: string[]; // Stores composite IDs like "careerId-milestoneIndex"
   academicPerformance?: {

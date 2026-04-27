@@ -1,122 +1,208 @@
 import { CareerPath, Institution, StudyMaterial, FundingOpportunity } from "../types/career";
 
 export const CAREER_PATHS: CareerPath[] = [
+  // 1. Technology & Digital
   {
     id: "ai-engineer",
     title: "AI & Machine Learning Engineer",
     description: "Design and implement AI models and scalable machine learning systems.",
     growth: "high",
-    category: "Technology",
+    category: "Technology & Digital",
+    subCategory: "Data & AI",
+    workType: "Remote",
+    tags: ["AI Integration", "Remote Economy"],
     milestones: [
-      {
-        ageRange: "10-14",
-        title: "Exploratory Phase",
-        description: "Introduction to logical thinking and block-based coding.",
-        requirements: ["Scratch", "Basic Math", "Logic puzzles"]
-      },
-      {
-        ageRange: "15-18",
-        title: "Foundational Phase",
-        description: "Mastering core languages and advanced mathematics.",
-        requirements: ["Python", "Calculus", "Linear Algebra", "Data Structures"]
-      },
-      {
-        ageRange: "18-22",
-        title: "Specialization Phase",
-        description: "Deep dive into neural networks and big data.",
-        requirements: ["Bachelor's in CS", "PyTorch/TensorFlow", "Statistics"]
-      }
+      { ageRange: "10-14", title: "Logic Basics", description: "Scratch & Math", requirements: ["Scratch", "Basic Math"] },
+      { ageRange: "18-22", title: "CS Degree", description: "Bachelor's level", requirements: ["Python", "Neural Networks"] }
     ]
   },
   {
-    id: "renewable-energy",
-    title: "Renewable Energy Specialist",
-    description: "Developing sustainable energy solutions for a greener future.",
+    id: "fullstack-dev",
+    title: "Full-stack Developer",
+    description: "Building complete web applications from database to user interface.",
     growth: "high",
-    category: "Engineering",
-    milestones: [
-      {
-        ageRange: "10-14",
-        title: "Environmental Awareness",
-        description: "Understanding climate change and energy types.",
-        requirements: ["Science projects", "Eco-clubs"]
-      }
-    ]
+    category: "Technology & Digital",
+    subCategory: "Software Development",
+    workType: "Remote",
+    tags: ["Remote Economy"],
+    milestones: [{ ageRange: "15-22", title: "Web Mastery", description: "JS/TS Frameworks", requirements: ["React", "Node.js"] }]
   },
   {
-    id: "nursing",
-    title: "Registered Nursing",
-    description: "Providing high-quality patient care in various medical settings with global mobility.",
+    id: "ethical-hacker",
+    title: "Ethical Hacker",
+    description: "Identifying security vulnerabilities in systems to prevent cyber attacks.",
     growth: "high",
-    category: "Healthcare",
-    milestones: [
-      {
-        ageRange: "15-18",
-        title: "Pre-Med Awareness",
-        description: "Focusing on biology and chemistry.",
-        requirements: ["Biology", "Chemistry", "First-Aid Certification"]
-      }
-    ]
+    category: "Technology & Digital",
+    subCategory: "Cybersecurity",
+    workType: "Hybrid",
+    tags: ["AI Integration"],
+    milestones: [{ ageRange: "18-24", title: "Certifications", description: "OSCP/CEH", requirements: ["Networking", "Kali Linux"] }]
   },
   {
     id: "ux-designer",
     title: "UX/UI Designer",
-    description: "Creating intuitive digital experiences for global platforms. High potential for remote work.",
+    description: "Creating intuitive digital experiences for global platforms.",
     growth: "high",
-    category: "Creative",
-    milestones: [
-      {
-        ageRange: "13-17",
-        title: "Visual Design Basics",
-        description: "Learning color theory, typography, and basic design tools.",
-        requirements: ["Figma Basics", "Art classes", "Digital Photography"]
-      }
-    ]
+    category: "Technology & Digital",
+    subCategory: "Design",
+    workType: "Remote",
+    tags: ["Remote Economy", "AI Integration"],
+    milestones: [{ ageRange: "13-20", title: "Visual Design", description: "Figma and UX principles", requirements: ["Figma", "User Research"] }]
+  },
+
+  // 2. Healthcare & Life Sciences
+  {
+    id: "surgeon",
+    title: "Surgeon",
+    description: "Performing complex operations to treat injuries and diseases.",
+    growth: "high",
+    category: "Healthcare & Life Sciences",
+    subCategory: "Clinical Practice",
+    workType: "On-site",
+    tags: ["AI Integration"],
+    milestones: [{ ageRange: "18-30", title: "Medical Residency", description: "Advanced surgical training", requirements: ["MD Degree", "Residency"] }]
   },
   {
-    id: "sustainability-analyst",
-    title: "Climate Risk Analyst",
-    description: "Evaluating financial and social risks emerging from climate change for major organizations.",
+    id: "nursing",
+    title: "Registered Nursing",
+    description: "Providing high-quality patient care in various medical settings.",
     growth: "high",
-    category: "Sustainability",
-    milestones: [
-      {
-        ageRange: "16-20",
-        title: "Interdisciplinary Foundation",
-        description: "Combining environmental science with data analytics.",
-        requirements: ["Data Science basics", "Environmental Studies", "GIS Systems"]
-      }
-    ]
+    category: "Healthcare & Life Sciences",
+    subCategory: "Clinical Practice",
+    workType: "On-site",
+    tags: ["Global Demand"],
+    milestones: [{ ageRange: "18-22", title: "Nursing Degree", description: "RN Certification", requirements: ["Bio/Chem", "Clinical Practice"] }]
   },
+  {
+    id: "bioinformatician",
+    title: "Bioinformatician",
+    description: "Combining biology, computer science, and statistics to analyze genomic data.",
+    growth: "high",
+    category: "Healthcare & Life Sciences",
+    subCategory: "Biotech",
+    workType: "Hybrid",
+    tags: ["AI Integration"],
+    milestones: [{ ageRange: "18-26", title: "Biotech Specialization", description: "Genomic analysis", requirements: ["R/Python", "Genetics"] }]
+  },
+
+  // 3. Business, Finance & Management
   {
     id: "financial-analyst",
     title: "Financial Analyst",
-    description: "Guiding businesses on investment decisions, market trends, and fiscal strategy.",
+    description: "Guiding businesses on investment decisions and market trends.",
     growth: "high",
-    category: "Business",
-    milestones: [
-      {
-        ageRange: "16-19",
-        title: "Quantitative Preparation",
-        description: "Developing advanced skill in mathematics and economics.",
-        requirements: ["Advanced Math", "Microeconomics", "Excel Proficiency"]
-      }
-    ]
+    category: "Business, Finance & Management",
+    subCategory: "Analysis",
+    workType: "Hybrid",
+    tags: ["AI Integration", "Remote Economy"],
+    milestones: [{ ageRange: "18-22", title: "Finance Base", description: "Economic modeling", requirements: ["Excel", "Economics"] }]
   },
   {
-    id: "intl-teacher",
-    title: "International School Teacher",
-    description: "Educating students in international settings with standardized global curricula.",
+    id: "project-manager",
+    title: "Project Manager",
+    description: "Leading teams to deliver complex business initiatives on time.",
     growth: "medium",
-    category: "Education",
-    milestones: [
-      {
-        ageRange: "18-22",
-        title: "Pedagogical Certification",
-        description: "Earning teaching degrees and cross-cultural certifications.",
-        requirements: ["B.Ed", "TEFL/TESOL", "IB Training"]
-      }
-    ]
+    category: "Business, Finance & Management",
+    subCategory: "Management",
+    workType: "Hybrid",
+    tags: ["Remote Economy"],
+    milestones: [{ ageRange: "22-26", title: "Certification", description: "PMP/Agile", requirements: ["Agile", "Stakeholder Management"] }]
+  },
+
+  // 4. Engineering, Science & Environment
+  {
+    id: "renewable-energy",
+    title: "Wind Turbine Engineer",
+    description: "Developing and maintaining sustainable energy infrastructure.",
+    growth: "high",
+    category: "Engineering, Science & Environment",
+    subCategory: "Green Energy",
+    workType: "Mobile",
+    tags: ["Green Transition"],
+    milestones: [{ ageRange: "18-24", title: "Engineering Degree", description: "Specialization in Renewables", requirements: ["Mechanical Eng", "Sustainability"] }]
+  },
+  {
+    id: "civil-engineer",
+    title: "Civil Engineer",
+    description: "Designing and overseeing the construction of critical infrastructure.",
+    growth: "stable",
+    category: "Engineering, Science & Environment",
+    subCategory: "Traditional Engineering",
+    workType: "On-site",
+    tags: ["Green Transition"],
+    milestones: [{ ageRange: "18-22", title: "PE License", description: "Structural engineering", requirements: ["CAD", "Physics"] }]
+  },
+
+  // 5. Arts, Design & Media
+  {
+    id: "animator",
+    title: "Animator",
+    description: "Bringing stories to life through digital motion and 3D modeling.",
+    growth: "high",
+    category: "Arts, Design & Media",
+    subCategory: "Visual Arts",
+    workType: "Remote",
+    tags: ["Remote Economy", "AI Integration"],
+    milestones: [{ ageRange: "15-22", title: "Animation Portfolio", description: "3D/2D production", requirements: ["Blender/Maya", "Storyboarding"] }]
+  },
+  {
+    id: "video-editor",
+    title: "Video Editor",
+    description: "Crating compelling narratives from raw footage for global platforms.",
+    growth: "high",
+    category: "Arts, Design & Media",
+    subCategory: "Content Creation",
+    workType: "Remote",
+    tags: ["Remote Economy", "AI Integration"],
+    milestones: [{ ageRange: "16-24", title: "Production Flow", description: "Non-linear editing", requirements: ["Premiere Pro", "After Effects"] }]
+  },
+
+  // 6. Education, Law & Public Service
+  {
+    id: "instructional-designer",
+    title: "Instructional Designer",
+    description: "Designing digital learning experiences and curricula for the AI age.",
+    growth: "high",
+    category: "Education, Law & Public Service",
+    subCategory: "Education",
+    workType: "Remote",
+    tags: ["Remote Economy", "AI Integration"],
+    milestones: [{ ageRange: "22-26", title: "Mastery", description: "EdTech integration", requirements: ["LMS", "Pedagogy"] }]
+  },
+  {
+    id: "corporate-lawyer",
+    title: "Corporate Lawyer",
+    description: "Handling legal matters for businesses, from mergers to IP protection.",
+    growth: "stable",
+    category: "Education, Law & Public Service",
+    subCategory: "Law",
+    workType: "Hybrid",
+    tags: ["AI Integration"],
+    milestones: [{ ageRange: "18-26", title: "Bar Certification", description: "Law degree and exam", requirements: ["JD Degree", "Analytical Law"] }]
+  },
+
+  // 7. Skilled Trades & Technical Services
+  {
+    id: "aircraft-mechanic",
+    title: "Aircraft Mechanic",
+    description: "Ensuring the safety and performance of global aviation fleets.",
+    growth: "high",
+    category: "Skilled Trades & Technical Services",
+    subCategory: "Electrical & Mechanical",
+    workType: "On-site",
+    tags: ["Global Mobility"],
+    milestones: [{ ageRange: "18-22", title: "A&P License", description: "FAA/EASA certification", requirements: ["Avionics", "Engine Systems"] }]
+  },
+  {
+    id: "chef",
+    title: "Chef",
+    description: "Leading culinary teams and designing high-end dining experiences.",
+    growth: "stable",
+    category: "Skilled Trades & Technical Services",
+    subCategory: "Culinary",
+    workType: "On-site",
+    tags: ["Global Hubs"],
+    milestones: [{ ageRange: "16-24", title: "Culinary Arts", description: "Kitchen management", requirements: ["Gastronomy", "Leadership"] }]
   }
 ];
 
@@ -227,6 +313,78 @@ export const INSTITUTIONS: Institution[] = [
     city: "Mumbai",
     country: "India",
     costOfLivingIndex: 0.8
+  },
+  {
+    id: "johns-hopkins",
+    name: "Johns Hopkins School of Medicine",
+    location: "USA",
+    type: "Medical School",
+    avgCost: 65000,
+    programs: ["MD Degree", "Surgery Residency", "Biomedical Engineering"],
+    ranking: 3,
+    image: "https://picsum.photos/seed/hopkins/800/600",
+    applicationDeadline: "2026-10-15",
+    website: "https://www.hopkinsmedicine.org",
+    allowsInternationalStudents: true,
+    visaSupport: "Full",
+    coordinates: { lat: 39.2974, lng: -76.5923 },
+    city: "Baltimore",
+    country: "USA",
+    costOfLivingIndex: 1.1
+  },
+  {
+    id: "oxford-med",
+    name: "University of Oxford Medical School",
+    location: "UK",
+    type: "University",
+    avgCost: 45000,
+    programs: ["MD Degree", "Clinical Medicine", "Residency"],
+    ranking: 5,
+    image: "https://picsum.photos/seed/oxford/800/600",
+    applicationDeadline: "2026-10-15",
+    website: "https://www.medsci.ox.ac.uk",
+    allowsInternationalStudents: true,
+    visaSupport: "Full",
+    coordinates: { lat: 51.7611, lng: -1.2530 },
+    city: "Oxford",
+    country: "UK",
+    costOfLivingIndex: 1.3
+  },
+  {
+    id: "harvard-med",
+    name: "Harvard Medical School",
+    location: "USA",
+    type: "Medical School",
+    avgCost: 75000,
+    programs: ["MD Degree", "Health Sciences", "Surgery"],
+    ranking: 1,
+    image: "https://picsum.photos/seed/harvard/800/600",
+    applicationDeadline: "2026-11-01",
+    website: "https://hms.harvard.edu",
+    allowsInternationalStudents: true,
+    visaSupport: "Full",
+    coordinates: { lat: 42.3359, lng: -71.1031 },
+    city: "Boston",
+    country: "USA",
+    costOfLivingIndex: 1.5
+  },
+  {
+    id: "mayo-clinic",
+    name: "Mayo Clinic Alix School of Medicine",
+    location: "USA",
+    type: "Medical School",
+    avgCost: 60000,
+    programs: ["MD Degree", "Medical Residency", "Specialized Surgery"],
+    ranking: 15,
+    image: "https://picsum.photos/seed/mayo/800/600",
+    applicationDeadline: "2026-12-15",
+    website: "https://college.mayo.edu",
+    allowsInternationalStudents: true,
+    visaSupport: "Full",
+    coordinates: { lat: 44.0225, lng: -92.4666 },
+    city: "Rochester",
+    country: "USA",
+    costOfLivingIndex: 1.0
   }
 ];
 

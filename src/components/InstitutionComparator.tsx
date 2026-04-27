@@ -15,7 +15,8 @@ import {
   AlertCircle,
   Check,
   ExternalLink,
-  Zap
+  Zap,
+  ChevronRight
 } from 'lucide-react';
 import { Institution, UserProfile } from '../types/career';
 import { INSTITUTIONS } from '../constants/mockData';
@@ -104,14 +105,53 @@ const AISingleCoverLetter = ({ institution, profile }: { institution: Institutio
 };
 
 export const InstitutionComparator: React.FC<ComparisonProps> = ({ onClose, selectedIds, onRemove, onAddMore, profile }) => {
-  const selectedInstitutions = selectedIds
+  const [visaFilter, setVisaFilter] = useState<Institution['visaSupport'] | 'All'>('All');
+
+  const allSelectedInstitutions = selectedIds
     .map(id => INSTITUTIONS.find(i => i.id === id))
     .filter((i): i is Institution => !!i);
+
+  const selectedInstitutions = visaFilter === 'All' 
+    ? allSelectedInstitutions 
+    : allSelectedInstitutions.filter(inst => inst.visaSupport === visaFilter);
 
   const calculateTotalEstimate = (inst: Institution) => {
     const tuition = inst.avgCost;
     const livingExpenses = 25000 * inst.costOfLivingIndex;
     return tuition + livingExpenses;
+  };
+
+  const handleExport = () => {
+    if (selectedInstitutions.length === 0) return;
+
+    // CSV Headers
+    const headers = ["Metric", ...selectedInstitutions.map(i => i.name)];
+    
+    // CSV Rows
+    const rows = [
+      ["Global Hub", ...selectedInstitutions.map(i => `${i.city}, ${i.country}`)],
+      ["Tuition (p/a)", ...selectedInstitutions.map(i => `$${i.avgCost.toLocaleString()}`)],
+      ["Est. Living Cost", ...selectedInstitutions.map(i => `$${(25000 * i.costOfLivingIndex).toLocaleString()}`)],
+      ["COL Index", ...selectedInstitutions.map(i => `${i.costOfLivingIndex}x`)],
+      ["Visa Support", ...selectedInstitutions.map(i => i.visaSupport)],
+      ["Total Capital Requirement", ...selectedInstitutions.map(i => `$${calculateTotalEstimate(i).toLocaleString()}`)],
+      ["Website", ...selectedInstitutions.map(i => i.website)]
+    ];
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `CareerVision_Comparison_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -129,7 +169,28 @@ export const InstitutionComparator: React.FC<ComparisonProps> = ({ onClose, sele
               <TrendingUp className="text-indigo-600" size={28} />
               The "Study Anywhere" Side-by-Side Advisor
             </h2>
-            <p className="text-slate-500 text-sm font-medium mt-1">Compare global career hubs, ROI, and cost of living impacts.</p>
+            <div className="flex items-center gap-6 mt-2">
+              <p className="text-slate-500 text-sm font-medium">Compare global career hubs, ROI, and cost of living impacts.</p>
+              
+              {/* Visa Support Filter */}
+              <div className="flex items-center gap-2 pl-6 border-l border-slate-200">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-loose">Visa Support:</span>
+                <div className="relative min-w-[120px]">
+                  <ShieldCheck className="absolute left-2.5 top-1/2 -translate-y-1/2 text-indigo-500" size={12} />
+                  <select 
+                    value={visaFilter}
+                    onChange={(e) => setVisaFilter(e.target.value as any)}
+                    className="w-full pl-8 pr-8 py-1.5 bg-white border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none appearance-none cursor-pointer"
+                  >
+                    <option value="All">All Levels</option>
+                    <option value="Full">Full Only</option>
+                    <option value="Partial">Partial</option>
+                    <option value="None">None</option>
+                  </select>
+                  <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 rotate-90 pointer-events-none" size={10} />
+                </div>
+              </div>
+            </div>
           </div>
           <button 
             onClick={onClose}
@@ -373,7 +434,8 @@ export const InstitutionComparator: React.FC<ComparisonProps> = ({ onClose, sele
               <span className="text-xs font-medium italic">Geospatial indices provided by Simulated Teleport API 2026.</span>
            </div>
            <button 
-            disabled={selectedIds.length === 0}
+            onClick={handleExport}
+            disabled={selectedInstitutions.length === 0}
             className="px-6 py-2.5 bg-slate-800 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
           >
             Export Location Dossier
