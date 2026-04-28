@@ -119,3 +119,23 @@ export interface JobListing {
   description: string;
   logo?: string;
 }
+
+export interface MarketInsights {
+  careerId: string;
+  salaryBenchmarks: {
+    entry: number;
+    mid: number;
+    senior: number;
+    currency: string;
+  };
+  growthForecast: {
+    percentage: number;
+    trend: "rising" | "stable" | "declining";
+    description: string;
+  };
+  inDemandSkills: {
+    name: string;
+    importance: number; // 0-100
+  }[];
+  topHiringCompanies: string[];
+}

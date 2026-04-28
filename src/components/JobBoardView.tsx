@@ -7,9 +7,9 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
-import { JobListing, UserProfile } from '../types/career';
+import { JobListing, UserProfile, MarketInsights } from '../types/career';
 import { JOB_LISTINGS, CAREER_PATHS } from '../constants/mockData';
-import { aiSearchJobs, getAiJobSuggestions, getAiProactiveJobRecommendations } from '../services/geminiService';
+import { aiSearchJobs, getAiJobSuggestions, getAiProactiveJobRecommendations, getMarketInsights } from '../services/geminiService';
 
 export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -37,9 +37,29 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
   const [proactiveRecs, setProactiveRecs] = useState<JobListing[]>([]);
   const [isProactiveLoading, setIsProactiveLoading] = useState(false);
 
+  // Market Insights State
+  const [marketInsights, setMarketInsights] = useState<MarketInsights | null>(null);
+  const [isLoadingInsights, setIsLoadingInsights] = useState(false);
+
   useEffect(() => {
     localStorage.setItem('savedJobs', JSON.stringify(savedJobIds));
   }, [savedJobIds]);
+
+  useEffect(() => {
+    const fetchInsights = async () => {
+      const careerId = profile.targetCareerId || CAREER_PATHS[0].id;
+      setIsLoadingInsights(true);
+      try {
+        const insights = await getMarketInsights(careerId, profile.country);
+        setMarketInsights(insights);
+      } catch (error) {
+        console.error("Failed to fetch market insights:", error);
+      } finally {
+        setIsLoadingInsights(false);
+      }
+    };
+    fetchInsights();
+  }, [profile.targetCareerId, profile.country]);
 
   const toggleSaveJob = (id: string) => {
     setSavedJobIds(prev => 
@@ -346,7 +366,7 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
         <motion.div 
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="bg-emerald-900 text-white p-8 rounded-[3rem] shadow-2xl space-y-6 relative overflow-hidden"
+          className="bg-emerald-900 text-white p-8 rounded-[3rem] shadow-2xl space-y-6 relative overflow-hidden mb-8"
         >
           <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-800 rounded-full blur-3xl opacity-20 -mr-32 -mt-32" />
           
@@ -403,28 +423,149 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
         </motion.div>
       )}
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-y-auto pr-2 pb-12 scrollbar-hide">
-        {filteredJobs.map((job, i) => (
-          <JobCard 
-            key={job.id} 
-            job={job} 
-            index={i} 
-            isSaved={savedJobIds.includes(job.id)}
-            onToggleSave={() => toggleSaveJob(job.id)}
-          />
-        ))}
-        {filteredJobs.length === 0 && (
-          <div className="col-span-full py-20 bg-white rounded-[3rem] border border-dashed border-slate-200 flex flex-col items-center gap-4 text-center">
-            <div className="p-6 bg-slate-50 rounded-full text-slate-300">
-               <Briefcase size={48} />
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+        {/* Market Insights Column */}
+        <div className="xl:col-span-4 space-y-6">
+          <div className="bg-slate-900 rounded-[3rem] p-8 text-white relative overflow-hidden shadow-2xl">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl -mr-16 -mt-16" />
+            
+            <div className="flex items-center gap-4 mb-8">
+              <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-indigo-400 border border-white/20">
+                <TrendingUp size={24} />
+              </div>
+              <div>
+                <h3 className="text-xl font-black uppercase tracking-tighter">Market Pulse</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{profile.country} Intelligence</p>
+              </div>
             </div>
-            <div>
-              <p className="text-lg font-black text-slate-900 uppercase tracking-tight">No positions found</p>
-              <p className="text-slate-500 font-medium">Try adjusting your filters or location</p>
-            </div>
+
+            {isLoadingInsights ? (
+              <div className="space-y-6">
+                {[1, 2, 3].map(i => <div key={i} className="h-20 bg-white/5 animate-pulse rounded-2xl" />)}
+              </div>
+            ) : marketInsights ? (
+              <div className="space-y-8">
+                {/* Salaries */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Salary Benchmarks</p>
+                    <span className="px-2 py-1 bg-white/10 rounded-md text-[8px] font-black uppercase">{marketInsights.salaryBenchmarks.currency} / Yr</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
+                      <p className="text-[8px] font-bold text-slate-500 uppercase mb-1">Entry</p>
+                      <p className="text-xs font-black">{(marketInsights.salaryBenchmarks.entry / 1000).toFixed(0)}k</p>
+                    </div>
+                    <div className="bg-indigo-500/20 p-3 rounded-2xl border border-indigo-500/30">
+                      <p className="text-[8px] font-bold text-indigo-400 uppercase mb-1">Mid</p>
+                      <p className="text-xs font-black">{(marketInsights.salaryBenchmarks.mid / 1000).toFixed(0)}k</p>
+                    </div>
+                    <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
+                      <p className="text-[8px] font-bold text-slate-500 uppercase mb-1">Senior</p>
+                      <p className="text-xs font-black">{(marketInsights.salaryBenchmarks.senior / 1000).toFixed(0)}k</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Growth */}
+                <div className="bg-emerald-500/10 p-5 rounded-3xl border border-emerald-500/20">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Growth Forecast</p>
+                      <p className="text-lg font-black mt-1">+{marketInsights.growthForecast.percentage}% Demand</p>
+                    </div>
+                    <div className={cn(
+                      "p-2 rounded-xl",
+                      marketInsights.growthForecast.trend === 'rising' ? "bg-emerald-500 text-white" : "bg-slate-700 text-slate-400"
+                    )}>
+                      <TrendingUp size={16} />
+                    </div>
+                  </div>
+                  <p className="text-[10px] font-medium text-emerald-100/60 leading-relaxed italic">
+                    "{marketInsights.growthForecast.description}"
+                  </p>
+                </div>
+
+                {/* Skills */}
+                <div className="space-y-4">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">In-Demand Skills</p>
+                  <div className="space-y-3">
+                    {marketInsights.inDemandSkills.map((skill, i) => (
+                      <div key={i} className="space-y-1.5">
+                        <div className="flex justify-between text-[10px] font-bold uppercase">
+                          <span>{skill.name}</span>
+                          <span className="text-indigo-400">{skill.importance}%</span>
+                        </div>
+                        <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${skill.importance}%` }}
+                            className="h-full bg-indigo-500"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Companies */}
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Core Hiring Nodes</p>
+                  <div className="flex flex-wrap gap-2">
+                    {marketInsights.topHiringCompanies.map((company, i) => (
+                      <span key={i} className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-[9px] font-bold text-slate-300">
+                        {company}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="py-12 text-center">
+                <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">No detailed insights yet</p>
+              </div>
+            )}
           </div>
-        )}
+
+          <div className="bg-indigo-50 p-8 rounded-[3rem] border border-indigo-100">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-white rounded-xl text-indigo-600 shadow-sm">
+                <Lightbulb size={20} />
+              </div>
+              <p className="text-[10px] font-black text-indigo-900 uppercase tracking-widest">Spark.E Tip</p>
+            </div>
+            <p className="text-xs font-medium text-indigo-900/70 leading-relaxed italic">
+              "Focusing on {marketInsights?.inDemandSkills[0]?.name || 'emerging technologies'} can increase your mid-level salary potential by up to 25% in the {profile.country} market."
+            </p>
+          </div>
+        </div>
+
+        {/* Job Listings Column */}
+        <div className="xl:col-span-8 flex flex-col gap-6">
+          {/* Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-y-auto pr-2 pb-12 scrollbar-hide">
+            {filteredJobs.map((job, i) => (
+              <JobCard 
+                key={job.id} 
+                job={job} 
+                index={i} 
+                isSaved={savedJobIds.includes(job.id)}
+                onToggleSave={() => toggleSaveJob(job.id)}
+              />
+            ))}
+            {filteredJobs.length === 0 && (
+              <div className="col-span-full py-20 bg-white rounded-[3rem] border border-dashed border-slate-200 flex flex-col items-center gap-4 text-center">
+                <div className="p-6 bg-slate-50 rounded-full text-slate-300">
+                  <Briefcase size={48} />
+                </div>
+                <div>
+                  <p className="text-lg font-black text-slate-900 uppercase tracking-tight">No positions found</p>
+                  <p className="text-slate-500 font-medium">Try adjusting your filters or location</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

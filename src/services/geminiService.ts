@@ -1,6 +1,6 @@
 import { ai, Type } from "../lib/gemini";
 import { FUNDING_OPPORTUNITIES, STUDY_MATERIALS } from "../constants/mockData";
-import { FundingOpportunity, UserProfile, CareerPath, StudyMaterial, JobListing, Institution } from "../types/career";
+import { FundingOpportunity, UserProfile, CareerPath, StudyMaterial, JobListing, Institution, MarketInsights } from "../types/career";
 
 // ... existing functions ...
 
@@ -212,6 +212,45 @@ export async function getAiProactiveJobRecommendations(profile: UserProfile, sav
   }
 }
 
+export async function getMarketInsights(careerId: string, country: string): Promise<MarketInsights | null> {
+  const model = "gemini-2.0-flash";
+  
+  const systemInstruction = `You are Spark.E, a Global Market Analyst.
+  Provide deep market insights for career ID: "${careerId}" in country: "${country}".
+  
+  1. Salary Benchmarks: Real 2026 projections for Entry, Mid, and Senior levels.
+  2. Growth Forecast: 2-year growth percentage and trend.
+  3. In-Demand Skills: Top 5 skills and their importance score (0-100).
+  4. Top Hiring Companies: List of major employers in this field for the specified country.
+  
+  Return a valid JSON object matching the MarketInsights schema.
+  
+  Schema:
+  {
+    "careerId": "string",
+    "salaryBenchmarks": { "entry": number, "mid": number, "senior": number, "currency": "string" },
+    "growthForecast": { "percentage": number, "trend": "rising" | "stable" | "declining", "description": "string" },
+    "inDemandSkills": [ { "name": "string", "importance": number } ],
+    "topHiringCompanies": ["string"]
+  }`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: "user", parts: [{ text: `Provide market data for ${careerId} in ${country}` }] }],
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json"
+      }
+    });
+
+    return JSON.parse(response.text);
+  } catch (error) {
+    console.error("Market Insights Failed:", error);
+    return null;
+  }
+}
+
 export async function matchScholarships(profile: UserProfile): Promise<FundingOpportunity[]> {
   const model = "gemini-3.1-pro-preview";
   
@@ -223,7 +262,7 @@ export async function matchScholarships(profile: UserProfile): Promise<FundingOp
     ${JSON.stringify(FUNDING_OPPORTUNITIES, null, 2)}
 
     Output Format:
-    Return an array of objects for the TOP matching items:
+    Return a JSON array of objects for the TOP matching items:
     [
       { "id": "sch-id", "matchScore": 0-100, "matchReasoning": "short explanation" }
     ]
@@ -287,7 +326,7 @@ export async function getRecommendedCourses(sector: string): Promise<any[]> {
     Your task is to recommend the TOP 10 high-impact online courses for a specific industry sector in 2026.
     
     Output Format:
-    Return an array of objects:
+    Return a JSON array of objects:
     [
       { 
         "title": "Course Title", 
@@ -465,12 +504,12 @@ export async function getLatestCareerNews(preferredCountry?: string): Promise<{ 
   
   const systemInstruction = `
     You are an AI News Curator for the year 2026.
-    Your task is to provide 5 brief "News Flash" items regarding:
+    Your task is to provide 5 brief "News Flash" items in JSON format regarding:
     1. The most in-demand career in a specific country right now.
     2. A brand-new, cutting-edge AI technology that was just launched.
     
     Output Format:
-    Return an array of 5 objects:
+    Return a JSON array of 5 objects:
     [
       { "career": "Cyber-Physical Auditor", "country": "Singapore", "aiTech": "Neural-Link GPT-X" },
       ...

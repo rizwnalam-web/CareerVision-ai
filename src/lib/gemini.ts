@@ -37,14 +37,23 @@ export const ai = {
           try {
             console.info("Switching to Groq Llama-3.3-70b-versatile...");
             
+            const systemContent = config?.systemInstruction || "You are a specialized career advisor AI.";
+            const userContent = typeof contents === 'string' ? contents : JSON.stringify(contents);
+            
+            // Groq requires the word "json" to be in the messages if responding in json_object mode
+            const isJsonMode = config?.responseMimeType === "application/json";
+            const finalSystemContent = isJsonMode && !systemContent.toLowerCase().includes("json") 
+              ? `${systemContent} Respond in JSON format.`
+              : systemContent;
+
             const groqResponse = await groq.chat.completions.create({
               messages: [
-                { role: "system", content: config?.systemInstruction || "You are a specialized career advisor AI." },
-                { role: "user", content: typeof contents === 'string' ? contents : JSON.stringify(contents) }
+                { role: "system", content: finalSystemContent },
+                { role: "user", content: userContent }
               ],
               model: "llama-3.3-70b-versatile",
               temperature: config?.temperature ?? 0.7,
-              response_format: config?.responseMimeType === "application/json" ? { type: "json_object" } : { type: "text" },
+              response_format: isJsonMode ? { type: "json_object" } : { type: "text" },
             });
 
             return { text: groqResponse.choices[0]?.message?.content || "" };

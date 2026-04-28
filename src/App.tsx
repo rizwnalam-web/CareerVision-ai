@@ -618,6 +618,7 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
   const [visaFilter, setVisaFilter] = useState<Institution['visaSupport'] | 'All'>('All');
   const [showComparator, setShowComparator] = useState(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   // AI Recommendation States
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -683,6 +684,12 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
 
     return matchesSearch && matchesIntl && matchesCost && matchesProgram && matchesRadius && matchesVisa;
   });
+
+  useEffect(() => {
+    setIsSearching(true);
+    const timer = setTimeout(() => setIsSearching(false), 600);
+    return () => clearTimeout(timer);
+  }, [search, intlOnly, maxCost, selectedProgram, radius, visaFilter]);
 
   const handleExport = () => {
     if (filtered.length === 0) return;
@@ -801,10 +808,18 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
                    <input 
                       type="text" 
                       placeholder="Find Hub (e.g. London)..." 
-                      className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold outline-none focus:ring-1 focus:ring-indigo-500"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                    />
+                   {search && (
+                      <button 
+                         onClick={() => setSearch("")}
+                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                      >
+                         <X size={12} />
+                      </button>
+                   )}
                 </div>
                 <div className="flex flex-wrap gap-1">
                    {["USA", "UK", "Singapore", "Canada"].map(country => (
@@ -817,6 +832,48 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
                      </button>
                    ))}
                 </div>
+              </div>
+           </div>
+        </div>
+
+        {/* Results Sidebar */}
+        <div className="absolute top-6 right-6 z-[1000] pointer-events-none h-[calc(100%-180px)] flex flex-col gap-4">
+           <div className="bg-white/90 backdrop-blur-xl p-6 rounded-[2.5rem] border border-white shadow-2xl w-[320px] pointer-events-auto flex flex-col overflow-hidden max-h-full">
+              <div className="flex items-center justify-between mb-6">
+                 <div>
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">Ecosystem Nodes</h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">{isSearching ? 'Calibrating...' : `${filtered.length} Local matches`}</p>
+                 </div>
+                 {isSearching && <Loader2 size={16} className="animate-spin text-indigo-600" />}
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-hide">
+                 {isSearching ? (
+                   [1,2,3,4].map(i => (
+                     <div key={i} className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3 animate-pulse">
+                        <div className="w-10 h-10 rounded-xl bg-slate-200 shrink-0" />
+                        <div className="flex-1 space-y-2">
+                           <div className="h-2 w-20 bg-slate-200 rounded" />
+                           <div className="h-2 w-12 bg-slate-100 rounded" />
+                        </div>
+                     </div>
+                   ))
+                 ) : (
+                   filtered.map(inst => (
+                     <div key={inst.id} className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3 group hover:border-indigo-500 transition-all cursor-pointer">
+                        <div className="w-10 h-10 rounded-xl bg-slate-200 shrink-0 overflow-hidden">
+                           <img src={inst.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        </div>
+                        <div className="flex-1 overflow-hidden">
+                           <p className="text-[10px] font-black uppercase truncate group-hover:text-indigo-600">{inst.name}</p>
+                           <p className="text-[8px] text-slate-400 font-bold uppercase">{inst.city}, {inst.country}</p>
+                        </div>
+                        <button className="p-2 text-slate-300 hover:text-indigo-600 transition-colors">
+                           <ArrowUpRight size={14} />
+                        </button>
+                     </div>
+                   ))
+                 )}
               </div>
            </div>
         </div>
@@ -867,7 +924,20 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
               {isAiLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3].map(i => (
-                    <div key={i} className="h-20 bg-slate-800 animate-pulse rounded-2xl" />
+                    <div key={i} className="bg-slate-800/50 border border-slate-700 p-4 rounded-2xl animate-pulse">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-8 h-8 rounded-lg bg-slate-700 shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-2 w-24 bg-slate-700 rounded" />
+                          <div className="h-2 w-16 bg-slate-700/50 rounded" />
+                        </div>
+                      </div>
+                      <div className="h-10 bg-slate-700/30 rounded-xl mb-3" />
+                      <div className="flex gap-2">
+                        <div className="flex-1 h-6 bg-slate-700 rounded-lg" />
+                        <div className="flex-1 h-6 bg-slate-700 rounded-lg" />
+                      </div>
+                    </div>
                   ))}
                 </div>
               ) : (
