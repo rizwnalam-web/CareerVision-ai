@@ -147,13 +147,19 @@ export async function getAiInstitutionRecommendations(profile: UserProfile, sele
     "id": "string",
     "name": "string",
     "location": "string",
-    "rank": "string",
+    "type": "University" | "Vocational" | "Polytechnic" | "Medical School" | "Business School",
+    "avgCost": number (annual fees),
     "programs": ["string"],
-    "fees": "string (per year)",
-    "type": "University" | "Bootcamp" | "Online",
-    "image": "Unsplash URL",
-    "description": "string",
-    "features": ["string"]
+    "ranking": number,
+    "image": "https://images.unsplash.com/photo-...",
+    "applicationDeadline": "YYYY-MM-DD",
+    "website": "string",
+    "allowsInternationalStudents": boolean,
+    "visaSupport": "Full" | "Partial" | "None",
+    "coordinates": { "lat": number, "lng": number },
+    "city": "string",
+    "country": "string",
+    "costOfLivingIndex": number
   }`;
 
   try {
@@ -170,6 +176,38 @@ export async function getAiInstitutionRecommendations(profile: UserProfile, sele
     return Array.isArray(results) ? results : [];
   } catch (error) {
     console.error("AI Institution Recommendations Failed:", error);
+    return [];
+  }
+}
+
+export async function getAiProactiveJobRecommendations(profile: UserProfile, savedJobs: JobListing[]): Promise<JobListing[]> {
+  const model = "gemini-2.0-flash";
+  
+  const systemInstruction = `You are Spark.E, a Career Growth Engine. 
+  The user has saved these jobs: ${JSON.stringify(savedJobs)}.
+  Their career path is: ${profile.targetCareerId}.
+  
+  1. Analyze the themes of saved jobs (seniority, industry, tech stack, company type).
+  2. Source 4 FRESH proactive job recommendations that logically follow these interests.
+  3. One should be a "Next Level" role (e.g. if they saved Senior/Med, suggest Lead).
+  4. Ensure URLs lead to valid portal searches.
+  
+  Return a valid JSON array of JobListing objects.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: "user", parts: [{ text: "Based on my saved jobs, what else should I look at?" }] }],
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json"
+      }
+    });
+
+    const results = JSON.parse(response.text);
+    return Array.isArray(results) ? results : [];
+  } catch (error) {
+    console.error("AI Proactive Search Failed:", error);
     return [];
   }
 }

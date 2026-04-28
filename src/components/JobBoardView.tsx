@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { JobListing, UserProfile } from '../types/career';
 import { JOB_LISTINGS, CAREER_PATHS } from '../constants/mockData';
-import { aiSearchJobs, getAiJobSuggestions } from '../services/geminiService';
+import { aiSearchJobs, getAiJobSuggestions, getAiProactiveJobRecommendations } from '../services/geminiService';
 
 export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -17,6 +17,11 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
   const [activeCareer, setActiveCareer] = useState<string>("All");
   const [activeType, setActiveType] = useState<string>("All");
   const [isSearching, setIsSearching] = useState(false);
+  const [showSavedOnly, setShowSavedOnly] = useState(false);
+  const [savedJobIds, setSavedJobIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('savedJobs');
+    return saved ? JSON.parse(saved) : [];
+  });
   
   // AI Search State
   const [isAiSearching, setIsAiSearching] = useState(false);
@@ -28,13 +33,42 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
+  // Proactive State
+  const [proactiveRecs, setProactiveRecs] = useState<JobListing[]>([]);
+  const [isProactiveLoading, setIsProactiveLoading] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('savedJobs', JSON.stringify(savedJobIds));
+  }, [savedJobIds]);
+
+  const toggleSaveJob = (id: string) => {
+    setSavedJobIds(prev => 
+      prev.includes(id) ? prev.filter(jobId => jobId !== id) : [...prev, id]
+    );
+  };
+
+  const loadProactiveRecs = async () => {
+    if (savedJobIds.length === 0) return;
+    setIsProactiveLoading(true);
+    try {
+      const savedJobs = JOB_LISTINGS.filter(j => savedJobIds.includes(j.id));
+      const results = await getAiProactiveJobRecommendations(profile, savedJobs);
+      setProactiveRecs(results);
+    } catch (error) {
+      console.error("Proactive Recs Error:", error);
+    } finally {
+      setIsProactiveLoading(false);
+    }
+  };
+
   const careers = ["All", ...CAREER_PATHS.map(c => c.title)];
 
   const filteredJobs = useMemo(() => {
-    // Merge local, AI search results, and suggestions
+    // Merge local, AI search results, suggestions, and proactive recs
     const baseList = [...JOB_LISTINGS];
     if (hasAiSearched) baseList.unshift(...aiResults);
     if (suggestions.length > 0) baseList.unshift(...suggestions);
+    if (proactiveRecs.length > 0) baseList.unshift(...proactiveRecs);
     
     // Deduplicate by ID
     const uniqueMap = new Map();
@@ -48,10 +82,11 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
       const matchesLocation = job.location.toLowerCase().includes(locationQuery.toLowerCase());
       const matchesCareer = activeCareer === "All" || career?.title === activeCareer;
       const matchesType = activeType === "All" || job.type === activeType;
+      const matchesSaved = !showSavedOnly || savedJobIds.includes(job.id);
 
-      return matchesSearch && matchesLocation && matchesCareer && matchesType;
+      return matchesSearch && matchesLocation && matchesCareer && matchesType && matchesSaved;
     });
-  }, [searchQuery, locationQuery, activeCareer, activeType, aiResults, hasAiSearched, suggestions]);
+  }, [searchQuery, locationQuery, activeCareer, activeType, aiResults, hasAiSearched, suggestions, proactiveRecs, showSavedOnly, savedJobIds]);
 
   const loadAiSuggestions = async () => {
     setIsSuggesting(true);
@@ -104,8 +139,44 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
           </p>
         </div>
         
-        <button 
-          onClick={loadAiSuggestions}
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setShowSavedOnly(!showSavedOnly)}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-2",
+              showSavedOnly 
+                ? "bg-rose-50 border-rose-200 text-rose-600 shadow-sm" 
+                : "bg-white border-slate-100 text-slate-400 hover:border-slate-200"
+            )}
+          >
+            <Bookmark size={14} className={showSavedOnly ? "fill-rose-600" : ""} />
+            {showSavedOnly ? "Showing Saved" : "Show Saved"}
+            {savedJobIds.length > 0 && (
+              <span className={cn(
+                "ml-1 px-1.5 py-0.5 rounded-md text-[8px]",
+                showSavedOnly ? "bg-rose-600 text-white" : "bg-slate-100 text-slate-500"
+              )}>
+                {savedJobIds.length}
+              </span>
+            )}
+          </button>
+
+          <button 
+            onClick={loadProactiveRecs}
+            disabled={isProactiveLoading || savedJobIds.length === 0}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-2",
+              proactiveRecs.length > 0
+                ? "bg-emerald-50 border-emerald-200 text-emerald-600 shadow-sm"
+                : "bg-white border-slate-100 text-slate-400 hover:border-slate-200 disabled:opacity-30"
+            )}
+          >
+            {isProactiveLoading ? <Loader2 size={14} className="animate-spin" /> : <TrendingUp size={14} />}
+            {isProactiveLoading ? "Sourcing..." : proactiveRecs.length > 0 ? "AI Recommendations Ready" : "AI Source From Saved"}
+          </button>
+
+          <button 
+            onClick={loadAiSuggestions}
           disabled={isSuggesting}
           className="group relative flex items-center gap-3 bg-white border-2 border-indigo-100 px-6 py-4 rounded-[2rem] hover:border-indigo-500 transition-all shadow-sm hover:shadow-indigo-500/10 active:scale-95 disabled:opacity-50"
         >
@@ -118,8 +189,9 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
           </div>
         </button>
       </div>
+    </div>
 
-      {/* Suggested Section */}
+    {/* Suggested Section */}
       <AnimatePresence>
         {showSuggestions && (
           <motion.div 
@@ -269,10 +341,78 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
         </motion.div>
       )}
 
+      {/* Proactive Recommendations Section */}
+      {proactiveRecs.length > 0 && (
+        <motion.div 
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="bg-emerald-900 text-white p-8 rounded-[3rem] shadow-2xl space-y-6 relative overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-800 rounded-full blur-3xl opacity-20 -mr-32 -mt-32" />
+          
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-emerald-400 border border-white/20">
+                 <BrainCircuit size={24} />
+              </div>
+              <div>
+                <h3 className="text-xl font-black uppercase tracking-tighter">AI Recommended Jobs</h3>
+                <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Sourced uniquely from your saved patterns</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => setProactiveRecs([])}
+              className="px-4 py-2 bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all"
+            >
+              Close Feed
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {proactiveRecs.map((job) => (
+              <motion.div 
+                key={`proactive-${job.id}`}
+                whileHover={{ scale: 1.02 }}
+                className="bg-white/5 border border-white/10 p-5 rounded-[2rem] hover:bg-white/10 transition-all group"
+              >
+                <div className="flex items-center gap-4 mb-4">
+                   <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center overflow-hidden shrink-0">
+                      <img src={job.logo} className="w-full h-full object-cover" />
+                   </div>
+                   <div className="overflow-hidden">
+                      <h4 className="font-black text-sm uppercase truncate">{job.title}</h4>
+                      <p className="text-[10px] font-bold text-emerald-400 uppercase truncate">{job.company}</p>
+                   </div>
+                </div>
+                <div className="flex items-center justify-between">
+                   <div className="flex items-center gap-2 text-emerald-100/60">
+                      <MapPin size={12} />
+                      <span className="text-[9px] font-bold uppercase">{job.location}</span>
+                   </div>
+                   <a 
+                    href={job.url} 
+                    target="_blank" 
+                    className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20"
+                   >
+                     <ArrowUpRight size={18} />
+                   </a>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       {/* Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-y-auto pr-2 pb-12 scrollbar-hide">
         {filteredJobs.map((job, i) => (
-          <JobCard key={job.id} job={job} index={i} />
+          <JobCard 
+            key={job.id} 
+            job={job} 
+            index={i} 
+            isSaved={savedJobIds.includes(job.id)}
+            onToggleSave={() => toggleSaveJob(job.id)}
+          />
         ))}
         {filteredJobs.length === 0 && (
           <div className="col-span-full py-20 bg-white rounded-[3rem] border border-dashed border-slate-200 flex flex-col items-center gap-4 text-center">
@@ -290,7 +430,7 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
   );
 };
 
-const JobCard = ({ job, index }: { job: JobListing, index: number }) => {
+const JobCard = ({ job, index, isSaved, onToggleSave }: { job: JobListing, index: number, isSaved: boolean, onToggleSave: () => void }) => {
   const career = CAREER_PATHS.find(c => c.id === job.careerId);
   
   return (
@@ -362,8 +502,14 @@ const JobCard = ({ job, index }: { job: JobListing, index: number }) => {
       </p>
 
       <div className="pt-2 flex items-center justify-between">
-        <button className="text-slate-400 hover:text-rose-500 transition-colors p-2">
-           <Bookmark size={20} />
+        <button 
+          onClick={onToggleSave}
+          className={cn(
+            "p-2 rounded-xl transition-all active:scale-90",
+            isSaved ? "text-rose-600 bg-rose-50 hover:bg-rose-100" : "text-slate-400 hover:text-rose-500 hover:bg-slate-50"
+          )}
+        >
+           <Bookmark size={20} className={isSaved ? "fill-rose-600" : ""} />
         </button>
         <a 
           href={job.url}
