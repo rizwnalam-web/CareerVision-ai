@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, 
   MapPin, 
@@ -16,8 +16,14 @@ import {
   Check,
   ExternalLink,
   Zap,
-  ChevronRight
+  ChevronRight,
+  RotateCcw,
+  Map as MapIcon,
+  LayoutGrid,
+  Download
 } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
 import { Institution, UserProfile } from '../types/career';
 import { INSTITUTIONS } from '../constants/mockData';
 import { cn } from '../lib/utils';
@@ -32,7 +38,7 @@ interface ComparisonProps {
   profile: UserProfile;
 }
 
-const AISingleCoverLetter = ({ institution, profile }: { institution: Institution, profile: UserProfile }) => {
+const AIAdmissionSuite = ({ institution, profile }: { institution: Institution, profile: UserProfile }) => {
   const [highlights, setHighlights] = useState("");
   const [generatedLetter, setGeneratedLetter] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -47,10 +53,13 @@ const AISingleCoverLetter = ({ institution, profile }: { institution: Institutio
   };
 
   return (
-    <div className="mt-8 pt-8 border-t border-slate-100 space-y-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Zap size={16} className="text-amber-500 fill-amber-500" />
-        <span className="text-[10px] font-black text-slate-800 uppercase tracking-widest leading-loose">AI Admission Forge</span>
+    <div className="mt-12 pt-8 border-t border-slate-100 space-y-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Zap size={14} className="text-amber-500 fill-amber-500" />
+          <span className="text-[10px] font-black text-slate-800 uppercase tracking-widest">AI Cover Letter</span>
+        </div>
+        <div className="px-2 py-0.5 bg-indigo-50 rounded text-[8px] font-bold text-indigo-600 uppercase tracking-tighter">Forge v2.6</div>
       </div>
       
       {!showEditor ? (
@@ -63,20 +72,32 @@ const AISingleCoverLetter = ({ institution, profile }: { institution: Institutio
               value={highlights}
               onChange={(e) => setHighlights(e.target.value)}
               placeholder="List specific projects, roles, or achievements you want to highlight (e.g. 'Led 5 robotics competitions', '3.9 GPA in STEM')..."
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-medium focus:ring-2 focus:ring-indigo-500 outline-none min-h-[80px] resize-none"
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-medium focus:ring-2 focus:ring-indigo-500 outline-none min-h-[100px] resize-none"
             />
           </div>
           <button 
             onClick={handleGenerate}
             disabled={isGenerating || !highlights}
-            className="w-full py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
           >
-            {isGenerating ? "Forging..." : "Generate AI Letter"}
+            {isGenerating ? (
+              <>
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                >
+                  <RotateCcw size={14} />
+                </motion.div>
+                Forging Strategy...
+              </>
+            ) : (
+              "Generate AI Letter"
+            )}
           </button>
         </div>
       ) : (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
-          <div className="bg-indigo-50/50 rounded-xl p-4 border border-indigo-100 h-[250px] overflow-y-auto custom-scrollbar">
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 h-[280px] overflow-y-auto custom-scrollbar shadow-inner">
             <div className="prose prose-slate prose-xs max-w-none text-[10px] font-medium leading-relaxed">
               <ReactMarkdown>{generatedLetter}</ReactMarkdown>
             </div>
@@ -86,12 +107,11 @@ const AISingleCoverLetter = ({ institution, profile }: { institution: Institutio
               onClick={() => setShowEditor(false)}
               className="flex-1 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all"
             >
-              Back to Input
+              Back
             </button>
             <button 
               onClick={() => {
                 navigator.clipboard.writeText(generatedLetter);
-                alert("Letter copied to clipboard!");
               }}
               className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100"
             >
@@ -106,6 +126,7 @@ const AISingleCoverLetter = ({ institution, profile }: { institution: Institutio
 
 export const InstitutionComparator: React.FC<ComparisonProps> = ({ onClose, selectedIds, onRemove, onAddMore, profile }) => {
   const [visaFilter, setVisaFilter] = useState<Institution['visaSupport'] | 'All'>('All');
+  const [view, setView] = useState<'grid' | 'map'>('grid');
 
   const allSelectedInstitutions = selectedIds
     .map(id => INSTITUTIONS.find(i => i.id === id))
@@ -154,6 +175,16 @@ export const InstitutionComparator: React.FC<ComparisonProps> = ({ onClose, sele
     document.body.removeChild(link);
   };
 
+  const customIcon = L.divIcon({
+    className: 'custom-marker',
+    html: `<div style="width: 24px; height: 24px; background: #6366f1; border: 3px solid white; border-radius: 50%; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); display: flex; items-center; justify-center; color: white;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3z"/></svg>
+    </div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+    popupAnchor: [0, -12]
+  });
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md">
       <motion.div 
@@ -201,7 +232,7 @@ export const InstitutionComparator: React.FC<ComparisonProps> = ({ onClose, sele
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-x-auto p-8 overflow-y-auto">
+        <div className="flex-1 overflow-hidden flex flex-col p-8">
           {selectedIds.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center space-y-6">
               <div className="w-24 h-24 bg-indigo-50 rounded-3xl flex items-center justify-center text-indigo-600 animate-pulse">
@@ -220,8 +251,8 @@ export const InstitutionComparator: React.FC<ComparisonProps> = ({ onClose, sele
                 </button>
               </div>
             </div>
-          ) : (
-            <div className="grid grid-cols-[200px_repeat(3,1fr)] gap-6 h-full">
+          ) : view === 'grid' ? (
+            <div className="grid grid-cols-[200px_repeat(3,1fr)] gap-6 h-full overflow-y-auto overflow-x-auto">
               {/* Metrics Labels */}
               <div className="space-y-12 pt-40">
                 <div className="h-24 flex flex-col justify-center">
@@ -236,13 +267,14 @@ export const InstitutionComparator: React.FC<ComparisonProps> = ({ onClose, sele
                 <div className="h-16 flex flex-col justify-center">
                    <div className="flex items-center gap-2 text-slate-500">
                     <DollarSign size={14} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Tuition (p/a)</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest">Average Tuition Cost</span>
                    </div>
+                   <p className="text-[8px] text-slate-400 leading-tight mt-1">Per academic year.</p>
                 </div>
                 <div className="h-16 flex flex-col justify-center border-t border-slate-50">
                    <div className="flex items-center gap-2 text-slate-500">
                     <TrendingUp size={14} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Est. Living Cost</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest">Estimated Living Expenses</span>
                    </div>
                    <p className="text-[8px] text-slate-400 leading-tight pr-4 mt-1">Adjusted by regional Teleport API metrics.</p>
                 </div>
@@ -258,9 +290,14 @@ export const InstitutionComparator: React.FC<ComparisonProps> = ({ onClose, sele
                    </div>
                 </div>
                 <div className="h-12 flex flex-col justify-center">
-                   <div className="flex items-center gap-2 text-slate-500">
+                   <div className="flex items-center gap-2 text-slate-500 group relative cursor-help">
                     <PlaneTakeoff size={14} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Migration Support</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest">Visa Support Level</span>
+                    <div className="absolute bottom-full left-0 mb-2 w-48 p-3 bg-slate-900 text-white text-[9px] font-medium rounded-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-10 shadow-2xl border border-slate-700 leading-relaxed translate-y-1 group-hover:translate-y-0">
+                       <p className="font-bold text-indigo-300 mb-1">Visa Sponsorship</p>
+                       Indicates the level of administrative and legal assistance provided by the institution for international residence permits.
+                       <div className="absolute top-full left-4 -mt-1 border-4 border-transparent border-t-slate-900"></div>
+                    </div>
                    </div>
                 </div>
                 <div className="h-12 flex flex-col justify-center">
@@ -269,11 +306,23 @@ export const InstitutionComparator: React.FC<ComparisonProps> = ({ onClose, sele
                     <span className="text-[10px] font-black uppercase tracking-widest">Official Website</span>
                    </div>
                 </div>
-                <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100">
-                   <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">Total Capital Req.</span>
+                <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 group relative cursor-help">
+                   <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest flex items-center gap-2">
+                     Total Capital Req.
+                     <Info size={10} className="text-indigo-400" />
+                   </span>
+                   <div className="absolute bottom-full left-0 mb-2 w-56 p-3 bg-indigo-950 text-indigo-50 text-[9px] font-medium rounded-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-10 shadow-2xl border border-indigo-800 leading-relaxed translate-y-1 group-hover:translate-y-0">
+                      <p className="font-bold text-white mb-1">Total Estimated Capital</p>
+                      Calculated as: <span className="text-indigo-300 font-bold">Annual Tuition + (Regional COL × $25,000 Base Living Exp)</span>. This represents the total proof of funds typically required for a 1-year visa.
+                      <div className="absolute top-full left-4 -mt-1 border-4 border-transparent border-t-indigo-950"></div>
+                   </div>
                 </div>
-                <div className="pt-8">
-                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-loose">Admission Suite</span>
+                <div className="pt-12 mt-8 border-t border-slate-100">
+                   <div className="flex items-center gap-2 text-indigo-600 mb-1">
+                     <Zap size={16} />
+                     <span className="text-xs font-black uppercase tracking-widest">Admission Suite</span>
+                   </div>
+                   <p className="text-[8px] text-slate-400 font-medium leading-relaxed">AI-powered tools for your global application success.</p>
                 </div>
               </div>
 
@@ -329,24 +378,26 @@ export const InstitutionComparator: React.FC<ComparisonProps> = ({ onClose, sele
                           {inst.costOfLivingIndex > 1.4 ? "High Density" : "Mid Density"}
                        </span>
                     </div>
-
                     <div className="h-16 flex flex-col justify-center px-2">
-                       <span className="text-xl font-black text-slate-800">${inst.avgCost.toLocaleString()}</span>
+                       <span className="text-xl font-black text-slate-800 tracking-tight">${inst.avgCost.toLocaleString()}</span>
                     </div>
 
                     <div className="h-16 flex flex-col justify-center px-2 border-t border-slate-50">
-                       <span className="text-xl font-black text-indigo-600">${(25000 * inst.costOfLivingIndex).toLocaleString()}</span>
+                       <span className="text-xl font-black text-indigo-600 tracking-tight">${(25000 * inst.costOfLivingIndex).toLocaleString()}</span>
                     </div>
                     
                     <div className="h-12 flex flex-col justify-center px-2 border-t border-slate-50">
                        <div className="flex items-center gap-2">
                           <span className={cn(
-                            "text-base font-black",
+                            "text-base font-black tracking-tighter",
                             inst.costOfLivingIndex > 1.4 ? "text-rose-600" : "text-emerald-600"
                           )}>
-                            {inst.costOfLivingIndex}x
+                             {inst.costOfLivingIndex.toFixed(2)}x
                           </span>
-                          <span className="text-[8px] font-black uppercase text-slate-400 tracking-tighter">Multiplier</span>
+                          <div className="flex flex-col">
+                            <span className="text-[7px] font-black uppercase text-slate-400 tracking-widest leading-none">Global</span>
+                            <span className="text-[8px] font-black uppercase text-slate-500 tracking-tighter">Multiplier</span>
+                          </div>
                        </div>
                     </div>
 
@@ -419,26 +470,88 @@ export const InstitutionComparator: React.FC<ComparisonProps> = ({ onClose, sele
                            <span className="text-[9px] leading-tight font-medium text-indigo-100">Recommended starting balance based on local rent + tuition.</span>
                         </div>
                     </div>
-                    <AISingleCoverLetter institution={inst} profile={profile} />
+                    <AIAdmissionSuite institution={inst} profile={profile} />
                   </motion.div>
                 );
               })}
+            </div>
+          ) : (
+            <div className="flex-1 rounded-3xl overflow-hidden border border-slate-100 shadow-inner relative bg-slate-50">
+              <MapContainer 
+                center={[20, 0]} 
+                zoom={2} 
+                className="h-full w-full z-0"
+              >
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+                {selectedInstitutions.map((inst) => (
+                  <Marker 
+                    key={inst.id} 
+                    position={[inst.coordinates.lat, inst.coordinates.lng]}
+                    icon={customIcon}
+                  >
+                    <Popup className="custom-popup">
+                      <div className="p-1 max-w-[200px]">
+                        <div className="h-20 rounded-lg overflow-hidden mb-2">
+                          <img src={inst.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        </div>
+                        <h4 className="font-bold text-slate-800 text-xs leading-tight mb-1">{inst.name}</h4>
+                        <p className="text-[10px] text-slate-500 mb-2">{inst.city}, {inst.country}</p>
+                        <div className="flex items-center justify-between border-t border-slate-100 pt-2">
+                          <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">${inst.avgCost.toLocaleString()} p/a</span>
+                          <span className="text-[8px] font-bold bg-slate-100 px-1.5 py-0.5 rounded uppercase">{inst.type}</span>
+                        </div>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))}
+              </MapContainer>
+              <div className="absolute top-4 right-4 z-[10] flex flex-col gap-2">
+                <div className="bg-white/90 backdrop-blur px-3 py-2 rounded-xl border border-white shadow-lg">
+                   <p className="text-[10px] font-black text-slate-800 uppercase tracking-widest leading-none mb-1">Geospatial Distribution</p>
+                   <p className="text-[8px] text-slate-500 font-medium">Visualizing selected global academic hubs.</p>
+                </div>
+              </div>
             </div>
           )}
         </div>
 
         {/* Action Bar */}
         <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
-           <div className="flex items-center gap-2 text-slate-400">
-              <Info size={16} />
-              <span className="text-xs font-medium italic">Geospatial indices provided by Simulated Teleport API 2026.</span>
+           <div className="flex items-center gap-4">
+              <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+                <button 
+                  onClick={() => setView('grid')}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                    view === 'grid' ? "bg-indigo-600 text-white shadow-md shadow-indigo-100" : "text-slate-400 hover:text-slate-600"
+                  )}
+                >
+                  <LayoutGrid size={14} /> Grid
+                </button>
+                <button 
+                  onClick={() => setView('map')}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                    view === 'map' ? "bg-indigo-600 text-white shadow-md shadow-indigo-100" : "text-slate-400 hover:text-slate-600"
+                  )}
+                >
+                  <MapIcon size={14} /> Map
+                </button>
+              </div>
+              <div className="flex items-center gap-2 text-slate-400 border-l border-slate-200 pl-4">
+                <Info size={16} />
+                <span className="text-xs font-medium italic">Geospatial indices provided by Simulated Teleport API 2026.</span>
+              </div>
            </div>
            <button 
             onClick={handleExport}
             disabled={selectedInstitutions.length === 0}
-            className="px-6 py-2.5 bg-slate-800 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            className="flex items-center gap-2 px-6 py-2.5 bg-slate-800 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
           >
-            Export Location Dossier
+            <Download size={14} /> Export CSV
           </button>
         </div>
       </motion.div>

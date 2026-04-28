@@ -42,16 +42,20 @@ export interface Institution {
 export interface StudyMaterial {
   id: string;
   title: string;
-  type: "video" | "audio" | "course";
+  type: "video" | "audio" | "course" | "article";
   provider: string;
   url: string;
-  careerId: string;
+  careerId: string; // Primary career ID
+  secondaryCareerIds?: string[]; // Optional secondary careers
   duration: string;
   thumbnail: string;
   region: "Global" | "NA" | "EU" | "ASIA" | "UK";
   language: string;
   rating: number;
   skillLevel: "Beginner" | "Intermediate" | "Advanced";
+  tags?: string[];
+  description?: string;
+  lastUpdated?: string;
 }
 
 export interface FundingOpportunity {
@@ -76,6 +80,7 @@ export interface UserProfile {
   interests: string[];
   budget: number;
   country: string;
+  targetLocation?: string;
   targetCareerId?: string;
   completedMilestones: string[]; // Stores composite IDs like "careerId-milestoneIndex"
   academicPerformance?: {
@@ -89,4 +94,28 @@ export interface UserProfile {
     goals: { id: string; title: string; target: number; current: number; deadline: string }[];
     debt: { id: string; title: string; amount: number; interestRate: number }[];
   };
+  // Auth and System fields
+  uid?: string;
+  email?: string;
+  createdAt?: any; // Firestore serverTimestamp or Timestamp
+  updatedAt?: any;
+}
+
+export interface JobListing {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  salary: {
+    min: number;
+    max: number;
+    currency: string;
+    period: "yearly" | "monthly" | "hourly";
+  };
+  type: "Full-time" | "Part-time" | "Contract" | "Remote" | "Hybrid";
+  postedAt: string;
+  url: string;
+  careerId: string;
+  description: string;
+  logo?: string;
 }

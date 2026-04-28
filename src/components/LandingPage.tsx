@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
+import { NewsFlash } from './NewsFlash';
 import { 
   ChevronRight, 
   Target, 
@@ -10,65 +11,17 @@ import {
   TrendingUp, 
   Cpu,
   Flame,
-  Radio
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { getLatestCareerNews } from '../services/geminiService';
 
 interface LandingPageProps {
   onStart: () => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
-  const [news, setNews] = useState<{ career: string, country: string, aiTech: string }[]>([]);
-  const [currentNewsIdx, setCurrentNewsIdx] = useState(0);
-
-  useEffect(() => {
-    const fetchNews = async () => {
-      const data = await getLatestCareerNews();
-      if (data && data.length > 0) setNews(data);
-    };
-    fetchNews();
-  }, []);
-
-  useEffect(() => {
-    if (news.length === 0) return;
-    const interval = setInterval(() => {
-      setCurrentNewsIdx((prev) => (prev + 1) % news.length);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [news]);
-
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-indigo-100 italic-selection">
-      {/* News Flash Ticker */}
-      <div className="bg-slate-900 text-white overflow-hidden py-2 border-b border-white/10 relative z-50">
-        <div className="max-w-7xl mx-auto px-8 flex items-center gap-6">
-          <div className="flex items-center gap-2 shrink-0">
-            <Radio size={14} className="text-rose-500 animate-pulse" />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-500">Live News Flash</span>
-          </div>
-          <div className="flex-1 relative h-4 overflow-hidden">
-            <AnimatePresence mode="wait">
-              {news.length > 0 && (
-                <motion.div 
-                  key={currentNewsIdx}
-                  initial={{ y: 20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: -20, opacity: 0 }}
-                  className="absolute inset-0 flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest"
-                >
-                  <span className="text-indigo-400">Trending in {news[currentNewsIdx].country}:</span>
-                  <span className="text-white">{news[currentNewsIdx].career}</span>
-                  <span className="mx-2 text-slate-700">|</span>
-                  <span className="text-amber-400">AI Launch:</span>
-                  <span className="text-white">{news[currentNewsIdx].aiTech}</span>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
-      </div>
+      <NewsFlash country="Global" />
 
       {/* Navigation */}
       <nav className="flex items-center justify-between px-8 py-6 max-w-7xl mx-auto">
@@ -84,7 +37,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
             onClick={onStart}
             className="bg-slate-900 text-white px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-xl hover:shadow-indigo-200"
           >
-            Launch System
+            Sign Up / Login
           </button>
         </div>
       </nav>
@@ -118,7 +71,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
               onClick={onStart}
               className="flex items-center justify-center gap-3 bg-indigo-600 text-white px-8 py-4 rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-2xl shadow-indigo-200 group"
             >
-              Initialize My Path <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+              Sign Up & Initialize <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
             </button>
             <div className="flex -space-x-3 items-center">
               {[1, 2, 3, 4].map((i) => (
@@ -244,7 +197,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
             onClick={onStart}
             className="inline-flex items-center gap-3 bg-white text-slate-900 px-10 py-5 rounded-2xl text-sm font-black uppercase tracking-[0.2em] hover:bg-indigo-500 hover:text-white transition-all shadow-2xl hover:shadow-indigo-500/50"
           >
-            Create My Profile <ChevronRight size={20} />
+            Start Your Registration <ChevronRight size={20} />
           </button>
         </div>
         

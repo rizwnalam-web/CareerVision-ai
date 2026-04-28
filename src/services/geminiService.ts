@@ -1,8 +1,178 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import { FUNDING_OPPORTUNITIES } from "../constants/mockData";
-import { FundingOpportunity, UserProfile, CareerPath } from "../types/career";
+import { ai, Type } from "../lib/gemini";
+import { FUNDING_OPPORTUNITIES, STUDY_MATERIALS } from "../constants/mockData";
+import { FundingOpportunity, UserProfile, CareerPath, StudyMaterial, JobListing, Institution } from "../types/career";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// ... existing functions ...
+
+export async function aiSearchStudyMaterials(query: string): Promise<StudyMaterial[]> {
+  const model = "gemini-2.0-flash";
+  
+  const systemInstruction = `You are Spark.E, a Global Career Academy Librarian. 
+  The user is searching for study materials. 
+  1. Analyze the query: "${query}".
+  2. If the query matches existing local materials, suggest them.
+  3. If not, synthesize 2-3 REAL, high-quality global resources (from YouTube, Coursera, MIT OpenCourseWare, etc.) that would help the user.
+  4. Return the result in a valid JSON array of StudyMaterial objects.
+  
+  StudyMaterial Schema:
+  {
+    "id": "string",
+    "title": "string",
+    "type": "video" | "audio" | "course" | "article",
+    "provider": "string",
+    "url": "string (valid URL)",
+    "careerId": "string (best fit)",
+    "duration": "string",
+    "thumbnail": "string (use high quality Unsplash URL: https://images.unsplash.com/photo-...)",
+    "region": "Global",
+    "language": "English",
+    "rating": number (4.0 - 5.0),
+    "skillLevel": "Beginner" | "Intermediate" | "Advanced",
+    "description": "string",
+    "tags": ["string"]
+  }`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: "user", parts: [{ text: `Search for materials matching: ${query}` }] }],
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json"
+      }
+    });
+
+    const results = JSON.parse(response.text);
+    return Array.isArray(results) ? results : [];
+  } catch (error) {
+    console.error("AI Search Failed:", error);
+    return [];
+  }
+}
+
+export async function aiSearchJobs(query: string, location: string): Promise<JobListing[]> {
+  const model = "gemini-2.0-flash";
+  
+  const systemInstruction = `You are Spark.E, a Global Career Academy Recruiter. 
+  The user is searching for jobs. 
+  1. Analyze the query: "${query}" in location: "${location}".
+  2. Research and synthesize 3-4 REAL, high-quality job opportunities from major portals (LinkedIn, Indeed, Glassdoor, etc.).
+  3. Ensure the "url" leads to a valid search page or job portal (e.g., https://www.linkedin.com/jobs/search/?keywords=...).
+  4. Return the result in a valid JSON array of JobListing objects.
+  
+  JobListing Schema:
+  {
+    "id": "string",
+    "title": "string",
+    "company": "string",
+    "location": "string",
+    "salary": {
+      "min": number,
+      "max": number,
+      "currency": "string",
+      "period": "yearly" | "monthly"
+    },
+    "type": "Full-time" | "Part-time" | "Contract" | "Remote" | "Hybrid",
+    "postedAt": "Just now" | "1d ago" | etc,
+    "url": "string (Direct link to search or portal)",
+    "careerId": "string (best fit from ID list)",
+    "description": "string (catchy summary)",
+    "logo": "string (high quality company logo or Unsplash: https://images.unsplash.com/photo-...)"
+  }`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: "user", parts: [{ text: `Find jobs for: ${query} in ${location}` }] }],
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json"
+      }
+    });
+
+    const results = JSON.parse(response.text);
+    return Array.isArray(results) ? results : [];
+  } catch (error) {
+    console.error("AI Job Search Failed:", error);
+    return [];
+  }
+}
+
+export async function getAiJobSuggestions(profile: UserProfile): Promise<JobListing[]> {
+  const model = "gemini-2.0-flash";
+  
+  const systemInstruction = `You are Spark.E, a Global Career Academy AI Career Scout.
+  Analyze this user profile: ${JSON.stringify(profile)}.
+  
+  1. Identify the user's core skills, career goal, and country.
+  2. Synthesize 4 highly personalized job recommendations based on their profile and 2026 global market trends.
+  3. One recommendation should be an "Ambition Move" (higher salary/level).
+  4. One should be a "Perfect Match" (alignment with current skills).
+  5. Use realistic job names and companies (local to their country: ${profile.country} or Global Remote).
+  
+  Return a valid JSON array of JobListing objects. Use the same schema as aiSearchJobs.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: "user", parts: [{ text: "Suggest jobs for me based on my profile." }] }],
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json"
+      }
+    });
+
+    const results = JSON.parse(response.text);
+    return Array.isArray(results) ? results : [];
+  } catch (error) {
+    console.error("AI Job Suggestions Failed:", error);
+    return [];
+  }
+}
+
+export async function getAiInstitutionRecommendations(profile: UserProfile, selectedPathId: string): Promise<{ institution: Institution, rationale: string }[]> {
+  const model = "gemini-2.0-flash";
+  
+  const systemInstruction = `You are Spark.E, a Global Admissions Strategist.
+  Analyze this user profile: ${JSON.stringify(profile)} and selected career path: ${selectedPathId}.
+  
+  1. Recommend 3 elite or highly relevant institutions/programs globally or in their country: ${profile.country}.
+  2. For each, provide a "rationale" explaining why it's perfect for their specific academic background and career goals.
+  3. Ensure the institutions exist and are known for the target field.
+  
+  Return a valid JSON array of objects: { "institution": Institution, "rationale": "string" }.
+  
+  Institution Schema:
+  {
+    "id": "string",
+    "name": "string",
+    "location": "string",
+    "rank": "string",
+    "programs": ["string"],
+    "fees": "string (per year)",
+    "type": "University" | "Bootcamp" | "Online",
+    "image": "Unsplash URL",
+    "description": "string",
+    "features": ["string"]
+  }`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: "user", parts: [{ text: "Recommend the best institutions for my career choice." }] }],
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json"
+      }
+    });
+
+    const results = JSON.parse(response.text);
+    return Array.isArray(results) ? results : [];
+  } catch (error) {
+    console.error("AI Institution Recommendations Failed:", error);
+    return [];
+  }
+}
 
 export async function matchScholarships(profile: UserProfile): Promise<FundingOpportunity[]> {
   const model = "gemini-3.1-pro-preview";

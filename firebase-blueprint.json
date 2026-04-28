@@ -1,0 +1,85 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user educational background, interests, career goals, and financial planning data.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "age": { "type": "number" },
+        "education": { "type": "string" },
+        "interests": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "budget": { "type": "number" },
+        "country": { "type": "string" },
+        "targetLocation": { "type": "string" },
+        "targetCareerId": { "type": "string" },
+        "completedMilestones": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "academicPerformance": {
+          "type": "object",
+          "properties": {
+            "gpa": { "type": "number" },
+            "achievements": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "financialProfile": {
+          "type": "object",
+          "properties": {
+            "annualIncome": { "type": "number" },
+            "currentSavings": { "type": "number" },
+            "monthlyExpenses": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "category": { "type": "string" },
+                  "amount": { "type": "number" }
+                }
+              }
+            },
+            "goals": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "title": { "type": "string" },
+                  "target": { "type": "number" },
+                  "current": { "type": "number" },
+                  "deadline": { "type": "string" }
+                }
+              }
+            },
+            "debt": {
+              "type": "array",
+              "items": {
+                "type": { "type": "string" },
+                "amount": { "type": "number" },
+                "interestRate": { "type": "number" }
+              }
+            }
+          }
+        },
+        "email": { "type": "string" },
+        "uid": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "uid"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile documents keyed by Firebase Auth UID."
+    }
+  }
+}

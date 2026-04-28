@@ -1,4 +1,4 @@
-import { CareerPath, Institution, StudyMaterial, FundingOpportunity } from "../types/career";
+import { CareerPath, Institution, StudyMaterial, FundingOpportunity, JobListing } from "../types/career";
 
 export const CAREER_PATHS: CareerPath[] = [
   // 1. Technology & Digital
@@ -437,19 +437,38 @@ export const FUNDING_OPPORTUNITIES: FundingOpportunity[] = [
 ];
 
 export const STUDY_MATERIALS: StudyMaterial[] = [
+  // AI Engineering
   {
     id: "ai-course-1",
     careerId: "ai-engineer",
     title: "Introduction to Artificial Intelligence",
     type: "video",
-    provider: "Stanford Online / YouTube",
+    provider: "Stanford Online",
     url: "https://www.youtube.com/results?search_query=intro+to+ai",
     duration: "45 mins",
-    thumbnail: "https://picsum.photos/seed/ai1/400/225",
-    region: "NA",
+    thumbnail: "https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&q=80&w=800",
+    region: "Global",
     language: "English",
     rating: 4.8,
-    skillLevel: "Beginner"
+    skillLevel: "Beginner",
+    description: "A foundational dive into early heuristics and modern neural networks.",
+    tags: ["AI", "Algorithms", "Python"]
+  },
+  {
+    id: "ai-art-1",
+    careerId: "ai-engineer",
+    title: "The Architecture of Transformer Models",
+    type: "article",
+    provider: "DeepMind Blog",
+    url: "https://deepmind.google/discover/blog/",
+    duration: "15 min read",
+    thumbnail: "https://images.unsplash.com/photo-1620712943543-bcc4628c9757?auto=format&fit=crop&q=80&w=800",
+    region: "Global",
+    language: "English",
+    rating: 5.0,
+    skillLevel: "Advanced",
+    description: "Detailed breakdown of attention mechanisms and self-supervised learning.",
+    tags: ["Transformers", "Deep Learning", "LLMs"]
   },
   {
     id: "ai-audio-1",
@@ -459,12 +478,15 @@ export const STUDY_MATERIALS: StudyMaterial[] = [
     provider: "MIT News",
     url: "https://www.youtube.com/results?search_query=ai+ethics+podcast",
     duration: "15 mins",
-    thumbnail: "https://picsum.photos/seed/ai2/400/225",
+    thumbnail: "https://images.unsplash.com/photo-1544652478-6653e09f18a2?auto=format&fit=crop&q=80&w=800",
     region: "Global",
     language: "English",
     rating: 4.9,
-    skillLevel: "Intermediate"
+    skillLevel: "Intermediate",
+    description: "Discussing bias mitigation and global regulations on autonomous agents."
   },
+
+  // UX Design
   {
     id: "ux-course-1",
     careerId: "ux-designer",
@@ -473,12 +495,31 @@ export const STUDY_MATERIALS: StudyMaterial[] = [
     provider: "Coursera",
     url: "https://www.coursera.org",
     duration: "12 hours",
-    thumbnail: "https://picsum.photos/seed/ux1/400/225",
+    thumbnail: "https://images.unsplash.com/photo-1581291518655-952d4334336c?auto=format&fit=crop&q=80&w=800",
     region: "Global",
     language: "English",
     rating: 4.7,
-    skillLevel: "Advanced"
+    skillLevel: "Advanced",
+    description: "Collaborative design workflows for cross-border engineering teams.",
+    tags: ["Figma", "Design Systems", "UX"]
   },
+  {
+    id: "ux-art-1",
+    careerId: "ux-designer",
+    title: "Design for the Silver Economy",
+    type: "article",
+    provider: "UX Collective",
+    url: "https://uxdesign.cc",
+    duration: "10 min read",
+    thumbnail: "https://images.unsplash.com/photo-1573164713988-86659c46522c?auto=format&fit=crop&q=80&w=800",
+    region: "EU",
+    language: "German",
+    rating: 4.5,
+    skillLevel: "Intermediate",
+    description: "Adjusting interfaces for the growing percentage of elderly digital users."
+  },
+
+  // Green Energy
   {
     id: "green-energy-video-1",
     careerId: "renewable-energy",
@@ -487,12 +528,30 @@ export const STUDY_MATERIALS: StudyMaterial[] = [
     provider: "National Geographic",
     url: "https://www.youtube.com/results?search_query=solar+infrastructure",
     duration: "28 mins",
-    thumbnail: "https://picsum.photos/seed/green1/400/225",
+    thumbnail: "https://images.unsplash.com/photo-1509391366360-fe5bb58583bb?auto=format&fit=crop&q=80&w=800",
     region: "Global",
     language: "English",
     rating: 4.6,
-    skillLevel: "Beginner"
+    skillLevel: "Beginner",
+    description: "How next-gen photovoltaic cells are reaching 40% efficiency levels."
   },
+  {
+    id: "green-art-1",
+    careerId: "renewable-energy",
+    title: "Grid Modernization in Southeast Asia",
+    type: "article",
+    provider: "The Guardian",
+    url: "https://www.theguardian.com",
+    duration: "12 min read",
+    thumbnail: "https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?auto=format&fit=crop&q=80&w=800",
+    region: "ASIA",
+    language: "English",
+    rating: 4.4,
+    skillLevel: "Intermediate",
+    description: "A look at Indonesia's shift from coal to floating solar farms."
+  },
+
+  // Finance
   {
     id: "finance-audio-1",
     careerId: "financial-analyst",
@@ -501,10 +560,97 @@ export const STUDY_MATERIALS: StudyMaterial[] = [
     provider: "Bloomberg Technology",
     url: "https://www.bloomberg.com/podcasts",
     duration: "35 mins",
-    thumbnail: "https://picsum.photos/seed/fin1/400/225",
+    thumbnail: "https://images.unsplash.com/photo-1611974714024-462ba99bb36a?auto=format&fit=crop&q=80&w=800",
     region: "Global",
     language: "English",
     rating: 4.8,
     skillLevel: "Intermediate"
+  },
+  {
+    id: "finance-course-1",
+    careerId: "financial-analyst",
+    title: "Crypto-Asset Analysis in 2026",
+    type: "course",
+    provider: "Binance Academy",
+    url: "https://academy.binance.com",
+    duration: "6 hours",
+    thumbnail: "https://images.unsplash.com/photo-1621761191319-c6fb62004040?auto=format&fit=crop&q=80&w=800",
+    region: "Global",
+    language: "English",
+    rating: 4.6,
+    skillLevel: "Beginner",
+    description: "Professional grade valuation models for decentralized finance tokens."
+  },
+
+  // Healthcare
+  {
+    id: "health-video-1",
+    careerId: "surgeon",
+    title: "Robotic-Assisted Neurosurgery",
+    type: "video",
+    provider: "Intuitive Surgical",
+    url: "https://www.intuitive.com",
+    duration: "18 mins",
+    thumbnail: "https://images.unsplash.com/photo-1576091160550-2173599211d0?auto=format&fit=crop&q=80&w=800",
+    region: "Global",
+    language: "English",
+    rating: 4.9,
+    skillLevel: "Advanced",
+    description: "Precision mapping and real-time haptic feedback in brain tumor removal."
+  }
+];
+
+export const JOB_LISTINGS: JobListing[] = [
+  {
+    id: "job-1",
+    title: "Senior AI Researcher",
+    company: "Spark.Net",
+    location: "Zurich, Switzerland",
+    salary: { min: 140000, max: 180000, currency: "CHF", period: "yearly" },
+    type: "Full-time",
+    postedAt: "2026-04-20",
+    url: "https://example.com/jobs/1",
+    careerId: "ai-engineer",
+    description: "Leading R&D on next-gen multi-modal agents for autonomous navigation.",
+    logo: "https://images.unsplash.com/photo-1599305090746-3ef462943717?auto=format&fit=crop&q=80&w=200"
+  },
+  {
+    id: "job-2",
+    title: "Full-stack Developer (Remote)",
+    company: "GitSync",
+    location: "Global / Remote",
+    salary: { min: 90000, max: 130000, currency: "USD", period: "yearly" },
+    type: "Remote",
+    postedAt: "2026-04-25",
+    url: "https://example.com/jobs/2",
+    careerId: "fullstack-dev",
+    description: "Build scalable React + Node.js applications for a distributed team.",
+    logo: "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?auto=format&fit=crop&q=80&w=200"
+  },
+  {
+    id: "job-3",
+    title: "Nursing Supervisor",
+    company: "Unity Health",
+    location: "Toronto, Canada",
+    salary: { min: 85000, max: 105000, currency: "CAD", period: "yearly" },
+    type: "Full-time",
+    postedAt: "2026-04-18",
+    url: "https://example.com/jobs/3",
+    careerId: "nursing",
+    description: "Manage nursing staff in our high-acuity surgical unit.",
+    logo: "https://images.unsplash.com/photo-1505751172157-c72859554829?auto=format&fit=crop&q=80&w=200"
+  },
+  {
+    id: "job-4",
+    title: "UX Designer",
+    company: "Vivid UI",
+    location: "London, UK",
+    salary: { min: 55000, max: 75000, currency: "GBP", period: "yearly" },
+    type: "Hybrid",
+    postedAt: "2026-04-22",
+    url: "https://example.com/jobs/4",
+    careerId: "ux-designer",
+    description: "Focus on accessibility and high-conversion landing pages for EMEA clients.",
+    logo: "https://images.unsplash.com/photo-1560179707-f14e90ef3623?auto=format&fit=crop&q=80&w=200"
   }
 ];
