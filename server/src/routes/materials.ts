@@ -2,8 +2,145 @@ import { Router } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { db } from "../db/database.js";
 import { StudyMaterial } from "../types/index.js";
+import { videoMaterialsService } from "../services/videoMaterialsService.js";
 
 const router = Router();
+
+/**
+ * External Material Search Endpoints
+ * Links to curated educational content without hosting
+ */
+
+// Search across all external sources
+router.get("/search/all", async (req, res) => {
+  try {
+    const { query, skillLevel = "Beginner" } = req.query;
+
+    if (!query || typeof query !== "string") {
+      return res.status(400).json({ error: "Query parameter is required" });
+    }
+
+    const materials = await videoMaterialsService.searchAllSources(
+      query,
+      (skillLevel as any) || "Beginner"
+    );
+
+    res.json(materials);
+  } catch (error) {
+    console.error("Search all sources error:", error);
+    res.status(500).json({ error: "Failed to search materials" });
+  }
+});
+
+// Search Boclips (1.7M+ educational videos)
+router.get("/search/boclips", async (req, res) => {
+  try {
+    const { query, skillLevel = "Beginner", limit = 10 } = req.query;
+
+    if (!query || typeof query !== "string") {
+      return res.status(400).json({ error: "Query parameter is required" });
+    }
+
+    const materials = await videoMaterialsService.searchBoclips(
+      query,
+      (skillLevel as any) || "Beginner",
+      parseInt(limit as string) || 10
+    );
+
+    res.json(materials);
+  } catch (error) {
+    console.error("Boclips search error:", error);
+    res.status(500).json({ error: "Failed to search Boclips" });
+  }
+});
+
+// Search YouTube
+router.get("/search/youtube", async (req, res) => {
+  try {
+    const { query, skillLevel = "Beginner", limit = 10 } = req.query;
+
+    if (!query || typeof query !== "string") {
+      return res.status(400).json({ error: "Query parameter is required" });
+    }
+
+    const materials = await videoMaterialsService.searchYouTube(
+      query,
+      (skillLevel as any) || "Beginner",
+      parseInt(limit as string) || 10
+    );
+
+    res.json(materials);
+  } catch (error) {
+    console.error("YouTube search error:", error);
+    res.status(500).json({ error: "Failed to search YouTube" });
+  }
+});
+
+// Search Coursera
+router.get("/search/coursera", async (req, res) => {
+  try {
+    const { query, skillLevel = "Beginner", limit = 5 } = req.query;
+
+    if (!query || typeof query !== "string") {
+      return res.status(400).json({ error: "Query parameter is required" });
+    }
+
+    const materials = await videoMaterialsService.searchCoursera(
+      query,
+      (skillLevel as any) || "Beginner",
+      parseInt(limit as string) || 5
+    );
+
+    res.json(materials);
+  } catch (error) {
+    console.error("Coursera search error:", error);
+    res.status(500).json({ error: "Failed to search Coursera" });
+  }
+});
+
+// Search Udemy
+router.get("/search/udemy", async (req, res) => {
+  try {
+    const { query, skillLevel = "Beginner", limit = 10 } = req.query;
+
+    if (!query || typeof query !== "string") {
+      return res.status(400).json({ error: "Query parameter is required" });
+    }
+
+    const materials = await videoMaterialsService.searchUdemy(
+      query,
+      (skillLevel as any) || "Beginner",
+      parseInt(limit as string) || 10
+    );
+
+    res.json(materials);
+  } catch (error) {
+    console.error("Udemy search error:", error);
+    res.status(500).json({ error: "Failed to search Udemy" });
+  }
+});
+
+// Search MIT OpenCourseWare (Free)
+router.get("/search/mit-ocw", async (req, res) => {
+  try {
+    const { query, skillLevel = "Intermediate", limit = 5 } = req.query;
+
+    if (!query || typeof query !== "string") {
+      return res.status(400).json({ error: "Query parameter is required" });
+    }
+
+    const materials = await videoMaterialsService.searchMITOpenCourseWare(
+      query,
+      (skillLevel as any) || "Intermediate",
+      parseInt(limit as string) || 5
+    );
+
+    res.json(materials);
+  } catch (error) {
+    console.error("MIT OCW search error:", error);
+    res.status(500).json({ error: "Failed to search MIT OpenCourseWare" });
+  }
+});
 
 // Get all study materials
 router.get("/", async (req, res) => {
