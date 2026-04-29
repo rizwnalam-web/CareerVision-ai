@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { v4 as uuidv4 } from "uuid";
+import bcryptjs from "bcryptjs";
 import { db } from "../db/database.js";
-import { UserProfile } from "../types/index.js";
+import { UserProfile, RegistrationRequest, LoginRequest, AuthResponse } from "../types/index.js";
 
 const router = Router();
 
@@ -206,6 +207,170 @@ router.delete("/:id", async (req, res) => {
     res.json({ message: "User deleted successfully" });
   } catch (error) {
     res.status(500).json({ error: "Failed to delete user" });
+  }
+});
+
+// Register new user with email and password
+router.post("/auth/register", async (req, res) => {
+  try {
+    const { email, name, password, age, country, interests, budget, education }: RegistrationRequest = req.body;
+
+    console.log("Registration request:", { email, name, passwordProvided: !!password });
+
+    // Validation
+    if (!email || !name || !password) {
+      return res.status(400).json({ 
+        success: false,
+        error: "Email, name, and password are required" 
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ 
+        success: false,
+        error: "Password must be at least 6 characters" 
+      });
+    }
+
+    // Check if user already exists
+    const existing = await db.oneOrNone(
+      "SELECT id FROM users WHERE email = $1",
+      [email]
+    );
+    if (existing) {
+      return res.status(400).json({ 
+        success: false,
+        error: "User with this email already exists" 
+      });
+    }
+
+    // Hash password
+    const saltRounds = 10;
+    const passwordHash = await bcryptjs.hash(password, saltRounds);
+    console.log("Password hashed successfully:", !!passwordHash);
+
+    // Create user
+    const id = uuidv4();
+    console.log("Inserting user with password hash...");
+    try {
+      await db.none(
+        `INSERT INTO users 
+         (id, email, name, password_hash, age, country, interests, budget, education, registration_method)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          id,
+          email,
+          name,
+          passwordHash,
+          age || null,
+          country || null,
+          interests ? JSON.stringify(interests) : null,
+          budget || null,
+          education || null,
+          "email"
+        ]
+      );
+      console.log("User inserted successfully");
+      
+      // Verify the password was stored
+      const verifyUser = await db.oneOrNone<any>(
+        "SELECT id, email, password_hash FROM users WHERE id = $1",
+        [id]
+      );
+      console.log("Verification - Password stored:", !!verifyUser?.password_hash, "Hash length:", verifyUser?.password_hash?.length || 0);
+    } catch (dbError) {
+      console.error("Database insert error:", dbError);
+      throw dbError;
+    }
+
+    const user: UserProfile = {
+      id,
+      email,
+      name,
+      age,
+      country,
+      interests: interests ? JSON.stringify(interests) : undefined,
+      budget,
+      education,
+      registrationMethod: "email",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    res.status(201).json({
+      success: true,
+      message: "User registered successfully",
+      user
+    });
+  } catch (error) {
+    console.error("Registration error:", error);
+    res.status(500).json({ 
+      success: false,
+      error: "Failed to register user" 
+    });
+  }
+});
+
+// Login user with email and password
+router.post("/auth/login", async (req, res) => {
+  try {
+    const { email, password }: LoginRequest = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ 
+        success: false,
+        error: "Email and password are required" 
+      });
+    }
+
+    // Find user - select password_hash explicitly with alias to ensure it's returned
+    const user = await db.oneOrNone<any>(
+      "SELECT *, password_hash as \"passwordHash\", registration_method as \"registrationMethod\" FROM users WHERE email = $1",
+      [email]
+    );
+
+    if (!user) {
+      return res.status(401).json({ 
+        success: false,
+        error: "Invalid email or password" 
+      });
+    }
+
+    // Check password
+    if (!user.passwordHash) {
+      return res.status(401).json({ 
+        success: false,
+        error: "This account was not registered with email/password" 
+      });
+    }
+
+    const passwordMatch = await bcryptjs.compare(password, user.passwordHash);
+    if (!passwordMatch) {
+      return res.status(401).json({ 
+        success: false,
+        error: "Invalid email or password" 
+      });
+    }
+
+    // Remove password hash from response and normalize to camelCase
+    const { passwordHash, password_hash, registration_method, registrationMethod, firebase_uid, target_location, target_career_id, annual_income, current_savings, created_at, updated_at, ...rest } = user;
+
+    res.json({
+      success: true,
+      message: "Login successful",
+      user: {
+        ...rest,
+        registrationMethod: registrationMethod || registration_method,
+        createdAt: created_at,
+        updatedAt: updated_at
+      }
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ 
+      success: false,
+      error: "Failed to login" 
+    });
   }
 });
 

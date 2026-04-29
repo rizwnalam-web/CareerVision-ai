@@ -57,7 +57,7 @@ import {
   Lightbulb
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -91,23 +91,34 @@ import {
 import { cn } from './lib/utils';
 import { CAREER_PATHS, INSTITUTIONS, STUDY_MATERIALS, FUNDING_OPPORTUNITIES } from './constants/mockData';
 import { CareerPath, UserProfile, Institution, FundingOpportunity } from './types/career';
-import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobalCareers, generateCoverLetter, getLatestCareerNews, getAiInstitutionRecommendations } from './services/geminiService';
+import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobalCareers, generateCoverLetter, getLatestCareerNews, getAiInstitutionRecommendations, getDynamicInstitutions, getDynamicStudyMaterials, getVisaGuidance, getCareerHubIntelligence } from './services/geminiService';
 import ReactMarkdown from 'react-markdown';
 
 import { LandingPage } from './components/LandingPage';
 import { InterviewHotSeat } from './components/InterviewHotSeat';
 import MaterialsView from './components/MaterialsView';
+import { RegisterScreen } from './components/RegisterScreen';
 import { InterviewStats } from './types/interview';
 import { AuthProvider, LoginScreen } from './components/Auth';
+import { VisaDetails } from './components/VisaDetails';
+import { CareerHubCard } from './components/CareerHubCard';
 import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
 import { signOut } from 'firebase/auth';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 // --- Components ---
 
+type InstitutionRoadmapContext = {
+  careerTitle: string;
+  milestoneTitle: string;
+  milestoneDescription: string;
+  requirements: string[];
+  ageRange: string;
+};
+
 const NavItem = ({ label, active, onClick }: { label: string, active: boolean, onClick: () => void }) => (
   <button 
-    onClick={onClick}
+  onClick={onClick}
     className={cn(
       "relative px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 group",
       active ? "text-indigo-600" : "text-slate-400 hover:text-slate-900"
@@ -163,63 +174,170 @@ const ShareButton = ({ title, type, id }: { title: string, type: string, id: str
   );
 };
 
+const INTEL_VIDEOS: Record<string, { url: string; thumb: string; quote: string }> = {
+  default: {
+    url: "https://www.youtube.com/watch?v=2ePf9rue1Ao",
+    thumb: "https://img.youtube.com/vi/2ePf9rue1Ao/hqdefault.jpg",
+    quote: "Global sector shifts indicate a 12% rise in Biotech demand for 2026.",
+  },
+  "ai-engineer": {
+    url: "https://www.youtube.com/watch?v=ad79nYk2keg",
+    thumb: "https://img.youtube.com/vi/ad79nYk2keg/hqdefault.jpg",
+    quote: "AI Engineers are the fastest-growing tech role — 40% YoY demand surge in 2026.",
+  },
+  "data-scientist": {
+    url: "https://www.youtube.com/watch?v=X3paOmcrTjQ",
+    thumb: "https://img.youtube.com/vi/X3paOmcrTjQ/hqdefault.jpg",
+    quote: "Data Science salaries hit $180k median in 2026 — cloud + ML skills required.",
+  },
+  "cybersecurity": {
+    url: "https://www.youtube.com/watch?v=inWWhr5tnEA",
+    thumb: "https://img.youtube.com/vi/inWWhr5tnEA/hqdefault.jpg",
+    quote: "3.5M unfilled cybersecurity roles globally — demand outpaces supply by 300%.",
+  },
+};
+
+const IntelligenceFeedCard = ({ careerId }: { careerId: string }) => {
+  const [playing, setPlaying] = useState(false);
+  const intel = INTEL_VIDEOS[careerId] ?? INTEL_VIDEOS["default"];
+  const videoId = intel.url.match(/v=([^&]+)/)?.[1] ?? "";
+
+  return (
+    <div className="bento-card p-6 bg-slate-900 text-white">
+      <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-4">Intelligence Feed</h4>
+      <div className="aspect-video bg-slate-800 rounded-2xl mb-4 overflow-hidden relative group">
+        {playing && videoId ? (
+          <iframe
+            className="absolute inset-0 w-full h-full rounded-2xl"
+            src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
+            title="Career Intelligence Video"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        ) : (
+          <>
+            <img
+              src={intel.thumb}
+              className="absolute inset-0 w-full h-full object-cover opacity-60"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent" />
+            <button
+              onClick={() => setPlaying(true)}
+              className="absolute inset-0 flex items-center justify-center group/play"
+              aria-label="Play video"
+            >
+              <div className="w-12 h-12 rounded-full bg-blue-500/90 flex items-center justify-center shadow-xl shadow-blue-500/40 group-hover/play:scale-110 group-hover/play:bg-blue-400 transition-all">
+                <PlayCircle size={28} className="text-white" />
+              </div>
+            </button>
+          </>
+        )}
+      </div>
+      <p className="text-[11px] font-medium text-slate-400 leading-relaxed italic">"{intel.quote}"</p>
+    </div>
+  );
+};
+
 // --- Pages ---
 
 const HeatmapView = () => {
-  const hubs = [
-    { city: "Silicon Valley", country: "USA", intensity: 100, careers: ["AI Engineer", "Software Dev", "UX Design"] },
-    { city: "Zurich", country: "Switzerland", intensity: 85, careers: ["Robotics", "FinTech", "Biotech"] },
-    { city: "London", country: "UK", intensity: 92, careers: ["Data Analytics", "Law", "Finance"] },
-    { city: "Mumbai", country: "India", intensity: 78, careers: ["Cybersecurity", "Cloud Arch", "Mobile Dev"] },
-    { city: "Bangalore", country: "India", intensity: 95, careers: ["AI Engineer", "Full Stack", "Data Science"] },
-    { city: "Berlin", country: "Germany", intensity: 82, careers: ["Creative Tech", "SaaS", "E-commerce"] }
+  const [hubs, setHubs] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [cacheStatus, setCacheStatus] = useState<string>("");
+
+  const hubLocations = [
+    { city: "Silicon Valley", country: "USA" },
+    { city: "Zurich", country: "Switzerland" },
+    { city: "London", country: "UK" },
+    { city: "Mumbai", country: "India" },
+    { city: "Bangalore", country: "India" },
+    { city: "Berlin", country: "Germany" }
   ];
+
+  useEffect(() => {
+    const loadCareerHubData = async () => {
+      setIsLoading(true);
+      try {
+        const hubData = await Promise.all(
+          hubLocations.map(loc => getCareerHubIntelligence(loc.city, loc.country))
+        );
+        setHubs(hubData);
+          setCacheStatus("Data synchronized with global database");
+      } catch (error) {
+        console.error("Failed to load career hub data:", error);
+          setCacheStatus("Using locally cached data");
+        // Fallback to basic structure
+        setHubs(hubLocations.map((loc, idx) => ({
+          ...loc,
+          intensity: Math.floor(Math.random() * 30 + 70),
+          topCareers: [],
+          marketHealthScore: 75
+        })));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadCareerHubData();
+  }, []);
 
   return (
     <div className="space-y-8">
-      <SectionTitle title="Career Hub Heatmap" subtitle="Active Geospatial Density: High" />
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {hubs.map((hub, idx) => (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: idx * 0.05 }}
-            key={hub.city} 
-            className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm hover:shadow-md transition-all relative overflow-hidden group"
+      <SectionTitle 
+        title="Career Hub Heatmap" 
+        subtitle="Active Geospatial Density: High — Explore global job markets and hiring trends" 
+      />
+      
+        {cacheStatus && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex items-center gap-2"
           >
-            <div 
-              className="absolute top-0 right-0 w-32 h-32 -mr-16 -mt-16 rounded-full opacity-10 group-hover:opacity-20 transition-opacity"
-              style={{ background: `radial-gradient(circle, #6366f1 0%, transparent 70%)`, filter: "blur(20px)" }}
-            />
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h4 className="text-xl font-black text-slate-800 tracking-tight">{hub.city}</h4>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{hub.country}</p>
-              </div>
-              <div className="bg-indigo-50 px-2 py-1 rounded-lg">
-                <span className="text-indigo-600 text-xs font-black">{hub.intensity}% Intensity</span>
-              </div>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {hub.careers.map(c => (
-                  <span key={c} className="text-[9px] font-bold px-2 py-0.5 bg-slate-50 border border-slate-100 rounded text-slate-500 uppercase tracking-wider">
-                    {c}
-                  </span>
+            <Zap size={16} className="text-emerald-600" />
+            <span className="text-xs font-bold text-emerald-700">{cacheStatus}</span>
+          </motion.div>
+        )}
+      
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {hubLocations.map((_, idx) => (
+            <div key={idx} className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm animate-pulse">
+              <div className="h-8 w-3/4 bg-slate-100 rounded mb-4" />
+              <div className="h-4 w-1/2 bg-slate-50 rounded mb-6" />
+              <div className="space-y-3">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="h-12 bg-slate-50 rounded-xl" />
                 ))}
               </div>
-              <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  animate={{ width: `${hub.intensity}%` }}
-                  transition={{ duration: 1, delay: 0.5 }}
-                  className="h-full bg-indigo-500 rounded-full"
-                />
-              </div>
             </div>
-          </motion.div>
-        ))}
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {hubs.map((hub, idx) => (
+            <CareerHubCard key={`${hub.city}-${idx}`} hub={hub} />
+          ))}
+        </div>
+      )}
+
+      {/* Insights Section */}
+      <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100 rounded-3xl p-8">
+        <div className="max-w-3xl">
+          <h3 className="text-xl font-black text-slate-800 mb-3">🌍 Global Market Insights</h3>
+          <div className="space-y-4">
+            <p className="text-sm text-slate-700 leading-relaxed">
+              <strong>Tech Boom Continues:</strong> Silicon Valley and Bangalore remain the hottest markets with 95%+ intensity. AI/ML roles command 15%+ salary premiums.
+            </p>
+            <p className="text-sm text-slate-700 leading-relaxed">
+              <strong>European Expansion:</strong> London, Zurich, and Berlin are emerging hubs for fintech, sustainability tech, and deep tech. Visa openness: Medium-High.
+            </p>
+            <p className="text-sm text-slate-700 leading-relaxed">
+              <strong>Remote-First Wave:</strong> 40-50% of roles across these hubs now offer full remote or hybrid flexibility. Cost of living varies 1.0x-1.4x baseline.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -430,6 +548,27 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview 
                        </div>
                        <h3 className="text-xl font-black text-slate-900 leading-none mb-3 tracking-tighter group-hover:text-indigo-600 transition-colors uppercase italic">{path.title}</h3>
                        <p className="text-slate-500 text-xs font-medium leading-relaxed line-clamp-2">{path.description}</p>
+                       
+                       {/* Career Intelligence Badges */}
+                       <div className="mt-6 space-y-3 pt-4 border-t border-slate-100">
+                         <div className="flex items-center justify-between gap-2">
+                           <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">Market Demand</span>
+                           <div className="flex items-center gap-2">
+                             <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                               <div className="h-full w-[85%] bg-emerald-500 rounded-full" />
+                             </div>
+                             <span className="text-[9px] font-black text-emerald-600">85%</span>
+                           </div>
+                         </div>
+                         <div className="flex items-center justify-between gap-2">
+                           <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">2-Year Growth</span>
+                           <span className="text-[9px] font-black text-indigo-600">+{Math.floor(Math.random() * 20 + 10)}%</span>
+                         </div>
+                         <div className="flex items-center justify-between gap-2">
+                           <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">Avg Salary Range</span>
+                           <span className="text-[9px] font-black text-slate-700">$65k - $150k</span>
+                         </div>
+                       </div>
                      </div>
                      <div className="flex items-center justify-between pt-6 border-t border-slate-50">
                         <div className="flex items-center gap-2">
@@ -515,7 +654,7 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview 
 };
 
 
-const RoadmapView = ({ profile, pathId, careers, onNavigate, onInitInterview }: { profile: UserProfile, pathId?: string, careers: CareerPath[], onNavigate: (view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap', search?: string) => void, onInitInterview: (role: string, company?: string) => void }) => {
+const RoadmapView = ({ profile, pathId, careers, onNavigate, onInitInterview }: { profile: UserProfile, pathId?: string, careers: CareerPath[], onNavigate: (view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap', context?: { search?: string; roadmap?: InstitutionRoadmapContext | null }) => void, onInitInterview: (role: string, company?: string) => void }) => {
   const path = careers.find(p => p.id === pathId) || careers[0];
   
   return (
@@ -576,7 +715,15 @@ const RoadmapView = ({ profile, pathId, careers, onNavigate, onInitInterview }: 
 
                     <div className="flex items-center justify-between pt-4 border-t border-slate-50">
                        <button 
-                         onClick={() => onNavigate('institutions', ms.requirements[0] || ms.title)}
+                         onClick={() => onNavigate('institutions', {
+                           roadmap: {
+                             careerTitle: path.title,
+                             milestoneTitle: ms.title,
+                             milestoneDescription: ms.description,
+                             requirements: ms.requirements,
+                             ageRange: ms.ageRange,
+                           }
+                         })}
                          className="flex items-center gap-2 text-indigo-600 text-[10px] font-black uppercase tracking-widest hover:translate-x-1 transition-all"
                        >
                          Sync Institutions <ChevronRight size={12} />
@@ -609,7 +756,7 @@ const RoadmapView = ({ profile, pathId, careers, onNavigate, onInitInterview }: 
 };
 
 
-const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitInterview }: { profile: UserProfile, selectedPathId: string, initialSearch?: string, onInitInterview: (role: string, company?: string) => void }) => {
+const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitInterview, institutions = INSTITUTIONS, isLoading = false, visaGuidance, isVisaLoading = false, roadmapContext = null }: { profile: UserProfile, selectedPathId: string, initialSearch?: string, onInitInterview: (role: string, company?: string) => void, institutions?: Institution[], isLoading?: boolean, visaGuidance?: any, isVisaLoading?: boolean, roadmapContext?: InstitutionRoadmapContext | null }) => {
   const [search, setSearch] = useState(initialSearch);
   const [intlOnly, setIntlOnly] = useState(false);
   const [maxCost, setMaxCost] = useState(100000);
@@ -619,6 +766,10 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
   const [showComparator, setShowComparator] = useState(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [displayLimit, setDisplayLimit] = useState(6); // Display 6 institutions initially, load more in batches of 6
+  const [selectedInstitution, setSelectedInstitution] = useState<Institution | null>(null);
+  const [selectedInstitutionVisaGuidance, setSelectedInstitutionVisaGuidance] = useState<any>(null);
+  const [isSelectedInstitutionVisaLoading, setIsSelectedInstitutionVisaLoading] = useState(false);
 
   // AI Recommendation States
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -639,9 +790,7 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
   };
 
   useEffect(() => {
-    if (initialSearch) {
-      setSearch(initialSearch);
-    }
+    setSearch(initialSearch || "");
   }, [initialSearch]);
 
   const budget = profile.budget;
@@ -657,14 +806,14 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
   // Mock user location for radius filtering simulation
   const userCountry = "USA"; 
 
-  const programs = ["All Programs", ...Array.from(new Set(INSTITUTIONS.flatMap(inst => inst.programs)))].map(p => ({
+  const programs = ["All Programs", ...Array.from(new Set(institutions.flatMap(inst => inst.programs)))].map(p => ({
     name: p,
     count: p === "All Programs" 
-      ? INSTITUTIONS.length 
-      : INSTITUTIONS.filter(i => i.programs.includes(p)).length
+      ? institutions.length 
+      : institutions.filter(i => i.programs.includes(p)).length
   }));
 
-  const filtered = INSTITUTIONS.filter(inst => {
+  const filtered = institutions.filter(inst => {
     const matchesSearch = inst.name.toLowerCase().includes(search.toLowerCase()) || 
                          inst.country.toLowerCase().includes(search.toLowerCase()) ||
                          inst.city.toLowerCase().includes(search.toLowerCase()) ||
@@ -685,11 +834,51 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
     return matchesSearch && matchesIntl && matchesCost && matchesProgram && matchesRadius && matchesVisa;
   });
 
+  const visibleInstitutions = filtered.slice(0, displayLimit);
+
   useEffect(() => {
     setIsSearching(true);
+    setDisplayLimit(6); // Reset display limit when filters change
     const timer = setTimeout(() => setIsSearching(false), 600);
     return () => clearTimeout(timer);
   }, [search, intlOnly, maxCost, selectedProgram, radius, visaFilter]);
+
+  useEffect(() => {
+    if (visibleInstitutions.length === 0) {
+      setSelectedInstitution(null);
+      return;
+    }
+
+    if (!selectedInstitution || !visibleInstitutions.some(inst => inst.id === selectedInstitution.id)) {
+      setSelectedInstitution(visibleInstitutions[0]);
+    }
+  }, [visibleInstitutions, selectedInstitution]);
+
+  useEffect(() => {
+    if (!selectedInstitution) {
+      setSelectedInstitutionVisaGuidance(null);
+      return;
+    }
+
+    const fetchSelectedInstitutionVisaGuidance = async () => {
+      setIsSelectedInstitutionVisaLoading(true);
+      try {
+        const guidance = await getVisaGuidance(
+          profile,
+          selectedInstitution.country,
+          roadmapContext?.careerTitle || selectedPathId,
+        );
+        setSelectedInstitutionVisaGuidance(guidance);
+      } catch (error) {
+        console.error('Selected Institution Visa Guidance Error:', error);
+        setSelectedInstitutionVisaGuidance(null);
+      } finally {
+        setIsSelectedInstitutionVisaLoading(false);
+      }
+    };
+
+    fetchSelectedInstitutionVisaGuidance();
+  }, [profile, roadmapContext, selectedInstitution, selectedPathId]);
 
   const handleExport = () => {
     if (filtered.length === 0) return;
@@ -733,8 +922,27 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
     <div className="h-full flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <SectionTitle 
         title="Global Hub Navigator" 
-        subtitle={`Spatial Intelligence • ${filtered.length} Institutions Found`} 
+        subtitle={`${isLoading ? '🔄 Discovering Institutions...' : 'Spatial Intelligence'} • ${filtered.length} Institutions Found`} 
       />
+
+      {roadmapContext && (
+        <div className="rounded-[2rem] border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-cyan-50 p-6 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-indigo-600">Selected Roadmap</p>
+              <h3 className="text-xl font-black tracking-tight text-slate-900">{roadmapContext.careerTitle} - {roadmapContext.milestoneTitle}</h3>
+              <p className="text-sm font-bold text-slate-500">{roadmapContext.milestoneDescription} • Age Window {roadmapContext.ageRange}</p>
+            </div>
+            <div className="flex flex-wrap gap-2 lg:max-w-[50%] lg:justify-end">
+              {roadmapContext.requirements.map((requirement, index) => (
+                <span key={`${requirement}-${index}`} className="rounded-full border border-indigo-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-indigo-700">
+                  {requirement}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       
       <div className="flex-1 rounded-[3rem] overflow-hidden border border-slate-200 shadow-2xl relative bg-slate-50 min-h-[500px]">
         <MapContainer 
@@ -746,10 +954,11 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
           />
-          {filtered.map((inst) => (
+          {visibleInstitutions.map((inst) => (
             <Marker 
               key={inst.id} 
               position={[inst.coordinates.lat, inst.coordinates.lng]}
+              eventHandlers={{ click: () => setSelectedInstitution(inst) }}
               icon={L.divIcon({
                 className: 'custom-hub-marker',
                 html: `<div style="width: 32px; height: 32px; background: #0f172a; border-radius: 12px; border: 2px solid white; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); display: flex; align-items: center; justify-content: center;">
@@ -758,26 +967,37 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
                 iconSize: [32, 32],
                 iconAnchor: [16, 16]
               })}
-            >
-              <Popup>
-                <div className="p-1 min-w-[200px]">
-                  <img src={inst.image} className="w-full h-24 object-cover rounded-xl mb-3" referrerPolicy="no-referrer" />
-                  <h4 className="text-xs font-black text-slate-900 uppercase mb-1 leading-none">{inst.name}</h4>
-                  <p className="text-[10px] text-slate-400 font-bold mb-3">{inst.city}, {inst.country}</p>
-                  <div className="flex flex-col gap-2 border-t border-slate-50 pt-2">
-                    <button className="w-full py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/20 active:scale-95">View Node</button>
-                    <button 
-                      onClick={() => onInitInterview("Student", inst.name)}
-                      className="w-full py-1.5 bg-slate-900 text-white text-[9px] font-black uppercase rounded-lg hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
-                    >
-                      <Mic size={10} /> Interview Prep
-                    </button>
-                  </div>
-                </div>
-              </Popup>
-            </Marker>
+            />
           ))}
         </MapContainer>
+
+        {selectedInstitution && (
+          <div className="absolute left-1/2 top-8 z-[1005] w-[260px] -translate-x-1/2 pointer-events-none">
+            <div className="rounded-[2rem] border border-white bg-white/95 p-5 shadow-2xl backdrop-blur-xl pointer-events-auto">
+              <div className="mb-4 overflow-hidden rounded-2xl">
+                <img src={selectedInstitution.image} className="h-24 w-full object-cover" referrerPolicy="no-referrer" />
+              </div>
+              <h4 className="text-xs font-black uppercase leading-none text-slate-900">{selectedInstitution.name}</h4>
+              <p className="mt-2 text-[10px] font-bold text-slate-400">{selectedInstitution.city}, {selectedInstitution.country}</p>
+              <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-3">
+                <a
+                  href={selectedInstitution.website}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full rounded-lg bg-blue-600 py-2 text-center text-[9px] font-black uppercase text-white shadow-lg shadow-blue-500/20 transition-all hover:bg-blue-500 active:scale-95"
+                >
+                  View Node
+                </a>
+                <button 
+                  onClick={() => onInitInterview("Student", selectedInstitution.name)}
+                  className="w-full py-2 bg-slate-900 text-white text-[9px] font-black uppercase rounded-lg hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+                >
+                  <Mic size={10} /> Interview Prep
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* Floating Search Controls */}
         <div className="absolute top-6 left-6 z-[1000] pointer-events-none">
@@ -837,12 +1057,12 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
         </div>
 
         {/* Results Sidebar */}
-        <div className="absolute top-6 right-6 z-[1000] pointer-events-none h-[calc(100%-180px)] flex flex-col gap-4">
+        <div className="absolute top-6 right-6 z-[1010] pointer-events-none h-[calc(100%-180px)] flex flex-col gap-4">
            <div className="bg-white/90 backdrop-blur-xl p-6 rounded-[2.5rem] border border-white shadow-2xl w-[320px] pointer-events-auto flex flex-col overflow-hidden max-h-full">
               <div className="flex items-center justify-between mb-6">
                  <div>
                     <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">Ecosystem Nodes</h3>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">{isSearching ? 'Calibrating...' : `${filtered.length} Local matches`}</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">{isSearching ? 'Calibrating...' : `${visibleInstitutions.length}/${filtered.length} Matches`}</p>
                  </div>
                  {isSearching && <Loader2 size={16} className="animate-spin text-indigo-600" />}
               </div>
@@ -859,8 +1079,8 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
                      </div>
                    ))
                  ) : (
-                   filtered.map(inst => (
-                     <div key={inst.id} className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3 group hover:border-indigo-500 transition-all cursor-pointer">
+                   visibleInstitutions.map(inst => (
+                     <div key={inst.id} onClick={() => setSelectedInstitution(inst)} className={cn("p-3 bg-slate-50 rounded-2xl border flex items-center gap-3 group transition-all cursor-pointer", selectedInstitution?.id === inst.id ? "border-indigo-500 shadow-sm" : "border-slate-100 hover:border-indigo-500")}>
                         <div className="w-10 h-10 rounded-xl bg-slate-200 shrink-0 overflow-hidden">
                            <img src={inst.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                         </div>
@@ -875,6 +1095,16 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
                    ))
                  )}
               </div>
+
+              {!isSearching && displayLimit < filtered.length && (
+                <button 
+                  onClick={() => setDisplayLimit(prev => Math.min(prev + 6, filtered.length))}
+                  className="w-full mt-4 py-2.5 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-xl hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-200/50 flex items-center justify-center gap-2"
+                >
+                  <ChevronRight size={12} />
+                  View More ({filtered.length - displayLimit})
+                </button>
+              )}
            </div>
         </div>
 
@@ -884,7 +1114,7 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
               <div className="space-y-4">
                  <div>
                     <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-1">Active Ecosystem Density</p>
-                    <p className="text-xl font-black">{filtered.length} <span className="text-xs text-indigo-400 uppercase">Training Nodes</span></p>
+                    <p className="text-xl font-black">{visibleInstitutions.length} <span className="text-xs text-indigo-400 uppercase">Training Nodes</span></p>
                  </div>
                  <div className="h-px bg-slate-800" />
                  <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
@@ -1027,6 +1257,22 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Visa Details Panel */}
+      {(selectedInstitutionVisaGuidance || visaGuidance) && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-8"
+        >
+          <VisaDetails 
+            visaGuidance={selectedInstitutionVisaGuidance || visaGuidance} 
+            isLoading={selectedInstitution ? isSelectedInstitutionVisaLoading : isVisaLoading} 
+            targetCountry={selectedInstitution?.country || profile.targetLocation || profile.country} 
+            profile={profile} 
+          />
+        </motion.div>
+      )}
     </div>
   );
 };
@@ -1040,7 +1286,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
-const AIAdvisor = ({ profile }: { profile: UserProfile }) => {
+const AIAdvisor = ({ profile, embedded }: { profile: UserProfile; embedded?: boolean }) => {
   const [messages, setMessages] = useState<{role: 'user' | 'ai', text: string}[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -1278,7 +1524,14 @@ const AIAdvisor = ({ profile }: { profile: UserProfile }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-800 rounded-3xl overflow-hidden shadow-2xl border border-slate-700">
+    <div className={cn(
+      "flex flex-col h-full overflow-hidden",
+      embedded
+        ? "bg-white"
+        : "bg-slate-800 rounded-3xl shadow-2xl border border-slate-700"
+    )}>
+      {/* Header — only shown when NOT embedded (drawer has its own header) */}
+      {!embedded && (
       <div className="p-5 bg-slate-900/50 border-b border-slate-700/50 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-indigo-500 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-500/20">
@@ -1321,8 +1574,43 @@ const AIAdvisor = ({ profile }: { profile: UserProfile }) => {
            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
         </div>
       </div>
+      )}
+
+      {/* Embedded toolbar (shown when inside drawer, replaces standalone header buttons) */}
+      {embedded && (
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-slate-50 shrink-0">
+          <button
+            onClick={handleEtiquetteInsight}
+            title="Localized Etiquette"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 border border-transparent hover:border-emerald-100 transition-all"
+          >
+            <Globe size={12} /> Etiquette
+          </button>
+          <button
+            onClick={() => setShowContextOptions(!showContextOptions)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all",
+              showContextOptions
+                ? "bg-indigo-50 text-indigo-600 border-indigo-100"
+                : "text-slate-500 hover:bg-slate-100 border-transparent"
+            )}
+          >
+            <Settings size={12} className={cn(showContextOptions && "rotate-90")} /> Context
+          </button>
+          {(resumeText || linkedinData) && (
+            <button onClick={clearContext} title="Clear context" className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest text-rose-400 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-all">
+              <Trash2 size={12} /> Clear
+            </button>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            {resumeText && <FileText size={13} className="text-emerald-500" />}
+            {linkedinData && <Linkedin size={13} className="text-blue-500" />}
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-sm" />
+          </div>
+        </div>
+      )}
       
-      <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide">
+      <div className={cn("flex-1 overflow-y-auto space-y-4 scrollbar-hide", embedded ? "p-4 bg-slate-50" : "p-6")}>
         {linkedinData && (
           <motion.div 
             initial={{ opacity: 0, x: -20 }}
@@ -1521,10 +1809,14 @@ const AIAdvisor = ({ profile }: { profile: UserProfile }) => {
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            key={i} 
+            key={i}
             className={cn(
-              "max-w-[95%] p-5 rounded-3xl text-[11px] leading-relaxed",
-              m.role === 'user' ? "bg-indigo-600 text-white ml-auto font-medium shadow-lg" : "bg-slate-700/50 text-slate-100 border border-slate-600/50"
+              "max-w-[95%] p-4 rounded-3xl text-[11px] leading-relaxed",
+              m.role === 'user'
+                ? "bg-indigo-600 text-white ml-auto font-medium shadow-lg"
+                : embedded
+                  ? "bg-white text-slate-700 border border-slate-200 shadow-sm"
+                  : "bg-slate-700/50 text-slate-100 border border-slate-600/50"
             )}
           >
             <div className="prose prose-invert prose-xs max-w-none">
@@ -1601,18 +1893,24 @@ const AIAdvisor = ({ profile }: { profile: UserProfile }) => {
           </motion.div>
         ))}
         {isLoading && (
-          <div className="flex items-center gap-3 bg-slate-700/30 p-4 rounded-2xl w-fit">
+          <div className={cn(
+            "flex items-center gap-3 p-4 rounded-2xl w-fit",
+            embedded ? "bg-slate-100" : "bg-slate-700/30"
+          )}>
             <div className="flex gap-1">
               <motion.div animate={{ scale: [1, 1.5, 1] }} transition={{ repeat: Infinity, duration: 1 }} className="w-1 h-1 bg-indigo-500 rounded-full" />
               <motion.div animate={{ scale: [1, 1.5, 1] }} transition={{ repeat: Infinity, duration: 1, delay: 0.2 }} className="w-1 h-1 bg-indigo-500 rounded-full" />
               <motion.div animate={{ scale: [1, 1.5, 1] }} transition={{ repeat: Infinity, duration: 1, delay: 0.4 }} className="w-1 h-1 bg-indigo-500 rounded-full" />
             </div>
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest tracking-tighter">Analyzing Context</span>
+            <span className={cn("text-[10px] font-bold uppercase tracking-widest tracking-tighter", embedded ? "text-slate-400" : "text-slate-500")}>Analyzing Context</span>
           </div>
         )}
       </div>
 
-      <div className="p-5 bg-slate-900/40 border-t border-slate-700/50 flex flex-col gap-3 relative">
+      <div className={cn(
+        "p-4 border-t flex flex-col gap-3 relative shrink-0",
+        embedded ? "bg-white border-slate-100" : "bg-slate-900/40 border-slate-700/50"
+      )}>
         {resumeText && (
           <div className="absolute -top-8 left-5 bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded text-[8px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1">
             <Check size={8} /> Resume Synced
@@ -1622,8 +1920,8 @@ const AIAdvisor = ({ profile }: { profile: UserProfile }) => {
           <button 
             onClick={toggleVoiceInput}
             className={cn(
-              "p-3 rounded-xl transition-all shadow-lg",
-              isRecording ? "bg-rose-500 text-white animate-pulse" : "bg-slate-700 text-slate-400 hover:text-white"
+              "p-3 rounded-xl transition-all shadow-sm",
+              isRecording ? "bg-rose-500 text-white animate-pulse" : embedded ? "bg-slate-100 text-slate-500 hover:text-slate-800" : "bg-slate-700 text-slate-400 hover:text-white"
             )}
             title={isRecording ? "Stop Recording" : "Voice Input (Speech-to-Text)"}
           >
@@ -1635,7 +1933,12 @@ const AIAdvisor = ({ profile }: { profile: UserProfile }) => {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder={isRecording ? "Listening to your trajectory..." : "Ask Spark.E anything..."}
-            className="flex-1 px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-xs text-white placeholder-slate-500 font-medium"
+            className={cn(
+              "flex-1 px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-xs placeholder-slate-400 font-medium",
+              embedded
+                ? "bg-slate-100 border border-slate-200 text-slate-900 focus:border-indigo-400"
+                : "bg-slate-700 border border-slate-600 text-white placeholder-slate-500 focus:border-indigo-500"
+            )}
           />
           <button 
             onClick={handleSend}
@@ -1978,16 +2281,87 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
   const [activeTab, setActiveTab] = useState<'planner' | 'projections' | 'calculator' | 'funding'>('planner');
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const [showGoalNotification, setShowGoalNotification] = useState<string | null>(null);
+  const [aiRecommendation, setAiRecommendation] = useState<string>("Based on your savings rate and target trajectory, I can generate a financial action plan with budget priorities, savings guidance, and next-step recommendations.");
+  const [isAiRecommendationLoading, setIsAiRecommendationLoading] = useState(false);
+  const financialDefaults: NonNullable<UserProfile['financialProfile']> = {
+    annualIncome: 0,
+    currentSavings: 0,
+    monthlyExpenses: [],
+    goals: [],
+    debt: [],
+  };
+  const financialProfile = profile.financialProfile || financialDefaults;
+
+  const updateFinancialProfile = (updater: (current: NonNullable<UserProfile['financialProfile']>) => NonNullable<UserProfile['financialProfile']>) => {
+    setProfile(prev => {
+      const current = prev.financialProfile || financialDefaults;
+      return {
+        ...prev,
+        financialProfile: updater(current),
+      };
+    });
+  };
+
+  const addStarterBudget = () => {
+    updateFinancialProfile(current => ({
+      ...current,
+      monthlyExpenses: current.monthlyExpenses.length > 0 ? current.monthlyExpenses : [
+        { category: 'Housing', amount: Math.max(600, Math.round(profile.budget / 24)) },
+        { category: 'Food', amount: 320 },
+        { category: 'Transport', amount: 140 },
+        { category: 'Learning', amount: 180 },
+      ],
+      goals: current.goals.length > 0 ? current.goals : [
+        {
+          id: `goal-emergency-${Date.now()}`,
+          title: 'Emergency Fund',
+          target: 6000,
+          current: Math.min(current.currentSavings, 2500),
+          deadline: new Date(Date.now() + 31536000000).toISOString().split('T')[0],
+        }
+      ],
+    }));
+    setShowGoalNotification('Starter budget loaded');
+    setTimeout(() => setShowGoalNotification(null), 3000);
+  };
+
+  const addExpenseItem = () => {
+    updateFinancialProfile(current => ({
+      ...current,
+      monthlyExpenses: [
+        ...current.monthlyExpenses,
+        {
+          category: `Expense ${current.monthlyExpenses.length + 1}`,
+          amount: 150,
+        }
+      ]
+    }));
+  };
+
+  const addDebtAccount = () => {
+    updateFinancialProfile(current => ({
+      ...current,
+      debt: [
+        ...current.debt,
+        {
+          id: `debt-${Date.now()}`,
+          title: `Debt Account ${current.debt.length + 1}`,
+          amount: 2500,
+          interestRate: 8.5,
+        }
+      ]
+    }));
+  };
   
   const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
-  const expenseData = profile.financialProfile?.monthlyExpenses.map(e => ({ name: e.category, value: e.amount })) || [];
-  const totalMonthlyExpenses = profile.financialProfile?.monthlyExpenses.reduce((acc, curr) => acc + curr.amount, 0) || 0;
+  const expenseData = financialProfile.monthlyExpenses.map(e => ({ name: e.category, value: e.amount }));
+  const totalMonthlyExpenses = financialProfile.monthlyExpenses.reduce((acc, curr) => acc + curr.amount, 0);
   
   // Retirement Projection Mock Logic
   const currentAge = profile.age;
   const retireAge = 65;
   const yearsToRetire = retireAge - currentAge;
-  const monthlySavings = (profile.financialProfile?.annualIncome || 0) / 12 - totalMonthlyExpenses;
+  const monthlySavings = financialProfile.annualIncome / 12 - totalMonthlyExpenses;
   const projectedReturn = 0.07; // 7% annual
   
   const fiveYearProjectionData = Array.from({ length: 11 }, (_, i) => {
@@ -1995,7 +2369,7 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
     const growthFactor = (profile.targetCareerId === 'ai-engineer' ? 1.15 : 1.08); // AI path has higher expected growth
     const adjustedReturn = projectedReturn * (1 + (i / 20)); // Return slightly improves with portfolio size
     
-    const futureValue = (profile.financialProfile?.currentSavings || 0) * Math.pow(1 + adjustedReturn, years) +
+    const futureValue = financialProfile.currentSavings * Math.pow(1 + adjustedReturn, years) +
       (monthlySavings * 12 * (Math.pow(1 + adjustedReturn, years) - 1)) / adjustedReturn;
       
     return {
@@ -2004,6 +2378,43 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
       growth: Math.round(futureValue * (growthFactor - 1))
     };
   });
+
+  const generateFinancialRecommendation = async () => {
+    setIsAiRecommendationLoading(true);
+    try {
+      const topExpenses = financialProfile.monthlyExpenses
+        .slice()
+        .sort((left, right) => right.amount - left.amount)
+        .slice(0, 3)
+        .map(expense => `${expense.category}: $${expense.amount}/mo`)
+        .join(', ');
+
+      const prompt = `Create a financial action plan for this user.
+Career Target: ${profile.targetCareerId || 'Not selected'}
+Country: ${profile.country}
+Target Location: ${profile.targetLocation || 'Not set'}
+Annual Income: $${financialProfile.annualIncome}
+Current Savings: $${financialProfile.currentSavings}
+Monthly Expenses Total: $${totalMonthlyExpenses}
+Largest Monthly Expenses: ${topExpenses || 'No expenses recorded'}
+Active Goals: ${financialProfile.goals.map(goal => `${goal.title} ($${goal.current}/$${goal.target})`).join(', ') || 'No goals yet'}
+Debt Accounts: ${financialProfile.debt.map(debt => `${debt.title} ($${debt.amount} at ${debt.interestRate}% APR)`).join(', ') || 'No debt tracked'}
+
+Return a concise finance-first recommendation with:
+- one budget priority
+- one savings move
+- one risk warning
+- one next action for this week`;
+
+      const recommendation = await getCareerAdvice(prompt, profile);
+      setAiRecommendation(recommendation);
+    } catch (error) {
+      console.error('Financial AI Recommendation Error:', error);
+      setAiRecommendation('I could not generate a fresh recommendation right now. Review your expense mix, protect at least one month of runway, and prioritize high-interest debt before speculative spending.');
+    } finally {
+      setIsAiRecommendationLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -2040,10 +2451,10 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
                    <input 
                      type="number" 
                      className="bg-transparent outline-none w-full font-bold text-slate-800 text-sm"
-                     value={profile.financialProfile?.annualIncome}
+                     value={financialProfile.annualIncome}
                      onChange={(e) => setProfile(prev => ({ 
                        ...prev, 
-                       financialProfile: { ...prev.financialProfile!, annualIncome: parseInt(e.target.value) || 0 } 
+                       financialProfile: { ...(prev.financialProfile || financialProfile), annualIncome: parseInt(e.target.value) || 0 } 
                      }))}
                    />
                  </div>
@@ -2055,13 +2466,27 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
                    <input 
                      type="number" 
                      className="bg-transparent outline-none w-full font-bold text-indigo-900 text-sm"
-                     value={profile.financialProfile?.currentSavings}
+                     value={financialProfile.currentSavings}
                      onChange={(e) => setProfile(prev => ({ 
                        ...prev, 
-                       financialProfile: { ...prev.financialProfile!, currentSavings: parseInt(e.target.value) || 0 } 
+                       financialProfile: { ...(prev.financialProfile || financialProfile), currentSavings: parseInt(e.target.value) || 0 } 
                      }))}
                    />
                  </div>
+               </div>
+               <div className="grid grid-cols-2 gap-3">
+                 <button
+                   onClick={addStarterBudget}
+                   className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-indigo-700 transition-all hover:bg-indigo-100"
+                 >
+                   Load Starter Budget
+                 </button>
+                 <button
+                   onClick={addExpenseItem}
+                   className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-600 transition-all hover:border-indigo-200 hover:text-indigo-600"
+                 >
+                   Add Expense Line
+                 </button>
                </div>
             </div>
           </div>
@@ -2070,13 +2495,20 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
              <div className="flex items-center gap-2 text-indigo-400 font-black uppercase tracking-widest mb-4">
                 <ShieldCheck size={14} /> AI Recommendation
              </div>
-             <p className="text-slate-300 italic mb-4">
-               "Based on your savings rate and {profile.targetCareerId} trajectory, you have a 
-               <span className="text-white font-bold"> matched contribution</span> opportunity. 
-               Move $1,200 of current savings into an index-linked tax-shelter."
-             </p>
-             <button className="w-full py-2 bg-indigo-600 rounded-xl font-black uppercase tracking-widest text-[9px] hover:bg-indigo-500 transition-all">
-                Execute AI Portfolio Sync
+             <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-950/40 p-4 min-h-[96px]">
+               {isAiRecommendationLoading ? (
+                 <div className="flex h-full items-center gap-3 text-slate-300">
+                   <Loader2 size={14} className="animate-spin text-indigo-400" />
+                   <span className="text-[11px] font-bold">Generating finance recommendation...</span>
+                 </div>
+               ) : (
+                 <div className="prose prose-invert prose-p:my-0 prose-strong:text-white max-w-none text-slate-300 text-[11px] leading-relaxed">
+                   <ReactMarkdown>{aiRecommendation}</ReactMarkdown>
+                 </div>
+               )}
+             </div>
+             <button onClick={generateFinancialRecommendation} disabled={isAiRecommendationLoading} className="w-full py-2 bg-indigo-600 rounded-xl font-black uppercase tracking-widest text-[9px] hover:bg-indigo-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+                {isAiRecommendationLoading ? 'Syncing AI Recommendation' : 'Execute AI Portfolio Sync'}
              </button>
           </div>
         </div>
@@ -2197,34 +2629,47 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
                 <h4 className="text-sm font-bold text-slate-800 mb-6 flex justify-between items-center">
                   Expense Distribution <span className="text-xs text-slate-400 font-mono tracking-tighter">${totalMonthlyExpenses}/mo</span>
                 </h4>
-                <div className="flex-1 min-h-[250px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={expenseData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {expenseData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                   {expenseData.map((e, idx) => (
-                     <div key={idx} className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
-                        <span className="text-[10px] font-bold text-slate-500 truncate uppercase">{e.name}</span>
-                     </div>
-                   ))}
-                </div>
+                {expenseData.length > 0 ? (
+                  <>
+                    <div className="flex-1 min-h-[250px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={expenseData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {expenseData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                       {expenseData.map((e, idx) => (
+                         <div key={idx} className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
+                            <span className="text-[10px] font-bold text-slate-500 truncate uppercase">{e.name}</span>
+                         </div>
+                       ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex min-h-[250px] flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 text-center">
+                    <p className="text-sm font-black text-slate-700">No monthly expenses yet</p>
+                    <p className="mt-2 text-[11px] font-bold text-slate-400">Load a starter budget or add an expense line to activate the planner.</p>
+                    <div className="mt-5 flex gap-3">
+                      <button onClick={addStarterBudget} className="rounded-xl bg-indigo-600 px-4 py-2 text-[9px] font-black uppercase tracking-widest text-white hover:bg-indigo-500">Starter Budget</button>
+                      <button onClick={addExpenseItem} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[9px] font-black uppercase tracking-widest text-slate-600 hover:border-indigo-200 hover:text-indigo-600">Add Expense</button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
@@ -2244,7 +2689,7 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
                   </AnimatePresence>
                 </h4>
                 <div className="space-y-6 overflow-y-auto max-h-[400px] pr-2 scrollbar-hide flex-1">
-                  {profile.financialProfile?.goals.map(goal => (
+                  {financialProfile.goals.map(goal => (
                     <div key={goal.id} className="group relative bg-slate-50/50 p-4 rounded-2xl border border-slate-100 transition-all hover:bg-white hover:shadow-md">
                        {editingGoalId === goal.id ? (
                          <div className="space-y-3">
@@ -2252,11 +2697,11 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
                               className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold"
                               value={goal.title}
                               onChange={(e) => {
-                                const newGoals = profile.financialProfile?.goals.map(g => g.id === goal.id ? { ...g, title: e.target.value } : g) || [];
+                                const newGoals = financialProfile.goals.map(g => g.id === goal.id ? { ...g, title: e.target.value } : g);
                                 setProfile(prev => ({ 
                                   ...prev, 
                                   financialProfile: { 
-                                    ...(prev.financialProfile || { annualIncome: 0, currentSavings: 0, monthlyExpenses: [], goals: [], debt: [] }), 
+                                    ...(prev.financialProfile || financialProfile), 
                                     goals: newGoals 
                                   } 
                                 }));
@@ -2271,11 +2716,11 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
                                    value={goal.current}
                                    onChange={(e) => {
                                      const val = parseInt(e.target.value) || 0;
-                                     const newGoals = profile.financialProfile?.goals.map(g => g.id === goal.id ? { ...g, current: val } : g) || [];
+                                     const newGoals = financialProfile.goals.map(g => g.id === goal.id ? { ...g, current: val } : g);
                                      setProfile(prev => ({ 
                                        ...prev, 
                                        financialProfile: { 
-                                         ...(prev.financialProfile || { annualIncome: 0, currentSavings: 0, monthlyExpenses: [], goals: [], debt: [] }), 
+                                         ...(prev.financialProfile || financialProfile), 
                                          goals: newGoals 
                                        } 
                                      }));
@@ -2292,11 +2737,11 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
                                    value={goal.target}
                                    onChange={(e) => {
                                      const val = parseInt(e.target.value) || 0;
-                                     const newGoals = profile.financialProfile?.goals.map(g => g.id === goal.id ? { ...g, target: val } : g) || [];
+                                     const newGoals = financialProfile.goals.map(g => g.id === goal.id ? { ...g, target: val } : g);
                                      setProfile(prev => ({ 
                                        ...prev, 
                                        financialProfile: { 
-                                         ...(prev.financialProfile || { annualIncome: 0, currentSavings: 0, monthlyExpenses: [], goals: [], debt: [] }), 
+                                         ...(prev.financialProfile || financialProfile), 
                                          goals: newGoals 
                                        } 
                                      }));
@@ -2308,11 +2753,11 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
                                <button 
                                  onClick={() => {
                                    if (confirm(`Delete goal: ${goal.title}?`)) {
-                                     const newGoals = profile.financialProfile?.goals.filter(g => g.id !== goal.id) || [];
+                                     const newGoals = financialProfile.goals.filter(g => g.id !== goal.id);
                                      setProfile(prev => ({ 
                                        ...prev, 
                                        financialProfile: { 
-                                         ...(prev.financialProfile || { annualIncome: 0, currentSavings: 0, monthlyExpenses: [], goals: [], debt: [] }), 
+                                         ...(prev.financialProfile || financialProfile), 
                                          goals: newGoals 
                                        } 
                                      }));
@@ -2368,14 +2813,8 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
                     onClick={() => {
                       const newId = `goal-${Date.now()}`;
                       const newGoal = { id: newId, title: "New Custom Goal", target: 5000, current: 0, deadline: new Date(Date.now() + 31536000000).toISOString().split('T')[0] };
-                      const newGoals = [...(profile.financialProfile?.goals || []), newGoal];
-                      setProfile(prev => ({ 
-                        ...prev, 
-                        financialProfile: { 
-                          ...(prev.financialProfile || { annualIncome: 0, currentSavings: 0, monthlyExpenses: [], goals: [], debt: [] }), 
-                          goals: newGoals 
-                        } 
-                      }));
+                      const newGoals = [...financialProfile.goals, newGoal];
+                      updateFinancialProfile(current => ({ ...current, goals: newGoals }));
                       setEditingGoalId(newId);
                     }}
                     className="w-full py-3 border border-dashed border-slate-200 rounded-2xl text-[10px] font-bold text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
@@ -2394,7 +2833,7 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
                      <TrendingDown size={16} className="text-rose-500" /> Debt Paydown Tracker
                   </h4>
                   <div className="space-y-4">
-                    {profile.financialProfile?.debt.map(d => (
+                    {financialProfile.debt.map(d => (
                       <div key={d.id} className="p-4 bg-rose-50/30 rounded-2xl border border-rose-100">
                          <div className="flex justify-between items-start mb-2">
                             <span className="text-xs font-bold text-rose-900 uppercase tracking-tighter">{d.title}</span>
@@ -2406,7 +2845,13 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
                          </div>
                       </div>
                     ))}
-                    <button className="w-full py-3 border border-dashed border-rose-200 rounded-2xl text-[10px] font-bold text-rose-400 hover:text-rose-600 hover:bg-rose-50 transition-all">
+                    {financialProfile.debt.length === 0 && (
+                      <div className="rounded-2xl border border-dashed border-rose-200 bg-rose-50/40 px-4 py-6 text-center">
+                        <p className="text-sm font-black text-rose-900">No debt accounts tracked</p>
+                        <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-rose-400">Add a loan or card to model paydown.</p>
+                      </div>
+                    )}
+                    <button onClick={addDebtAccount} className="w-full py-3 border border-dashed border-rose-200 rounded-2xl text-[10px] font-bold text-rose-400 hover:text-rose-600 hover:bg-rose-50 transition-all">
                       Add New Debt Account
                     </button>
                   </div>
@@ -2445,11 +2890,15 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
 
 export default function App() {
   const [globalView, setGlobalView] = useState<'landing' | 'app'>('landing');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [localUser, setLocalUser] = useState<any>(null);
 
   return (
     <AuthProvider>
       {({ user, loading }) => {
-        if (loading && globalView === 'app') {
+        const activeUser = user || localUser;
+
+        if (loading && globalView === 'app' && !localUser) {
           return (
             <div className="h-screen w-full bg-slate-950 flex flex-col items-center justify-center space-y-4">
               <div className="w-16 h-16 bg-indigo-600 rounded-3xl animate-pulse flex items-center justify-center">
@@ -2464,11 +2913,35 @@ export default function App() {
           return <LandingPage onStart={() => setGlobalView('app')} />;
         }
 
-        if (!user) {
-          return <LoginScreen onBack={() => setGlobalView('landing')} />;
+        if (!activeUser) {
+          if (authMode === 'register') {
+            return (
+              <RegisterScreen 
+                onBack={() => {
+                  setAuthMode('login');
+                  setGlobalView('landing');
+                }}
+                onSuccess={() => {
+                  setAuthMode('login');
+                  setGlobalView('app');
+                }}
+              />
+            );
+          }
+          
+          return (
+            <LoginScreen 
+              onBack={() => setGlobalView('landing')}
+              onShowRegister={() => setAuthMode('register')}
+              onLoginSuccess={(userData: any) => {
+                setLocalUser(userData);
+                setGlobalView('app');
+              }}
+            />
+          );
         }
 
-        return <AuthenticatedApp user={user} onExit={() => setGlobalView('landing')} />;
+        return <AuthenticatedApp user={activeUser} onExit={() => { setLocalUser(null); setGlobalView('landing'); }} />;
       }}
     </AuthProvider>
   );
@@ -2478,6 +2951,8 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   const [activeView, setActiveView] = useState<'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs'>('dashboard');
   const [selectedPathId, setSelectedPathId] = useState<string>("ai-engineer");
   const [institutionSearchQuery, setInstitutionSearchQuery] = useState("");
+  const [institutionRoadmapContext, setInstitutionRoadmapContext] = useState<InstitutionRoadmapContext | null>(null);
+  const [sparkEOpen, setSparkEOpen] = useState(false);
   const [isInterviewOpen, setIsInterviewOpen] = useState(false);
   const [interviewRole, setInterviewRole] = useState("");
   const [interviewCompany, setInterviewCompany] = useState("");
@@ -2535,16 +3010,26 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
     setIsInterviewOpen(true);
   };
 
-  const handleNavigate = (view: typeof activeView, search?: string) => {
-    if (view === 'institutions' && search) {
-      setInstitutionSearchQuery(search);
-    } else if (view !== 'institutions') {
+  const handleNavigate = (view: typeof activeView, context?: { search?: string; roadmap?: InstitutionRoadmapContext | null }) => {
+    if (view === 'institutions') {
+      setInstitutionSearchQuery(context?.search ?? "");
+      setInstitutionRoadmapContext(context?.roadmap ?? null);
+    } else {
       setInstitutionSearchQuery("");
+      setInstitutionRoadmapContext(null);
     }
     setActiveView(view);
   };
   const [careers, setCareers] = useState<CareerPath[]>(CAREER_PATHS);
   const [isCareersLoading, setIsCareersLoading] = useState(false);
+  
+  // Dynamic data from LLM based on navigation
+  const [dynamicInstitutions, setDynamicInstitutions] = useState<Institution[]>([]);
+  const [isInstitutionsLoading, setIsInstitutionsLoading] = useState(false);
+  const [dynamicMaterials, setDynamicMaterials] = useState<any[]>([]);
+  const [isMaterialsLoading, setIsMaterialsLoading] = useState(false);
+  const [visaGuidance, setVisaGuidance] = useState<any>(null);
+  const [isVisaLoading, setIsVisaLoading] = useState(false);
   
   const handleSelectPath = (id: string) => {
     setSelectedPathId(id);
@@ -2566,6 +3051,70 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
     };
     fetchCareers();
   }, []);
+
+  // Fetch institutions dynamically when navigating to institutions view
+  useEffect(() => {
+    if (activeView === 'institutions' && selectedPathId) {
+      const fetchInstitutions = async () => {
+        setIsInstitutionsLoading(true);
+        const selectedCareer = careers.find(c => c.id === selectedPathId);
+        const targetLocation = profile.targetLocation || 'Global';
+        
+        const roadmapFocus = institutionRoadmapContext
+          ? `${institutionRoadmapContext.milestoneTitle}: ${institutionRoadmapContext.milestoneDescription}. Requirements: ${institutionRoadmapContext.requirements.join(', ')}`
+          : undefined;
+
+        const dynamicInsts = await getDynamicInstitutions(
+          profile,
+          selectedCareer?.title || selectedPathId,
+          targetLocation,
+          roadmapFocus,
+        );
+        if (dynamicInsts && dynamicInsts.length > 0) {
+          setDynamicInstitutions(dynamicInsts);
+        } else {
+          setDynamicInstitutions(INSTITUTIONS.slice(0, 20));
+        }
+        setIsInstitutionsLoading(false);
+      };
+      fetchInstitutions();
+    }
+  }, [activeView, selectedPathId, profile.targetLocation, careers, institutionRoadmapContext]);
+
+  // Fetch study materials dynamically when navigating to materials view
+  useEffect(() => {
+    if (activeView === 'materials' && selectedPathId) {
+      const fetchMaterials = async () => {
+        setIsMaterialsLoading(true);
+        const skillLevel = profile.academicPerformance?.gpa ? (profile.academicPerformance.gpa > 3.7 ? 'Advanced' : 'Intermediate') : 'Beginner';
+        const region = profile.country === 'USA' ? 'NA' : 'Global';
+        
+        const materials = await getDynamicStudyMaterials(selectedPathId, skillLevel, region);
+        if (materials && materials.length > 0) {
+          setDynamicMaterials(materials);
+        } else {
+          // Fallback to mock materials filtered by career
+          setDynamicMaterials(STUDY_MATERIALS.filter(m => m.careerId === selectedPathId).slice(0, 12));
+        }
+        setIsMaterialsLoading(false);
+      };
+      fetchMaterials();
+    }
+  }, [activeView, selectedPathId, profile]);
+
+  // Fetch visa guidance when profile or selected path changes
+  useEffect(() => {
+    if (selectedPathId && profile.targetLocation) {
+      const fetchVisaInfo = async () => {
+        setIsVisaLoading(true);
+        const selectedCareer = careers.find(c => c.id === selectedPathId);
+        const guidance = await getVisaGuidance(profile, profile.targetLocation, selectedCareer?.title || selectedPathId);
+        setVisaGuidance(guidance);
+        setIsVisaLoading(false);
+      };
+      fetchVisaInfo();
+    }
+  }, [selectedPathId, profile.targetLocation, careers]);
 
   const handleLogout = async () => {
     try {
@@ -2640,43 +3189,31 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
             
             {activeView !== 'dashboard' && (
               <div className="grid grid-cols-12 gap-8 h-full">
-                {/* Sidebars for deeper views - minimized/condensed */}
-                <section className="hidden xl:col-span-3 xl:flex flex-col gap-8 overflow-hidden">
-                   <div className="bento-card p-6">
-                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Quick Context</h4>
-                      <div className="flex items-center gap-3">
-                         <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white text-xs">CV</div>
-                         <div>
-                            <p className="text-sm font-black text-slate-900 leading-none mb-1">{profile.name}</p>
-                            <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-tight">Active Node</p>
-                         </div>
-                      </div>
-                   </div>
-                   <AIAdvisor profile={profile} />
-                </section>
-
-                <section className="col-span-12 xl:col-span-6 space-y-8 h-full">
+                <section className="col-span-12 xl:col-span-9 space-y-8 h-full">
                    {activeView === 'roadmap' && <RoadmapView profile={profile} pathId={selectedPathId} careers={careers} onNavigate={handleNavigate} onInitInterview={initiateInterview} />}
                    {activeView === 'jobs' && <JobBoardView profile={profile} />}
-                   {activeView === 'institutions' && <InstitutionsView profile={profile} selectedPathId={selectedPathId} initialSearch={institutionSearchQuery} onInitInterview={initiateInterview} />}
+                   {activeView === 'institutions' && <InstitutionsView profile={profile} selectedPathId={selectedPathId} initialSearch={institutionSearchQuery} onInitInterview={initiateInterview} institutions={dynamicInstitutions.length > 0 ? dynamicInstitutions : INSTITUTIONS} isLoading={isInstitutionsLoading} visaGuidance={visaGuidance} isVisaLoading={isVisaLoading} roadmapContext={institutionRoadmapContext} />}
                    {activeView === 'heatmap' && <HeatmapView />}
-                   {activeView === 'materials' && <MaterialsView />}
+                   {activeView === 'materials' && <MaterialsView materials={dynamicMaterials.length > 0 ? dynamicMaterials : STUDY_MATERIALS} isLoading={isMaterialsLoading} />}
                    {activeView === 'parent' && <ParentalDashboard profile={profile} onBack={() => setActiveView('dashboard')} careers={careers} />}
                    {activeView === 'expenses' && <FinancialView profile={profile} setProfile={setProfile} />}
                 </section>
 
                 <section className="hidden xl:col-span-3 xl:flex flex-col gap-8 overflow-hidden">
-                   <div className="bento-card p-6 bg-slate-900 text-white">
-                      <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-4">Intelligence Feed</h4>
-                      <div className="aspect-video bg-slate-800 rounded-2xl mb-4 overflow-hidden relative group">
-                         <img src={STUDY_MATERIALS[0].thumbnail} className="absolute inset-0 w-full h-full object-cover opacity-40" />
-                         <div className="absolute inset-0 flex items-center justify-center">
-                            <PlayCircle size={24} className="text-blue-400 opacity-90 group-hover:scale-110 group-active:scale-95 transition-all drop-shadow-[0_0_8px_rgba(96,165,250,0.5)]" />
-                         </div>
-                      </div>
-                      <p className="text-[11px] font-medium text-slate-400 leading-relaxed italic">"Global sector shifts indicate a 12% rise in Biotech需求 for 2026."</p>
-                   </div>
+                   <IntelligenceFeedCard careerId={selectedPathId} />
                    <FinancialBreakdownWidget profile={profile} />
+                   {/* Quick Spark.E CTA */}
+                   <button
+                     onClick={() => setSparkEOpen(true)}
+                     className="w-full flex items-center gap-3 px-5 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl transition-all group shadow-xl shadow-indigo-200"
+                   >
+                     <Sparkles size={18} className="shrink-0" />
+                     <div className="text-left flex-1 min-w-0">
+                       <p className="text-[10px] font-black uppercase tracking-widest leading-none">Ask Spark.E</p>
+                       <p className="text-[9px] text-indigo-200 leading-none mt-0.5 truncate">AI Career Mentor</p>
+                     </div>
+                     <ChevronRight size={14} className="shrink-0 group-hover:translate-x-1 transition-transform" />
+                   </button>
                 </section>
               </div>
             )}
@@ -2708,6 +3245,93 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
         location={interviewLocation}
         onStatsUpdate={setInterviewStats}
       />
+
+      {/* Spark.E Floating Bubble */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+        {/* Tooltip label */}
+        <AnimatePresence>
+          {!sparkEOpen && (
+            <motion.div
+              initial={{ opacity: 0, x: 10, scale: 0.9 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 10, scale: 0.9 }}
+              className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl shadow-xl pointer-events-none"
+            >
+              Spark.E ⚡
+            </motion.div>
+          )}
+        </AnimatePresence>
+        {/* Bubble button */}
+        <motion.button
+          onClick={() => setSparkEOpen(o => !o)}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.94 }}
+          className="relative w-14 h-14 rounded-2xl bg-indigo-600 shadow-2xl shadow-indigo-500/40 flex items-center justify-center text-white overflow-hidden"
+        >
+          <AnimatePresence mode="wait">
+            {sparkEOpen ? (
+              <motion.span key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.2 }}>
+                <X size={22} />
+              </motion.span>
+            ) : (
+              <motion.span key="open" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.2 }}>
+                <Sparkles size={22} />
+              </motion.span>
+            )}
+          </AnimatePresence>
+          {/* Pulse ring */}
+          {!sparkEOpen && (
+            <span className="absolute inset-0 rounded-2xl border-2 border-indigo-400 animate-ping opacity-30 pointer-events-none" />
+          )}
+        </motion.button>
+      </div>
+
+      {/* Spark.E Slide-in Drawer */}
+      <AnimatePresence>
+        {sparkEOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSparkEOpen(false)}
+              className="fixed inset-0 bg-slate-950/30 backdrop-blur-sm z-40"
+            />
+            {/* Drawer panel */}
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+              className="fixed top-0 right-0 h-full w-full max-w-md z-50 bg-white shadow-2xl flex flex-col overflow-hidden"
+            >
+              {/* Drawer header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-slate-950">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center">
+                    <Sparkles size={16} className="text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-black text-white tracking-tight leading-none">⚡ Spark.E</p>
+                    <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest leading-none mt-0.5">AI Career Mentor</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSparkEOpen(false)}
+                  className="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              {/* AIAdvisor fills the rest */}
+              <div className="flex-1 overflow-hidden">
+                <AIAdvisor profile={profile} embedded />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

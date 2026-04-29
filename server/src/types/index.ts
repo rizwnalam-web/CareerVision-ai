@@ -94,8 +94,33 @@ export interface UserProfile {
   achievements?: string;
   annualIncome?: number;
   currentSavings?: number;
+  passwordHash?: string;
+  registrationMethod?: "email" | "google" | "firebase";
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface RegistrationRequest {
+  email: string;
+  name: string;
+  password: string;
+  age?: number;
+  country?: string;
+  interests?: string[];
+  budget?: number;
+  education?: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  success: boolean;
+  message: string;
+  user?: UserProfile;
+  token?: string;
 }
 
 export interface InterviewQuestion {

@@ -94,6 +94,11 @@ export interface UserProfile {
     goals: { id: string; title: string; target: number; current: number; deadline: string }[];
     debt: { id: string; title: string; amount: number; interestRate: number }[];
   };
+  // Visa & Immigration fields
+  visaRequirements?: string[];
+  visaSponsorshipNeeded?: boolean;
+  targetVisaType?: string; // e.g., "F-1 Student Visa", "H-1B Work Visa", "Green Card"
+  citizenCountry?: string; // Home country for visa matching
   // Auth and System fields
   uid?: string;
   email?: string;
@@ -138,4 +143,38 @@ export interface MarketInsights {
     importance: number; // 0-100
   }[];
   topHiringCompanies: string[];
+}
+
+export interface CareerHubIntelligence {
+  city: string;
+  country: string;
+  intensity: number; // 0-100 market intensity score
+  topCareers: {
+    title: string;
+    demandScore: number; // 0-100
+    avgSalary: {
+      entry: number;
+      mid: number;
+      senior: number;
+      currency: string;
+    };
+    jobGrowth: number; // percentage
+    openings: number; // approximate count
+  }[];
+  marketHealthScore: number; // 0-100
+  averageSalaryRange: {
+    min: number;
+    max: number;
+    currency: string;
+  };
+  costOfLiving: number; // index (1.0 = average)
+  requiredSkills: {
+    skill: string;
+    demand: number; // 0-100
+  }[];
+  visaOpenness: "High" | "Medium" | "Low";
+  hiringTrends: string; // Market description
+  topEmployers: string[];
+  internshipOpportunities: number;
+  remoteWorkPercentage: number; // % of jobs that are remote/hybrid
 }

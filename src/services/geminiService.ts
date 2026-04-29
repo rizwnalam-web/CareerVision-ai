@@ -1,6 +1,7 @@
 import { ai, Type } from "../lib/gemini";
 import { FUNDING_OPPORTUNITIES, STUDY_MATERIALS } from "../constants/mockData";
-import { FundingOpportunity, UserProfile, CareerPath, StudyMaterial, JobListing, Institution, MarketInsights } from "../types/career";
+import { FundingOpportunity, UserProfile, CareerPath, StudyMaterial, JobListing, Institution, MarketInsights, CareerHubIntelligence } from "../types/career";
+import { getCachedCareerHub, saveCachedCareerHub, getCachedInstitutions, saveCachedInstitutions, getCachedStudyMaterialsByCareer, saveCachedStudyMaterials } from "./cacheService";
 
 // ... existing functions ...
 
@@ -640,5 +641,237 @@ export async function getTopGlobalCareers(): Promise<CareerPath[]> {
     }
     // Fallback to locally defined mock data if API fails or quota hit
     return [];
+  }
+}
+
+// NEW: Get Dynamic Institutions Based on Profile & Career
+export async function getDynamicInstitutions(profile: UserProfile, careerId: string, targetLocation: string, roadmapFocus?: string): Promise<Institution[]> {
+  const model = "gemini-2.0-flash";
+  
+  const systemInstruction = `You are an expert global education consultant. Recommend top 20 institutions matching the student's profile and career goals.
+  Return valid JSON array of Institution objects with realistic data.`;
+
+  try {
+        // Step 1: Check if institutions are cached for this location
+        const cachedInstitutions = await getCachedInstitutions(targetLocation);
+        if (cachedInstitutions && cachedInstitutions.length > 0) {
+          return cachedInstitutions as Institution[];
+        }
+
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{
+        role: "user",
+        parts: [{
+          text: `Find top 20 institutions for:
+Career: ${careerId}
+Target Location: ${targetLocation}
+Budget: $${profile.budget}/year
+Home Country: ${profile.country}
+Education Level: ${profile.education}
+GPA: ${profile.academicPerformance?.gpa || 3.5}
+${roadmapFocus ? `Roadmap Focus: ${roadmapFocus}` : ''}
+
+Return JSON array with fields: id, name, country, city, type, programs[], avgCost, ranking, visaSupport, allowsInternationalStudents, website, applicationDeadline, costOfLivingIndex. Include 20 diverse institutions from different countries.`
+        }]
+      }],
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json"
+      }
+    });
+
+    const institutions = JSON.parse(response.text);
+      const result = Array.isArray(institutions) ? institutions.slice(0, 20) : [];
+
+      // Step 2: Save to database for caching on success
+      if (result.length > 0) {
+        await saveCachedInstitutions(result).catch(err => 
+          console.warn("Failed to cache institutions (non-blocking):", err)
+        );
+      }
+
+      return result;
+  } catch (error) {
+    console.error("Get Dynamic Institutions Error:", error);
+    return [];
+  }
+}
+
+// NEW: Get Dynamic Study Materials Based on Career & Level
+export async function getDynamicStudyMaterials(careerId: string, skillLevel: string, region: string): Promise<StudyMaterial[]> {
+  const model = "gemini-2.0-flash";
+  
+  const systemInstruction = `You are a learning curator. Find real, high-quality study materials from platforms like Coursera, edX, MIT OpenCourseWare, YouTube, Udemy.
+  Return valid JSON array of StudyMaterial objects.`;
+
+  try {
+        // Step 1: Check if study materials are cached for this career
+        const cachedMaterials = await getCachedStudyMaterialsByCareer(careerId);
+        if (cachedMaterials && cachedMaterials.length > 0) {
+          return cachedMaterials as StudyMaterial[];
+        }
+
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{
+        role: "user",
+        parts: [{
+          text: `Find top 12 study materials for:
+Career: ${careerId}
+Skill Level: ${skillLevel}
+Region: ${region}
+
+Return JSON array with: id, title, type (video|course|article|interactive), provider, url, duration, rating, language, description, tags`
+        }]
+      }],
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json"
+      }
+    });
+
+    const materials = JSON.parse(response.text);
+      const result = Array.isArray(materials) ? materials.slice(0, 12) : [];
+
+      // Step 2: Save to database for caching on success
+      if (result.length > 0) {
+        await saveCachedStudyMaterials(result, careerId).catch(err => 
+          console.warn("Failed to cache study materials (non-blocking):", err)
+        );
+      }
+
+      return result;
+  } catch (error) {
+    console.error("Get Dynamic Materials Error:", error);
+    return [];
+  }
+}
+
+// NEW: Get Visa Guidance
+export async function getVisaGuidance(profile: UserProfile, targetCountry: string, targetCareer: string): Promise<any> {
+  const model = "gemini-2.0-flash";
+  
+  const systemInstruction = `You are an expert immigration consultant specializing in student visas and work permits.
+  Provide comprehensive, realistic visa guidance based on student profile and target location.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{
+        role: "user",
+        parts: [{
+          text: `Visa Guidance for:
+Home Country: ${profile.citizenCountry || profile.country}
+Target Country: ${targetCountry}
+Career: ${targetCareer}
+Education: ${profile.education}
+Budget: $${profile.budget}
+
+Return JSON with: recommendedVisaTypes[], processingTimeline, estimatedCost, requirements[], sponsorshipLikelihood (High/Medium/Low), nextSteps[], processingLocation`
+        }]
+      }],
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json"
+      }
+    });
+
+    const visaInfo = JSON.parse(response.text);
+    return visaInfo;
+  } catch (error) {
+    console.error("Visa Guidance Error:", error);
+    return {
+      recommendedVisaTypes: ['Student Visa'],
+      processingTimeline: '2-4 months',
+      estimatedCost: 1500,
+      requirements: ['Valid Passport', 'Acceptance Letter', 'Proof of Funds', 'Medical Clearance'],
+      sponsorshipLikelihood: 'Medium',
+      nextSteps: ['Apply to institutions', 'Gather required documents', 'Schedule consulate appointment'],
+      processingLocation: 'Home Country Embassy'
+    };
+  }
+}
+
+// NEW: Get Career Hub Intelligence - Market data for job markets in cities
+export async function getCareerHubIntelligence(city: string, country: string): Promise<any> {
+  const model = "gemini-2.0-flash";
+
+  // Step 1: Check if data is cached in database
+  const cachedData = await getCachedCareerHub(city, country);
+  if (cachedData) {
+    console.log("✓ Using cached career hub data for:", city, country);
+    return cachedData;
+  }
+
+  const systemInstruction = `You are Spark.E, a Global Career Market Intelligence Specialist.
+  Provide comprehensive market insights for job markets in specific cities.
+  Return a valid JSON object with city, country, intensity (0-100), topCareers array, marketHealthScore, averageSalaryRange, costOfLiving, visaOpenness, hiringTrends, requiredSkills array, topEmployers array, internshipOpportunities, and remoteWorkPercentage.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{
+        role: "user",
+        parts: [{
+          text: `Analyze the job market for ${city}, ${country}. Provide 2026 market insights including: Top 4-5 in-demand careers with demand scores and salary ranges (entry, mid, senior), Job market intensity (0-100), Cost of living index, Required technical skills with demand scores, Visa sponsorship openness (High/Medium/Low), Current hiring trends, Top 5 employers, Internship availability count, Remote work percentage (0-100), and Market health score (0-100).`
+        }]
+      }],
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json"
+      }
+    });
+
+    const hubData = JSON.parse(response.text);
+    const result = {
+      ...hubData,
+      city,
+      country
+    };
+
+    // Step 2: Save to database for caching on success
+    await saveCachedCareerHub(result).catch(err => 
+      console.warn("Failed to cache career hub data (non-blocking):", err)
+    );
+
+    return result;
+  } catch (error) {
+    console.error("Career Hub Intelligence Error:", error);
+    // Return structured fallback data
+    return {
+      city,
+      country,
+      intensity: 75,
+      topCareers: [
+        {
+          title: "Software Engineer",
+          demandScore: 95,
+          avgSalary: { entry: 60000, mid: 100000, senior: 150000, currency: "USD" },
+          jobGrowth: 12,
+          openings: 500
+        },
+        {
+          title: "Data Scientist",
+          demandScore: 90,
+          avgSalary: { entry: 70000, mid: 110000, senior: 160000, currency: "USD" },
+          jobGrowth: 15,
+          openings: 300
+        }
+      ],
+      marketHealthScore: 78,
+      averageSalaryRange: { min: 55000, max: 180000, currency: "USD" },
+      costOfLiving: 1.1,
+      requiredSkills: [
+        { skill: "Python", demand: 90 },
+        { skill: "Cloud Platforms", demand: 85 },
+        { skill: "System Design", demand: 80 }
+      ],
+      visaOpenness: "Medium",
+      hiringTrends: "Tech roles dominating the market with strong emphasis on AI/ML and Cloud Computing",
+      topEmployers: ["Tech Giants", "Startups", "Finance Firms", "Consulting"],
+      internshipOpportunities: 200,
+      remoteWorkPercentage: 45
+    };
   }
 }

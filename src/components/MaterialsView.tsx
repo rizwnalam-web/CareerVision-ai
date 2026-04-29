@@ -13,9 +13,11 @@ import { aiSearchStudyMaterials } from '../services/geminiService';
 
 interface MaterialsLibraryProps {
   onBack?: () => void;
+  materials?: StudyMaterial[];
+  isLoading?: boolean;
 }
 
-const MaterialsLibrary: React.FC<MaterialsLibraryProps> = () => {
+const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_MATERIALS, isLoading = false }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeType, setActiveType] = useState<string>("All");
   const [activeLevel, setActiveLevel] = useState<string>("All");
@@ -37,12 +39,12 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = () => {
   // Derive recent materials
   const recentMaterials = useMemo(() => {
     // Combine local and AI results to find the objects for the IDs
-    const allKnown = [...STUDY_MATERIALS, ...aiResults];
+    const allKnown = [...materials, ...aiResults];
     return recentlyViewedIds
       .map(id => allKnown.find(m => m.id === id))
       .filter((m): m is StudyMaterial => !!m)
       .slice(0, 5); // Keep only top 5
-  }, [recentlyViewedIds, aiResults]);
+  }, [recentlyViewedIds, aiResults, materials]);
 
   const addToRecent = (id: string) => {
     const newIds = [id, ...recentlyViewedIds.filter(existingId => existingId !== id)].slice(0, 10);
@@ -51,13 +53,13 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = () => {
   };
 
   // Derive unique options for filters
-  const types = ["All", ...Array.from(new Set(STUDY_MATERIALS.map(m => m.type)))];
+  const types = ["All", ...Array.from(new Set(materials.map(m => m.type)))];
   const levels = ["All", "Beginner", "Intermediate", "Advanced"];
-  const languages = ["All", ...Array.from(new Set(STUDY_MATERIALS.map(m => m.language)))];
+  const languages = ["All", ...Array.from(new Set(materials.map(m => m.language)))];
 
   const filteredMaterials = useMemo(() => {
     // Merge local and AI results
-    const combinedBase = hasAiSearched ? [...aiResults, ...STUDY_MATERIALS] : STUDY_MATERIALS;
+    const combinedBase = hasAiSearched ? [...aiResults, ...materials] : materials;
     
     // Deduplicate by ID
     const uniqueMap = new Map();
@@ -114,7 +116,7 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = () => {
             <Sparkles className="text-amber-400" size={24} />
           </h2>
           <p className="text-sm font-bold text-slate-500 uppercase tracking-widest mt-1">
-            {filteredMaterials.length} Curated Resources for {activeCareer === 'All' ? 'Global Careers' : CAREER_PATHS.find(c => c.id === activeCareer)?.title}
+            {isLoading ? '🔄 Loading curated resources...' : `${filteredMaterials.length} Curated Resources for ${activeCareer === 'All' ? 'Global Careers' : CAREER_PATHS.find(c => c.id === activeCareer)?.title}`}
           </p>
         </div>
 
