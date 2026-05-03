@@ -203,6 +203,20 @@ export const CAREER_PATHS: CareerPath[] = [
     workType: "On-site",
     tags: ["Global Hubs"],
     milestones: [{ ageRange: "16-24", title: "Culinary Arts", description: "Kitchen management", requirements: ["Gastronomy", "Leadership"] }]
+  },
+  {
+    id: "mistral-ai",
+    title: "Mistral AI Developer",
+    description: "Develop and integrate AI solutions using Mistral models like Mistral-7B, Mixtral 8x7B, and Mistral Small.",
+    growth: "medium",
+    category: "Technology & Digital",
+    subCategory: "Data & AI",
+    workType: "Hybrid",
+    tags: ["Mistral Models", "AI Development"],
+    milestones: [
+      { ageRange: "15-18", title: "AI Basics", description: "Learn AI fundamentals and Mistral model usage.", requirements: ["Python", "AI Basics"] },
+      { ageRange: "22-25", title: "Advanced AI", description: "Master Mistral models and deployment.", requirements: ["Mistral-7B", "Mixtral 8x7B"] }
+    ]
   }
 ];
 
