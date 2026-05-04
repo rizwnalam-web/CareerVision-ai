@@ -644,6 +644,84 @@ export async function getTopGlobalCareers(): Promise<CareerPath[]> {
   }
 }
 
+export async function aiSearchCareerPaths(query: string): Promise<CareerPath[]> {
+  const model = "gemini-3.1-pro-preview";
+  const systemInstruction = `
+    You are an AI Career Strategist. The user is searching for global career paths.
+    Analyze the query: "${query}".
+    Return up to 8 high-quality career paths that match the query and the global job market in 2026.
+    Use the exact JSON schema below and nothing else.
+
+    CareerPath Schema:
+    [{
+      "id": "slug-id",
+      "title": "Full Career Title",
+      "description": "Short, punchy 1-2 sentence description",
+      "growth": "high" | "medium" | "stable",
+      "category": "Technology & Digital" | "Healthcare & Life Sciences" | "Business, Finance & Management" | "Engineering, Science & Environment" | "Arts, Design & Media" | "Education, Law & Public Service" | "Skilled Trades & Technical Services",
+      "subCategory": "The specific field (e.g. Data & AI, Clinical Practice, etc.)",
+      "workType": "Remote" | "On-site" | "Hybrid" | "Mobile",
+      "tags": ["string"],
+      "milestones": [
+        {
+          "ageRange": "e.g. 13-17",
+          "title": "Exploratory Phase",
+          "description": "What to do at this age",
+          "requirements": ["Skill 1", "Skill 2"]
+        }
+      ]
+    }]
+  `;
+
+  const prompt = `Provide AI-powered global career paths matching: ${query}. Return valid JSON only.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              title: { type: Type.STRING },
+              description: { type: Type.STRING },
+              growth: { type: Type.STRING, enum: ["high", "medium", "stable"] },
+              category: { type: Type.STRING },
+              subCategory: { type: Type.STRING },
+              workType: { type: Type.STRING, enum: ["Remote", "On-site", "Hybrid", "Mobile"] },
+              tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+              milestones: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    ageRange: { type: Type.STRING },
+                    title: { type: Type.STRING },
+                    description: { type: Type.STRING },
+                    requirements: { type: Type.ARRAY, items: { type: Type.STRING } }
+                  },
+                  required: ["ageRange", "title", "description", "requirements"]
+                }
+              }
+            },
+            required: ["id", "title", "description", "growth", "category", "milestones"]
+          }
+        }
+      }
+    });
+
+    return JSON.parse(response.text);
+  } catch (error: any) {
+    console.error("AI Career Search Error:", error);
+    return [];
+  }
+}
+
 // NEW: Get Dynamic Institutions Based on Profile & Career
 export async function getDynamicInstitutions(profile: UserProfile, careerId: string, targetLocation: string, roadmapFocus?: string): Promise<Institution[]> {
   const model = "gemini-2.0-flash";

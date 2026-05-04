@@ -116,6 +116,15 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface PasswordResetRequest {
+  email: string;
+}
+
+export interface PasswordResetTokenRequest {
+  token: string;
+  password: string;
+}
+
 export interface AuthResponse {
   success: boolean;
   message: string;

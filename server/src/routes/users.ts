@@ -2,7 +2,7 @@ import { Router } from "express";
 import { v4 as uuidv4 } from "uuid";
 import bcryptjs from "bcryptjs";
 import { db } from "../db/database.js";
-import { UserProfile, RegistrationRequest, LoginRequest, AuthResponse } from "../types/index.js";
+import { UserProfile, RegistrationRequest, LoginRequest, PasswordResetRequest, PasswordResetTokenRequest, AuthResponse } from "../types/index.js";
 
 const router = Router();
 
@@ -370,6 +370,129 @@ router.post("/auth/login", async (req, res) => {
     res.status(500).json({ 
       success: false,
       error: "Failed to login" 
+    });
+  }
+});
+
+// Request password reset token for an email-authenticated user
+router.post("/auth/password/forgot", async (req, res) => {
+  try {
+    const { email }: PasswordResetRequest = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: "Email is required"
+      });
+    }
+
+    const user = await db.oneOrNone<any>(
+      "SELECT id, registration_method FROM users WHERE email = $1",
+      [email]
+    );
+
+    if (!user || user.registration_method !== "email") {
+      return res.json({
+        success: true,
+        message: "If an account exists for that email, a password reset token has been generated."
+      });
+    }
+
+    const token = uuidv4();
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
+
+    await db.none(
+      `INSERT INTO password_reset_tokens (user_id, token, expires_at, used)
+       VALUES ($1, $2, $3, false)`,
+      [user.id, token, expiresAt]
+    );
+
+    const response: any = {
+      success: true,
+      message: "Password reset token created. Use the token to reset your password."
+    };
+
+    if (process.env.NODE_ENV !== "production") {
+      response.token = token;
+    }
+
+    res.json(response);
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to request password reset"
+    });
+  }
+});
+
+// Reset password using a valid reset token
+router.post("/auth/password/reset", async (req, res) => {
+  try {
+    const { token, password }: PasswordResetTokenRequest = req.body;
+
+    if (!token || !password) {
+      return res.status(400).json({
+        success: false,
+        error: "Reset token and new password are required"
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: "Password must be at least 6 characters"
+      });
+    }
+
+    const resetRecord = await db.oneOrNone<any>(
+      `SELECT id, user_id FROM password_reset_tokens
+       WHERE token = $1 AND used = false AND expires_at > NOW()`,
+      [token]
+    );
+
+    if (!resetRecord) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid or expired reset token"
+      });
+    }
+
+    const user = await db.oneOrNone<any>(
+      "SELECT id FROM users WHERE id = $1",
+      [resetRecord.user_id]
+    );
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid reset token"
+      });
+    }
+
+    const saltRounds = 10;
+    const passwordHash = await bcryptjs.hash(password, saltRounds);
+
+    await db.tx(async (t) => {
+      await t.none(
+        "UPDATE users SET password_hash = $1 WHERE id = $2",
+        [passwordHash, user.id]
+      );
+      await t.none(
+        "UPDATE password_reset_tokens SET used = true WHERE id = $1",
+        [resetRecord.id]
+      );
+    });
+
+    res.json({
+      success: true,
+      message: "Password has been reset successfully. You can now sign in with your new password."
+    });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to reset password"
     });
   }
 });

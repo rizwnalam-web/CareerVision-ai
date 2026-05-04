@@ -91,7 +91,7 @@ import {
 import { cn } from './lib/utils';
 import { CAREER_PATHS, INSTITUTIONS, STUDY_MATERIALS, FUNDING_OPPORTUNITIES } from './constants/mockData';
 import { CareerPath, UserProfile, Institution, FundingOpportunity } from './types/career';
-import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobalCareers, generateCoverLetter, getLatestCareerNews, getAiInstitutionRecommendations, getDynamicInstitutions, getDynamicStudyMaterials, getVisaGuidance, getCareerHubIntelligence } from './services/geminiService';
+import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobalCareers, aiSearchCareerPaths, generateCoverLetter, getLatestCareerNews, getAiInstitutionRecommendations, getDynamicInstitutions, getDynamicStudyMaterials, getVisaGuidance, getCareerHubIntelligence } from './services/geminiService';
 import ReactMarkdown from 'react-markdown';
 
 import { LandingPage } from './components/LandingPage';
@@ -416,7 +416,7 @@ const FinancialBreakdownWidget = ({ profile }: { profile: UserProfile }) => {
 
 // NewsFlash is now imported from components/NewsFlash.tsx
 
-const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview }: { profile: UserProfile, onSelectPath: (id: string) => void, careers: CareerPath[], isLoading: boolean, onInitInterview: (role: string, company?: string) => void }) => {
+const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview, onAiCareerSearch, isAiCareerLoading, aiCareerSearchMessage }: { profile: UserProfile, onSelectPath: (id: string) => void, careers: CareerPath[], isLoading: boolean, onInitInterview: (role: string, company?: string) => void, onAiCareerSearch: (query: string) => Promise<void>, isAiCareerLoading: boolean, aiCareerSearchMessage: string }) => {
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [activeWorkType, setActiveWorkType] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -509,7 +509,7 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview 
                   <h3 className="text-xl font-black text-slate-900 tracking-tight leading-none mb-1">Future Trajectories</h3>
                   <p className="text-[9px] text-indigo-500 font-black uppercase tracking-widest leading-none">2026 Sector Correlation</p>
                </div>
-               <div className="flex items-center gap-2">
+               <div className="flex items-center gap-2 flex-wrap">
                   <div className="relative">
                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={12} />
                      <input 
@@ -520,7 +520,17 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview 
                         onChange={(e) => setSearchQuery(e.target.value)}
                      />
                   </div>
+                  <button
+                    onClick={() => onAiCareerSearch(searchQuery)}
+                    disabled={isAiCareerLoading || !searchQuery.trim()}
+                    className="h-10 px-4 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 transition-all disabled:opacity-50"
+                  >
+                    {isAiCareerLoading ? 'Searching...' : 'AI Global Search'}
+                  </button>
                </div>
+               {aiCareerSearchMessage && (
+                 <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-2">{aiCareerSearchMessage}</p>
+               )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2407,7 +2417,7 @@ Return a concise finance-first recommendation with:
 - one next action for this week`;
 
       const recommendation = await getCareerAdvice(prompt, profile);
-      setAiRecommendation(recommendation);
+      setAiRecommendation(recommendation || '');
     } catch (error) {
       console.error('Financial AI Recommendation Error:', error);
       setAiRecommendation('I could not generate a fresh recommendation right now. Review your expense mix, protect at least one month of runway, and prioritize high-interest debt before speculative spending.');
@@ -3022,6 +3032,8 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   };
   const [careers, setCareers] = useState<CareerPath[]>(CAREER_PATHS);
   const [isCareersLoading, setIsCareersLoading] = useState(false);
+  const [isAiCareerLoading, setIsAiCareerLoading] = useState(false);
+  const [aiCareerSearchMessage, setAiCareerSearchMessage] = useState<string>("");
   
   // Dynamic data from LLM based on navigation
   const [dynamicInstitutions, setDynamicInstitutions] = useState<Institution[]>([]);
@@ -3035,6 +3047,33 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
     setSelectedPathId(id);
     setProfile(prev => ({ ...prev, targetCareerId: id }));
     setActiveView('roadmap');
+  };
+
+  const handleAiCareerSearch = async (query: string) => {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) {
+      setAiCareerSearchMessage('Enter a query to search global careers with AI.');
+      return;
+    }
+
+    setIsAiCareerLoading(true);
+    setAiCareerSearchMessage(`Searching global careers for "${trimmedQuery}"...`);
+
+    try {
+      const results = await aiSearchCareerPaths(trimmedQuery);
+      if (results.length > 0) {
+        setCareers(results);
+        setSelectedPathId(results[0].id);
+        setAiCareerSearchMessage(`Found ${results.length} AI-powered global career paths for "${trimmedQuery}".`);
+      } else {
+        setAiCareerSearchMessage(`No AI career paths found for "${trimmedQuery}". Try another search term.`);
+      }
+    } catch (error) {
+      console.error('AI career search failed:', error);
+      setAiCareerSearchMessage('AI global career search failed. Please try again later.');
+    } finally {
+      setIsAiCareerLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -3108,7 +3147,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       const fetchVisaInfo = async () => {
         setIsVisaLoading(true);
         const selectedCareer = careers.find(c => c.id === selectedPathId);
-        const guidance = await getVisaGuidance(profile, profile.targetLocation, selectedCareer?.title || selectedPathId);
+        const guidance = await getVisaGuidance(profile, profile.targetLocation || '', selectedCareer?.title || selectedPathId);
         setVisaGuidance(guidance);
         setIsVisaLoading(false);
       };
@@ -3185,7 +3224,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
             transition={{ duration: 0.3, ease: "circOut" }}
             className="h-full"
           >
-            {activeView === 'dashboard' && <Dashboard profile={profile} onSelectPath={handleSelectPath} careers={careers} isLoading={isCareersLoading} onInitInterview={initiateInterview} />}
+            {activeView === 'dashboard' && <Dashboard profile={profile} onSelectPath={handleSelectPath} careers={careers} isLoading={isCareersLoading} onInitInterview={initiateInterview} onAiCareerSearch={handleAiCareerSearch} isAiCareerLoading={isAiCareerLoading} aiCareerSearchMessage={aiCareerSearchMessage} />}
             
             {activeView !== 'dashboard' && (
               <div className="grid grid-cols-12 gap-8 h-full">

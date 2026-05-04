@@ -11,7 +11,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { LogIn, LogOut, Loader2, Sparkles, ShieldCheck, Globe, ArrowLeft, Mail, Lock } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { loginUser } from '../services/authService';
+import { loginUser, forgotPassword, resetPassword } from '../services/authService';
 
 export interface AuthUser extends User {
   profile?: any;
@@ -66,9 +66,13 @@ export const AuthProvider = ({ children }: { children: (props: { user: AuthUser 
 
 export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack?: () => void; onShowRegister?: () => void; onLoginSuccess?: (user: any) => void }) => {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [useEmailLogin, setUseEmailLogin] = useState(false);
+  const [authStage, setAuthStage] = useState<'initial' | 'emailLogin' | 'forgotPassword' | 'resetPassword'>('initial');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [resetToken, setResetToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -109,7 +113,73 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
     }
   };
 
-  if (useEmailLogin) {
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+
+    if (!email) {
+      setError('Email is required');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await forgotPassword({ email });
+      setMessage(response.message || 'Password reset token generated.');
+      if (response.token) {
+        setResetToken(response.token);
+        setAuthStage('resetPassword');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to request password reset');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+
+    if (!resetToken) {
+      setError('Reset token is required');
+      return;
+    }
+
+    if (!newPassword || !confirmPassword) {
+      setError('Enter and confirm your new password');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await resetPassword({ token: resetToken, password: newPassword });
+      setMessage(response.message || 'Password has been reset successfully.');
+      setAuthStage('emailLogin');
+      setPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setResetToken('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to reset password');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (authStage === 'emailLogin') {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
@@ -124,10 +194,11 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
         >
           <button 
             onClick={() => {
-              setUseEmailLogin(false);
+              setAuthStage('initial');
               setError('');
               setEmail('');
               setPassword('');
+              setMessage('');
             }}
             className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1 hover:text-white transition-colors mb-8"
           >
@@ -139,13 +210,16 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
             <p className="text-slate-400">Sign in with your email and password</p>
           </div>
 
-          {error && (
+          {(error || message) && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm"
+              className={cn(
+                "mb-6 p-4 rounded-xl text-sm",
+                error ? "bg-red-500/10 border border-red-500/20 text-red-400" : "bg-emerald-500/10 border border-emerald-500/20 text-emerald-200"
+              )}
             >
-              {error}
+              {error || message}
             </motion.div>
           )}
 
@@ -178,6 +252,21 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
               />
             </div>
 
+            <div className="flex items-center justify-between text-sm text-slate-400">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthStage('forgotPassword');
+                  setError('');
+                  setMessage('');
+                }}
+                className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
+              >
+                Forgot password?
+              </button>
+              <span className="italic">Need help logging in?</span>
+            </div>
+
             <button
               type="submit"
               disabled={isLoading}
@@ -204,6 +293,200 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
               </button>
             </p>
           </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (authStage === 'forgotPassword') {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500 rounded-full blur-[128px]" />
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-500 rounded-full blur-[128px]" />
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md bg-slate-900/50 border border-slate-800 rounded-[3rem] p-12 backdrop-blur-xl relative z-10"
+        >
+          <button
+            onClick={() => {
+              setAuthStage('emailLogin');
+              setError('');
+              setMessage('');
+            }}
+            className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1 hover:text-white transition-colors mb-8"
+          >
+            <ArrowLeft size={12} /> Back to Login
+          </button>
+
+          <div className="space-y-2 mb-8">
+            <h1 className="text-2xl font-black text-white">Forgot Password</h1>
+            <p className="text-slate-400">Enter the email for your account and we will generate a reset token.</p>
+          </div>
+
+          {(error || message) && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                "mb-6 p-4 rounded-xl text-sm",
+                error ? "bg-red-500/10 border border-red-500/20 text-red-400" : "bg-emerald-500/10 border border-emerald-500/20 text-emerald-200"
+              )}
+            >
+              {error || message}
+            </motion.div>
+          )}
+
+          <form onSubmit={handleForgotPassword} className="space-y-4">
+            <div>
+              <label className="text-xs font-black text-slate-300 uppercase tracking-widest block mb-2">
+                <Mail size={14} className="inline mr-2" />
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="your@email.com"
+                className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className={cn(
+                "w-full py-3 px-6 rounded-xl font-bold uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2",
+                isLoading
+                  ? "bg-slate-700 text-slate-400 cursor-not-allowed"
+                  : "bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-700 hover:to-emerald-700 text-white"
+              )}
+            >
+              {isLoading && <Loader2 size={18} className="animate-spin" />}
+              {isLoading ? "Requesting reset..." : "Request Reset Token"}
+            </button>
+          </form>
+
+          {resetToken && (
+            <div className="mt-6 p-4 bg-slate-800 border border-slate-700 rounded-2xl text-slate-200 text-sm">
+              <p className="font-semibold text-white mb-2">Reset token generated</p>
+              <p className="break-words">{resetToken}</p>
+              <p className="mt-3 text-slate-400">Use this token on the next screen to reset your password.</p>
+              <button
+                onClick={() => setAuthStage('resetPassword')}
+                className="mt-4 w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold transition-colors"
+              >
+                Reset Password Now
+              </button>
+            </div>
+          )}
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (authStage === 'resetPassword') {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500 rounded-full blur-[128px]" />
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-500 rounded-full blur-[128px]" />
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md bg-slate-900/50 border border-slate-800 rounded-[3rem] p-12 backdrop-blur-xl relative z-10"
+        >
+          <button
+            onClick={() => {
+              setAuthStage('emailLogin');
+              setError('');
+              setMessage('');
+            }}
+            className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1 hover:text-white transition-colors mb-8"
+          >
+            <ArrowLeft size={12} /> Back to Login
+          </button>
+
+          <div className="space-y-2 mb-8">
+            <h1 className="text-2xl font-black text-white">Reset Password</h1>
+            <p className="text-slate-400">Enter your reset token and choose a new password.</p>
+          </div>
+
+          {(error || message) && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                "mb-6 p-4 rounded-xl text-sm",
+                error ? "bg-red-500/10 border border-red-500/20 text-red-400" : "bg-emerald-500/10 border border-emerald-500/20 text-emerald-200"
+              )}
+            >
+              {error || message}
+            </motion.div>
+          )}
+
+          <form onSubmit={handleResetPassword} className="space-y-4">
+            <div>
+              <label className="text-xs font-black text-slate-300 uppercase tracking-widest block mb-2">
+                <Lock size={14} className="inline mr-2" />
+                Reset Token
+              </label>
+              <input
+                type="text"
+                value={resetToken}
+                onChange={(e) => setResetToken(e.target.value)}
+                placeholder="Paste your reset token"
+                className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-black text-slate-300 uppercase tracking-widest block mb-2">
+                <Lock size={14} className="inline mr-2" />
+                New Password
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="••••••"
+                className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-black text-slate-300 uppercase tracking-widest block mb-2">
+                <Lock size={14} className="inline mr-2" />
+                Confirm Password
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="••••••"
+                className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className={cn(
+                "w-full py-3 px-6 rounded-xl font-bold uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2",
+                isLoading
+                  ? "bg-slate-700 text-slate-400 cursor-not-allowed"
+                  : "bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-700 hover:to-emerald-700 text-white"
+              )}
+            >
+              {isLoading && <Loader2 size={18} className="animate-spin" />}
+              {isLoading ? "Resetting password..." : "Reset Password"}
+            </button>
+          </form>
         </motion.div>
       </div>
     );
@@ -273,7 +556,11 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
           </button>
 
           <button
-            onClick={() => setUseEmailLogin(true)}
+            onClick={() => {
+              setAuthStage('emailLogin');
+              setError('');
+              setMessage('');
+            }}
             className="w-full h-16 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl flex items-center justify-center gap-4 transition-all shadow-xl font-black uppercase tracking-tighter"
           >
             <Mail size={24} />

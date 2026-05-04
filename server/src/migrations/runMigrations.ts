@@ -2,6 +2,7 @@ import { db, closeConnection, testConnection } from "../db/database.js";
 import * as migration001 from "./001_initial_schema.js";
 import * as migration002 from "./002_add_password_field.js";
 import * as migration003 from "./002_add_market_data_tables.js";
+import * as migration004 from "./004_add_password_reset_tokens.js";
 
 const migrations = [
   {
@@ -15,6 +16,10 @@ const migrations = [
   {
     name: "003_add_market_data_tables",
     module: migration003,
+  },
+  {
+    name: "004_add_password_reset_tokens",
+    module: migration004,
   },
 ];
 
