@@ -11,10 +11,7 @@ const GEMINI_USER_KEY = "AIzaSyBX4hI2RvtsbGN_z_xej34H-rQ3jrmz064";
 const GEMINI_ENV_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_KEY = GEMINI_USER_KEY || GEMINI_ENV_KEY || "";
 
-// Groq Key provided by user
-const GROQ_USER_KEY = "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";
-const GROQ_ENV_KEY = (import.meta as any).env?.VITE_GROQ_API_KEY;
-const GROQ_KEY = GROQ_USER_KEY || GROQ_ENV_KEY || "";
+const GROQ_KEY = (import.meta as any).env?.VITE_GROQ_API_KEY || "";
 
 const gemini = new GoogleGenAI({ apiKey: GEMINI_KEY });
 const groq = GROQ_KEY ? new Groq({ apiKey: GROQ_KEY, dangerouslyAllowBrowser: true }) : null;

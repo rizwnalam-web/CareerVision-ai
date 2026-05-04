@@ -54,7 +54,8 @@ import {
   Download,
   Loader2,
   BrainCircuit,
-  Lightbulb
+  Lightbulb,
+  AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MapContainer, TileLayer, Marker } from 'react-leaflet';
@@ -91,7 +92,7 @@ import {
 import { cn } from './lib/utils';
 import { CAREER_PATHS, INSTITUTIONS, STUDY_MATERIALS, FUNDING_OPPORTUNITIES } from './constants/mockData';
 import { CareerPath, UserProfile, Institution, FundingOpportunity } from './types/career';
-import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobalCareers, aiSearchCareerPaths, generateCoverLetter, getLatestCareerNews, getAiInstitutionRecommendations, getDynamicInstitutions, getDynamicStudyMaterials, getVisaGuidance, getCareerHubIntelligence } from './services/geminiService';
+import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobalCareers, aiSearchCareerPaths, generateCoverLetter, getLatestCareerNews, getAiInstitutionRecommendations, getDynamicInstitutions, getDynamicStudyMaterials, getVisaGuidance, getCareerHubIntelligence, aiSearchInstitutions, aiSearchCareerHubs } from './services/geminiService';
 import ReactMarkdown from 'react-markdown';
 
 import { LandingPage } from './components/LandingPage';
@@ -242,103 +243,274 @@ const IntelligenceFeedCard = ({ careerId }: { careerId: string }) => {
 // --- Pages ---
 
 const HeatmapView = () => {
-  const [hubs, setHubs] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [cacheStatus, setCacheStatus] = useState<string>("");
-
-  const hubLocations = [
+  const DEFAULT_HUBS = [
     { city: "Silicon Valley", country: "USA" },
-    { city: "Zurich", country: "Switzerland" },
     { city: "London", country: "UK" },
-    { city: "Mumbai", country: "India" },
+    { city: "Singapore", country: "Singapore" },
+    { city: "Berlin", country: "Germany" },
     { city: "Bangalore", country: "India" },
-    { city: "Berlin", country: "Germany" }
+    { city: "Dubai", country: "UAE" },
   ];
 
-  useEffect(() => {
-    const loadCareerHubData = async () => {
-      setIsLoading(true);
-      try {
-        const hubData = await Promise.all(
-          hubLocations.map(loc => getCareerHubIntelligence(loc.city, loc.country))
-        );
-        setHubs(hubData);
-          setCacheStatus("Data synchronized with global database");
-      } catch (error) {
-        console.error("Failed to load career hub data:", error);
-          setCacheStatus("Using locally cached data");
-        // Fallback to basic structure
-        setHubs(hubLocations.map((loc, idx) => ({
-          ...loc,
-          intensity: Math.floor(Math.random() * 30 + 70),
-          topCareers: [],
-          marketHealthScore: 75
-        })));
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const [hubs, setHubs] = useState<any[]>([]);
+  const [hubLoadingStates, setHubLoadingStates] = useState<Record<string, boolean>>({});
+  const [hubErrors, setHubErrors] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isAiSearching, setIsAiSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [cacheStatus, setCacheStatus] = useState<string>("");
 
-    loadCareerHubData();
+  const fetchHub = async (city: string, country: string, key: string) => {
+    setHubLoadingStates(prev => ({ ...prev, [key]: true }));
+    setHubErrors(prev => ({ ...prev, [key]: false }));
+    try {
+      const data = await getCareerHubIntelligence(city, country);
+      if (data) {
+        setHubs(prev => {
+          const exists = prev.find(h => `${h.city}-${h.country}` === key);
+          if (exists) return prev.map(h => `${h.city}-${h.country}` === key ? data : h);
+          return [...prev, data];
+        });
+      } else {
+        setHubErrors(prev => ({ ...prev, [key]: true }));
+      }
+    } catch {
+      setHubErrors(prev => ({ ...prev, [key]: true }));
+    } finally {
+      setHubLoadingStates(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  // Load default hubs sequentially to avoid rate limits
+  useEffect(() => {
+    const loadDefaults = async () => {
+      setHubs([]);
+      setCacheStatus("Fetching live market intelligence...");
+      for (const loc of DEFAULT_HUBS) {
+        const key = `${loc.city}-${loc.country}`;
+        await fetchHub(loc.city, loc.country, key);
+        // Small delay between requests to avoid hitting rate limits
+        await new Promise(r => setTimeout(r, 400));
+      }
+      setCacheStatus("Live data synchronized — 2026 market intelligence active");
+    };
+    loadDefaults();
   }, []);
+
+  const handleAiSearch = async () => {
+    const q = searchQuery.trim();
+    if (!q) return;
+    setIsAiSearching(true);
+    setHasSearched(true);
+    setCacheStatus(`Searching global hubs for "${q}"...`);
+    try {
+      const locations = await aiSearchCareerHubs(q);
+      if (locations.length === 0) {
+        setCacheStatus("No hubs matched your query. Try different terms.");
+        setIsAiSearching(false);
+        return;
+      }
+      setHubs([]);
+      setHubLoadingStates({});
+      setHubErrors({});
+      setCacheStatus(`Found ${locations.length} hubs — fetching live data...`);
+      setIsAiSearching(false);
+      for (const loc of locations) {
+        const key = `${loc.city}-${loc.country}`;
+        await fetchHub(loc.city, loc.country, key);
+        await new Promise(r => setTimeout(r, 400));
+      }
+      setCacheStatus(`Live data ready for ${locations.length} AI-matched hubs`);
+    } catch {
+      setCacheStatus("AI hub search failed. Please try again.");
+      setIsAiSearching(false);
+    }
+  };
+
+  const handleReset = () => {
+    setSearchQuery("");
+    setHasSearched(false);
+    setHubs([]);
+    setHubLoadingStates({});
+    setHubErrors({});
+    setCacheStatus("Fetching live market intelligence...");
+    const loadDefaults = async () => {
+      for (const loc of DEFAULT_HUBS) {
+        const key = `${loc.city}-${loc.country}`;
+        await fetchHub(loc.city, loc.country, key);
+        await new Promise(r => setTimeout(r, 400));
+      }
+      setCacheStatus("Live data synchronized — 2026 market intelligence active");
+    };
+    loadDefaults();
+  };
+
+  const isAnyLoading = Object.values(hubLoadingStates).some(Boolean);
+  const loadedCount = hubs.length;
 
   return (
     <div className="space-y-8">
-      <SectionTitle 
-        title="Career Hub Heatmap" 
-        subtitle="Active Geospatial Density: High — Explore global job markets and hiring trends" 
+      <SectionTitle
+        title="Career Hub Heatmap"
+        subtitle="Active Geospatial Density: High — Explore global job markets and hiring trends"
       />
-      
-        {cacheStatus && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex items-center gap-2"
-          >
-            <Zap size={16} className="text-emerald-600" />
-            <span className="text-xs font-bold text-emerald-700">{cacheStatus}</span>
-          </motion.div>
-        )}
-      
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {hubLocations.map((_, idx) => (
-            <div key={idx} className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm animate-pulse">
-              <div className="h-8 w-3/4 bg-slate-100 rounded mb-4" />
-              <div className="h-4 w-1/2 bg-slate-50 rounded mb-6" />
-              <div className="space-y-3">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="h-12 bg-slate-50 rounded-xl" />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {hubs.map((hub, idx) => (
-            <CareerHubCard key={`${hub.city}-${idx}`} hub={hub} />
-          ))}
-        </div>
+
+      {/* Status bar */}
+      {cacheStatus && (
+        <motion.div
+          key={cacheStatus}
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`border rounded-xl px-4 py-3 flex items-center gap-2 ${isAnyLoading || isAiSearching ? 'bg-indigo-50 border-indigo-200' : 'bg-emerald-50 border-emerald-200'}`}
+        >
+          {isAnyLoading || isAiSearching
+            ? <Loader2 size={16} className="text-indigo-600 animate-spin shrink-0" />
+            : <Zap size={16} className="text-emerald-600 shrink-0" />}
+          <span className={`text-xs font-bold ${isAnyLoading || isAiSearching ? 'text-indigo-700' : 'text-emerald-700'}`}>
+            {cacheStatus}
+          </span>
+          {isAnyLoading && loadedCount > 0 && (
+            <span className="ml-auto text-[10px] font-black text-indigo-500 uppercase tracking-widest">
+              {loadedCount} loaded
+            </span>
+          )}
+        </motion.div>
       )}
 
-      {/* Insights Section */}
-      <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100 rounded-3xl p-8">
-        <div className="max-w-3xl">
-          <h3 className="text-xl font-black text-slate-800 mb-3">🌍 Global Market Insights</h3>
-          <div className="space-y-4">
-            <p className="text-sm text-slate-700 leading-relaxed">
-              <strong>Tech Boom Continues:</strong> Silicon Valley and Bangalore remain the hottest markets with 95%+ intensity. AI/ML roles command 15%+ salary premiums.
-            </p>
-            <p className="text-sm text-slate-700 leading-relaxed">
-              <strong>European Expansion:</strong> London, Zurich, and Berlin are emerging hubs for fintech, sustainability tech, and deep tech. Visa openness: Medium-High.
-            </p>
-            <p className="text-sm text-slate-700 leading-relaxed">
-              <strong>Remote-First Wave:</strong> 40-50% of roles across these hubs now offer full remote or hybrid flexibility. Cost of living varies 1.0x-1.4x baseline.
-            </p>
-          </div>
+      {/* AI Search Bar */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex gap-3 items-center">
+        <div className="flex items-center gap-2 shrink-0">
+          <BrainCircuit size={18} className="text-indigo-600" />
+          <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest hidden sm:block">AI Hub Search</span>
         </div>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleAiSearch()}
+          placeholder='e.g. "best AI hubs Europe", "finance cities Asia", "affordable tech hubs"...'
+          className="flex-1 text-sm font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-indigo-400 transition-all"
+        />
+        <button
+          onClick={handleAiSearch}
+          disabled={isAiSearching || isAnyLoading || !searchQuery.trim()}
+          className="px-4 py-2.5 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2 shrink-0"
+        >
+          {isAiSearching ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+          Search
+        </button>
+        {hasSearched && (
+          <button
+            onClick={handleReset}
+            className="p-2.5 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 transition-all active:scale-95 shrink-0"
+            title="Reset to default hubs"
+          >
+            <RotateCcw size={14} />
+          </button>
+        )}
       </div>
+
+      {/* Hub Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Loaded hubs */}
+        {hubs.map((hub, idx) => (
+          <motion.div
+            key={`${hub.city}-${hub.country}-${idx}`}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: idx * 0.05 }}
+          >
+            <CareerHubCard hub={hub} />
+          </motion.div>
+        ))}
+
+        {/* Per-hub loading skeletons for hubs still in flight */}
+        {Object.entries(hubLoadingStates)
+          .filter(([, loading]) => loading)
+          .map(([key]) => (
+            <div key={`loading-${key}`} className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <Loader2 size={16} className="text-indigo-400 animate-spin shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-5 w-3/4 bg-slate-100 rounded animate-pulse" />
+                  <div className="h-3 w-1/2 bg-slate-50 rounded animate-pulse" />
+                </div>
+              </div>
+              <div className="space-y-3">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="h-12 bg-slate-50 rounded-xl animate-pulse" />
+                ))}
+              </div>
+              <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mt-4 text-center">
+                Fetching live market data...
+              </p>
+            </div>
+          ))}
+
+        {/* Error states */}
+        {Object.entries(hubErrors)
+          .filter(([, err]) => err)
+          .map(([key]) => {
+            const [city, country] = key.split('-');
+            return (
+              <div key={`error-${key}`} className="bg-rose-50 border border-rose-200 p-6 rounded-3xl flex flex-col items-center justify-center gap-3 text-center min-h-[200px]">
+                <AlertCircle size={24} className="text-rose-400" />
+                <div>
+                  <p className="text-sm font-black text-rose-700">{city}</p>
+                  <p className="text-[10px] text-rose-400 font-bold uppercase">{country}</p>
+                </div>
+                <p className="text-[10px] text-rose-500 font-medium">Failed to fetch live data</p>
+                <button
+                  onClick={() => fetchHub(city, country, key)}
+                  className="px-3 py-1.5 bg-rose-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-rose-700 transition-all flex items-center gap-1"
+                >
+                  <RotateCcw size={10} /> Retry
+                </button>
+              </div>
+            );
+          })}
+      </div>
+
+      {/* Live Global Insights - shown once at least one hub is loaded */}
+      {loadedCount > 0 && !isAnyLoading && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100 rounded-3xl p-8"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-indigo-600 rounded-xl text-white">
+              <BrainCircuit size={18} />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-slate-800 tracking-tight">Live Global Market Snapshot</h3>
+              <p className="text-[10px] text-indigo-500 font-black uppercase tracking-widest">AI-synthesized from {loadedCount} active hubs</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {[
+              { label: "Avg Market Heat", value: `${Math.round(hubs.reduce((s, h) => s + (h.intensity || 0), 0) / loadedCount)}%`, icon: Zap, color: "text-amber-600" },
+              { label: "Avg Health Score", value: `${Math.round(hubs.reduce((s, h) => s + (h.marketHealthScore || 0), 0) / loadedCount)}%`, icon: TrendingUp, color: "text-emerald-600" },
+              { label: "Avg Remote Work", value: `${Math.round(hubs.reduce((s, h) => s + (h.remoteWorkPercentage || 0), 0) / loadedCount)}%`, icon: Globe, color: "text-indigo-600" },
+              { label: "Hubs Tracked", value: `${loadedCount}`, icon: MapPin, color: "text-purple-600" },
+            ].map((stat, i) => (
+              <div key={i} className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 border border-indigo-100 text-center">
+                <stat.icon size={20} className={`mx-auto mb-2 ${stat.color}`} />
+                <p className={`text-xl font-black ${stat.color}`}>{stat.value}</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-3">
+            {hubs.slice(0, 3).filter(h => h.hiringTrends).map((hub, i) => (
+              <div key={i} className="bg-white/60 rounded-xl p-3 border border-indigo-50">
+                <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest mb-1">{hub.city}, {hub.country}</p>
+                <p className="text-sm text-slate-700 leading-relaxed">{hub.hiringTrends}</p>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 };
@@ -416,7 +588,7 @@ const FinancialBreakdownWidget = ({ profile }: { profile: UserProfile }) => {
 
 // NewsFlash is now imported from components/NewsFlash.tsx
 
-const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview, onAiCareerSearch, isAiCareerLoading, aiCareerSearchMessage }: { profile: UserProfile, onSelectPath: (id: string) => void, careers: CareerPath[], isLoading: boolean, onInitInterview: (role: string, company?: string) => void, onAiCareerSearch: (query: string) => Promise<void>, isAiCareerLoading: boolean, aiCareerSearchMessage: string }) => {
+const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview, onAiCareerSearch, isAiCareerLoading, aiCareerSearchMessage, onNavigate }: { profile: UserProfile, onSelectPath: (id: string) => void, careers: CareerPath[], isLoading: boolean, onInitInterview: (role: string, company?: string) => void, onAiCareerSearch: (query: string) => Promise<void>, isAiCareerLoading: boolean, aiCareerSearchMessage: string, onNavigate: (view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs') => void }) => {
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [activeWorkType, setActiveWorkType] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -636,14 +808,19 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
             <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Execution Sync</h4>
             <div className="grid grid-cols-2 gap-3">
                {[
-                 { label: 'Visa Hub', icon: Globe },
-                 { label: 'Market', icon: BarChart3 },
-                 { label: 'Housing', icon: Landmark },
-                 { label: 'Network', icon: UserCheck }
+                 { label: 'Visa Hub', icon: Globe, view: 'institutions' as const, description: 'Global institutions & visa roadmaps' },
+                 { label: 'Market', icon: BarChart3, view: 'heatmap' as const, description: 'Career hub intelligence' },
+                 { label: 'Housing', icon: Landmark, view: 'expenses' as const, description: 'Financial planning & budget' },
+                 { label: 'Network', icon: UserCheck, view: 'jobs' as const, description: 'Jobs & career board' }
                ].map(item => (
-                 <button key={item.label} className="p-4 bg-slate-50 rounded-[1.5rem] border border-slate-100 flex flex-col items-center gap-3 hover:bg-indigo-50 hover:border-indigo-100 transition-all group">
+                 <button
+                   key={item.label}
+                   onClick={() => onNavigate(item.view)}
+                   className="p-4 bg-slate-50 rounded-[1.5rem] border border-slate-100 flex flex-col items-center gap-3 hover:bg-indigo-50 hover:border-indigo-100 hover:shadow-md hover:shadow-indigo-100/50 transition-all group active:scale-95"
+                   title={item.description}
+                 >
                     <item.icon size={20} className="text-slate-300 group-hover:text-indigo-600 transition-colors" />
-                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none">{item.label}</span>
+                    <span className="text-[8px] font-black text-slate-500 group-hover:text-indigo-700 uppercase tracking-widest leading-none transition-colors">{item.label}</span>
                  </button>
                ))}
             </div>
@@ -786,6 +963,12 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
   const [aiRecs, setAiRecs] = useState<{ institution: Institution, rationale: string }[]>([]);
   const [showAiRecs, setShowAiRecs] = useState(false);
 
+  // AI Global Search States
+  const [aiSearchQuery, setAiSearchQuery] = useState("");
+  const [isAiSearching, setIsAiSearching] = useState(false);
+  const [aiSearchResults, setAiSearchResults] = useState<Institution[]>([]);
+  const [hasAiSearched, setHasAiSearched] = useState(false);
+
   const fetchAiRecs = async () => {
     setIsAiLoading(true);
     setShowAiRecs(true);
@@ -797,6 +980,29 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
     } finally {
       setIsAiLoading(false);
     }
+  };
+
+  const handleAiSearch = async () => {
+    const q = aiSearchQuery.trim();
+    if (!q) return;
+    setIsAiSearching(true);
+    setHasAiSearched(false);
+    setAiSearchResults([]);
+    try {
+      const results = await aiSearchInstitutions(q, profile);
+      setAiSearchResults(results);
+      setHasAiSearched(true);
+    } catch (error) {
+      console.error("AI Institution Search Error:", error);
+    } finally {
+      setIsAiSearching(false);
+    }
+  };
+
+  const clearAiSearch = () => {
+    setAiSearchQuery("");
+    setAiSearchResults([]);
+    setHasAiSearched(false);
   };
 
   useEffect(() => {
@@ -823,8 +1029,11 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
       : institutions.filter(i => i.programs.includes(p)).length
   }));
 
-  const filtered = institutions.filter(inst => {
-    const matchesSearch = inst.name.toLowerCase().includes(search.toLowerCase()) || 
+  // When AI search results are present, show them instead of local filter results
+  const baseInstitutions = hasAiSearched ? aiSearchResults : institutions;
+
+  const filtered = baseInstitutions.filter(inst => {
+    const matchesSearch = !search || inst.name.toLowerCase().includes(search.toLowerCase()) || 
                          inst.country.toLowerCase().includes(search.toLowerCase()) ||
                          inst.city.toLowerCase().includes(search.toLowerCase()) ||
                          inst.programs.some(p => p.toLowerCase().includes(search.toLowerCase()));
@@ -833,12 +1042,14 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
     const matchesProgram = selectedProgram === "All Programs" || inst.programs.includes(selectedProgram);
     const matchesVisa = visaFilter === "All" || inst.visaSupport === visaFilter;
     
-    // Radius Filter Logic
+    // Radius Filter Logic (only apply when not in AI search mode)
     let matchesRadius = true;
-    if (radius === "Local") {
-       matchesRadius = inst.city === "Cambridge" || inst.city === "Stanford"; // Simulated local hub
-    } else if (radius === "National") {
-       matchesRadius = inst.country === userCountry;
+    if (!hasAiSearched) {
+      if (radius === "Local") {
+        matchesRadius = inst.city === "Cambridge" || inst.city === "Stanford"; // Simulated local hub
+      } else if (radius === "National") {
+        matchesRadius = inst.country === userCountry;
+      }
     }
 
     return matchesSearch && matchesIntl && matchesCost && matchesProgram && matchesRadius && matchesVisa;
@@ -867,28 +1078,40 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
   useEffect(() => {
     if (!selectedInstitution) {
       setSelectedInstitutionVisaGuidance(null);
+      setIsSelectedInstitutionVisaLoading(false);
       return;
     }
 
+    let cancelled = false;
+
     const fetchSelectedInstitutionVisaGuidance = async () => {
       setIsSelectedInstitutionVisaLoading(true);
+      setSelectedInstitutionVisaGuidance(null);
       try {
         const guidance = await getVisaGuidance(
           profile,
           selectedInstitution.country,
           roadmapContext?.careerTitle || selectedPathId,
         );
-        setSelectedInstitutionVisaGuidance(guidance);
+        if (!cancelled) {
+          setSelectedInstitutionVisaGuidance(guidance);
+        }
       } catch (error) {
         console.error('Selected Institution Visa Guidance Error:', error);
-        setSelectedInstitutionVisaGuidance(null);
+        if (!cancelled) {
+          setSelectedInstitutionVisaGuidance(null);
+        }
       } finally {
-        setIsSelectedInstitutionVisaLoading(false);
+        if (!cancelled) {
+          setIsSelectedInstitutionVisaLoading(false);
+        }
       }
     };
 
     fetchSelectedInstitutionVisaGuidance();
-  }, [profile, roadmapContext, selectedInstitution, selectedPathId]);
+
+    return () => { cancelled = true; };
+  }, [profile.country, profile.citizenCountry, profile.education, profile.budget, roadmapContext?.careerTitle, selectedInstitution?.id, selectedInstitution?.country, selectedPathId]);
 
   const handleExport = () => {
     if (filtered.length === 0) return;
@@ -929,7 +1152,7 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
   }, []);
 
   return (
-    <div className="h-full flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <SectionTitle 
         title="Global Hub Navigator" 
         subtitle={`${isLoading ? '🔄 Discovering Institutions...' : 'Spatial Intelligence'} • ${filtered.length} Institutions Found`} 
@@ -954,7 +1177,7 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
         </div>
       )}
       
-      <div className="flex-1 rounded-[3rem] overflow-hidden border border-slate-200 shadow-2xl relative bg-slate-50 min-h-[500px]">
+      <div className="rounded-[3rem] overflow-hidden border border-slate-200 shadow-2xl relative bg-slate-50 h-[620px]">
         <MapContainer 
           center={[20, 0]} 
           zoom={2} 
@@ -964,21 +1187,56 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
           />
-          {visibleInstitutions.map((inst) => (
-            <Marker 
-              key={inst.id} 
-              position={[inst.coordinates.lat, inst.coordinates.lng]}
-              eventHandlers={{ click: () => setSelectedInstitution(inst) }}
-              icon={L.divIcon({
-                className: 'custom-hub-marker',
-                html: `<div style="width: 32px; height: 32px; background: #0f172a; border-radius: 12px; border: 2px solid white; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); display: flex; align-items: center; justify-content: center;">
-                  <div style="width: 6px; height: 6px; background: #818cf8; border-radius: 9999px;"></div>
-                </div>`,
-                iconSize: [32, 32],
-                iconAnchor: [16, 16]
-              })}
-            />
-          ))}
+          {visibleInstitutions.map((inst) => {
+            const isSelected = selectedInstitution?.id === inst.id;
+            return (
+              <Marker 
+                key={inst.id} 
+                position={[inst.coordinates.lat, inst.coordinates.lng]}
+                eventHandlers={{ click: () => setSelectedInstitution(inst) }}
+                icon={L.divIcon({
+                  className: 'custom-hub-marker',
+                  html: `<div style="
+                    position: relative;
+                    width: ${isSelected ? '52px' : '44px'};
+                    height: ${isSelected ? '52px' : '44px'};
+                    transition: all 0.2s;
+                  ">
+                    <div style="
+                      width: 100%;
+                      height: 100%;
+                      border-radius: 50%;
+                      border: 3px solid ${isSelected ? '#6366f1' : 'white'};
+                      box-shadow: ${isSelected ? '0 0 0 3px #6366f1, 0 8px 24px rgba(99,102,241,0.4)' : '0 4px 16px rgba(0,0,0,0.25)'};
+                      overflow: hidden;
+                      background: #e2e8f0;
+                      cursor: pointer;
+                    ">
+                      <img
+                        src="${inst.image}"
+                        style="width: 100%; height: 100%; object-fit: cover; display: block;"
+                        onerror="this.style.display='none'; this.parentNode.innerHTML += '<div style=\\'width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#6366f1;\\'><svg width=\\'20\\' height=\\'20\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'white\\' stroke-width=\\'2\\'><path d=\\'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\\'></path><polyline points=\\'9 22 9 12 15 12 15 22\\'></polyline></svg></div>'"
+                      />
+                    </div>
+                    <div style="
+                      position: absolute;
+                      bottom: -5px;
+                      left: 50%;
+                      transform: translateX(-50%);
+                      width: 0; height: 0;
+                      border-left: 6px solid transparent;
+                      border-right: 6px solid transparent;
+                      border-top: 8px solid ${isSelected ? '#6366f1' : 'white'};
+                      filter: drop-shadow(0 2px 2px rgba(0,0,0,0.15));
+                    "></div>
+                  </div>`,
+                  iconSize: [isSelected ? 52 : 44, isSelected ? 60 : 52],
+                  iconAnchor: [isSelected ? 26 : 22, isSelected ? 60 : 52],
+                  popupAnchor: [0, -60]
+                })}
+              />
+            );
+          })}
         </MapContainer>
 
         {selectedInstitution && (
@@ -1019,7 +1277,7 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
                    </div>
                    <div>
                       <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest leading-none">Spatial Intelligence</p>
-                      <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">Calibrating global hubs</p>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{hasAiSearched ? 'AI Global Results' : 'Calibrating global hubs'}</p>
                    </div>
                 </div>
                 <button 
@@ -1033,35 +1291,79 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
               </div>
               
               <div className="space-y-3">
-                <div className="relative">
-                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                   <input 
-                      type="text" 
-                      placeholder="Find Hub (e.g. London)..." 
-                      className="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold outline-none focus:ring-1 focus:ring-indigo-500"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                   />
-                   {search && (
-                      <button 
-                         onClick={() => setSearch("")}
-                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                {/* Standard filter search */}
+                {!hasAiSearched && (
+                  <div className="relative">
+                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                     <input 
+                        type="text" 
+                        placeholder="Find Hub (e.g. London)..." 
+                        className="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold outline-none focus:ring-1 focus:ring-indigo-500"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                     />
+                     {search && (
+                        <button 
+                           onClick={() => setSearch("")}
+                           className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                        >
+                           <X size={12} />
+                        </button>
+                     )}
+                  </div>
+                )}
+
+                {/* AI Global Search */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles size={10} className="text-indigo-500" />
+                    <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">AI Global Search</span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder='e.g. "top medical schools Asia"'
+                      className={`w-full pl-3 pr-16 py-2.5 border rounded-xl text-[10px] font-bold outline-none transition-all ${hasAiSearched ? 'bg-indigo-50 border-indigo-300 focus:ring-1 focus:ring-indigo-500' : 'bg-white border-slate-200 focus:ring-1 focus:ring-indigo-400'}`}
+                      value={aiSearchQuery}
+                      onChange={(e) => setAiSearchQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAiSearch()}
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      {hasAiSearched && (
+                        <button onClick={clearAiSearch} className="p-1 text-slate-400 hover:text-red-500 transition-colors" title="Clear AI results">
+                          <X size={11} />
+                        </button>
+                      )}
+                      <button
+                        onClick={handleAiSearch}
+                        disabled={isAiSearching || !aiSearchQuery.trim()}
+                        className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50"
+                        title="Search globally with AI"
                       >
-                         <X size={12} />
+                        {isAiSearching ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
                       </button>
-                   )}
+                    </div>
+                  </div>
+                  {hasAiSearched && (
+                    <p className="text-[9px] text-indigo-600 font-bold flex items-center gap-1">
+                      <Check size={9} className="text-emerald-500" /> {aiSearchResults.length} global results found
+                    </p>
+                  )}
                 </div>
-                <div className="flex flex-wrap gap-1">
-                   {["USA", "UK", "Singapore", "Canada"].map(country => (
-                     <button 
-                        key={country} 
-                        onClick={() => setSearch(country)}
-                        className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-[8px] font-black text-slate-400 uppercase tracking-widest hover:border-indigo-500 transition-colors"
-                     >
-                       {country}
-                     </button>
-                   ))}
-                </div>
+
+                {!hasAiSearched && (
+                  <div className="flex flex-wrap gap-1">
+                     {["USA", "UK", "Singapore", "Canada"].map(country => (
+                       <button 
+                          key={country} 
+                          onClick={() => setSearch(country)}
+                          className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-[8px] font-black text-slate-400 uppercase tracking-widest hover:border-indigo-500 transition-colors"
+                       >
+                         {country}
+                       </button>
+                     ))}
+                  </div>
+                )}
               </div>
            </div>
         </div>
@@ -1071,14 +1373,21 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
            <div className="bg-white/90 backdrop-blur-xl p-6 rounded-[2.5rem] border border-white shadow-2xl w-[320px] pointer-events-auto flex flex-col overflow-hidden max-h-full">
               <div className="flex items-center justify-between mb-6">
                  <div>
-                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">Ecosystem Nodes</h3>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">{isSearching ? 'Calibrating...' : `${visibleInstitutions.length}/${filtered.length} Matches`}</p>
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                      Ecosystem Nodes
+                      {hasAiSearched && (
+                        <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-600 text-[8px] font-black rounded-md uppercase tracking-widest">AI</span>
+                      )}
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">
+                      {isSearching || isAiSearching ? 'Calibrating...' : `${visibleInstitutions.length}/${filtered.length} Matches`}
+                    </p>
                  </div>
-                 {isSearching && <Loader2 size={16} className="animate-spin text-indigo-600" />}
+                 {(isSearching || isAiSearching) && <Loader2 size={16} className="animate-spin text-indigo-600" />}
               </div>
 
               <div className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-hide">
-                 {isSearching ? (
+                 {isSearching || isAiSearching ? (
                    [1,2,3,4].map(i => (
                      <div key={i} className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3 animate-pulse">
                         <div className="w-10 h-10 rounded-xl bg-slate-200 shrink-0" />
@@ -1269,11 +1578,11 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
       </AnimatePresence>
 
       {/* Visa Details Panel */}
-      {(selectedInstitutionVisaGuidance || visaGuidance) && (
+      {(selectedInstitutionVisaGuidance || visaGuidance || isSelectedInstitutionVisaLoading || isVisaLoading) && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-8"
+          className="pb-8"
         >
           <VisaDetails 
             visaGuidance={selectedInstitutionVisaGuidance || visaGuidance} 
@@ -3222,13 +3531,13 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.3, ease: "circOut" }}
-            className="h-full"
+            className={activeView === 'institutions' ? 'min-h-full' : 'h-full'}
           >
-            {activeView === 'dashboard' && <Dashboard profile={profile} onSelectPath={handleSelectPath} careers={careers} isLoading={isCareersLoading} onInitInterview={initiateInterview} onAiCareerSearch={handleAiCareerSearch} isAiCareerLoading={isAiCareerLoading} aiCareerSearchMessage={aiCareerSearchMessage} />}
+            {activeView === 'dashboard' && <Dashboard profile={profile} onSelectPath={handleSelectPath} careers={careers} isLoading={isCareersLoading} onInitInterview={initiateInterview} onAiCareerSearch={handleAiCareerSearch} isAiCareerLoading={isAiCareerLoading} aiCareerSearchMessage={aiCareerSearchMessage} onNavigate={handleNavigate} />}
             
             {activeView !== 'dashboard' && (
-              <div className="grid grid-cols-12 gap-8 h-full">
-                <section className="col-span-12 xl:col-span-9 space-y-8 h-full">
+              <div className={activeView === 'institutions' ? 'grid grid-cols-12 gap-8' : 'grid grid-cols-12 gap-8 h-full'}>
+                <section className={activeView === 'institutions' ? 'col-span-12 xl:col-span-9 space-y-8' : 'col-span-12 xl:col-span-9 space-y-8 h-full'}>
                    {activeView === 'roadmap' && <RoadmapView profile={profile} pathId={selectedPathId} careers={careers} onNavigate={handleNavigate} onInitInterview={initiateInterview} />}
                    {activeView === 'jobs' && <JobBoardView profile={profile} />}
                    {activeView === 'institutions' && <InstitutionsView profile={profile} selectedPathId={selectedPathId} initialSearch={institutionSearchQuery} onInitInterview={initiateInterview} institutions={dynamicInstitutions.length > 0 ? dynamicInstitutions : INSTITUTIONS} isLoading={isInstitutionsLoading} visaGuidance={visaGuidance} isVisaLoading={isVisaLoading} roadmapContext={institutionRoadmapContext} />}

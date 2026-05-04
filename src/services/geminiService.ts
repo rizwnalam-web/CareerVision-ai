@@ -43,7 +43,7 @@ export async function aiSearchStudyMaterials(query: string): Promise<StudyMateri
       }
     });
 
-    const results = JSON.parse(response.text);
+    const results = JSON.parse(response.text ?? "");
     return Array.isArray(results) ? results : [];
   } catch (error) {
     console.error("AI Search Failed:", error);
@@ -91,10 +91,63 @@ export async function aiSearchJobs(query: string, location: string): Promise<Job
       }
     });
 
-    const results = JSON.parse(response.text);
+    const results = JSON.parse(response.text ?? "");
     return Array.isArray(results) ? results : [];
   } catch (error) {
     console.error("AI Job Search Failed:", error);
+    return [];
+  }
+}
+
+export async function aiSearchInstitutions(query: string, profile: UserProfile): Promise<Institution[]> {
+  const model = "gemini-2.0-flash";
+
+  const systemInstruction = `You are Spark.E, an elite Global Admissions Intelligence Engine.
+The user is performing a GLOBAL institutional search with this natural language query: "${query}".
+Their profile: country=${profile.country}, budget=$${profile.budget}/yr, career=${profile.targetCareerId || 'undecided'}, interests=${profile.interests?.join(', ')}.
+
+Your task:
+1. Interpret the query semantically (e.g. "affordable engineering in Europe", "top medical schools Asia", "online MBA Canada").
+2. Find 4-6 REAL, globally recognized institutions that best match the query and the user's profile.
+3. Prioritize institutions that exist in reality — include accurate coordinates, real websites, and real programs.
+4. Vary the results across regions if the query allows.
+5. Ensure "image" is a high-quality Unsplash URL representing the institution's city/campus.
+
+Return a valid JSON array of Institution objects with this exact schema:
+{
+  "id": "ai-<unique-slug>",
+  "name": "string",
+  "location": "string",
+  "type": "University" | "Vocational" | "Polytechnic" | "Medical School" | "Business School",
+  "avgCost": number,
+  "programs": ["string"],
+  "ranking": number,
+  "image": "https://images.unsplash.com/photo-XXXXXXXXXX-XXXXXXXXXX?w=800&q=80",
+  "applicationDeadline": "YYYY-MM-DD",
+  "website": "https://...",
+  "allowsInternationalStudents": true,
+  "visaSupport": "Full" | "Partial" | "None",
+  "coordinates": { "lat": number, "lng": number },
+  "city": "string",
+  "country": "string",
+  "costOfLivingIndex": number
+}`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: "user", parts: [{ text: `Search globally for institutions matching: "${query}"` }] }],
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json"
+      }
+    });
+
+    const raw = typeof response.text === 'string' ? response.text : JSON.stringify(response.text);
+    const results = JSON.parse(raw);
+    return Array.isArray(results) ? results : [];
+  } catch (error) {
+    console.error("AI Institution Search Failed:", error);
     return [];
   }
 }
@@ -123,7 +176,7 @@ export async function getAiJobSuggestions(profile: UserProfile): Promise<JobList
       }
     });
 
-    const results = JSON.parse(response.text);
+    const results = JSON.parse(response.text ?? "");
     return Array.isArray(results) ? results : [];
   } catch (error) {
     console.error("AI Job Suggestions Failed:", error);
@@ -173,7 +226,7 @@ export async function getAiInstitutionRecommendations(profile: UserProfile, sele
       }
     });
 
-    const results = JSON.parse(response.text);
+    const results = JSON.parse(response.text ?? "");
     return Array.isArray(results) ? results : [];
   } catch (error) {
     console.error("AI Institution Recommendations Failed:", error);
@@ -205,7 +258,7 @@ export async function getAiProactiveJobRecommendations(profile: UserProfile, sav
       }
     });
 
-    const results = JSON.parse(response.text);
+    const results = JSON.parse(response.text ?? "");
     return Array.isArray(results) ? results : [];
   } catch (error) {
     console.error("AI Proactive Search Failed:", error);
@@ -245,7 +298,7 @@ export async function getMarketInsights(careerId: string, country: string): Prom
       }
     });
 
-    return JSON.parse(response.text);
+    return JSON.parse(response.text ?? "");
   } catch (error) {
     console.error("Market Insights Failed:", error);
     return null;
@@ -301,7 +354,7 @@ export async function matchScholarships(profile: UserProfile): Promise<FundingOp
       }
     });
 
-    const matches = JSON.parse(response.text);
+    const matches = JSON.parse(response.text ?? "");
     return FUNDING_OPPORTUNITIES.map(opp => {
       const match = matches.find((m: any) => m.id === opp.id);
       if (match) {
@@ -378,7 +431,7 @@ export async function getRecommendedCourses(sector: string): Promise<any[]> {
       }
     });
 
-    return JSON.parse(response.text);
+    return JSON.parse(response.text ?? "");
   } catch (error: any) {
     if (error?.message?.includes("429") || error?.status === "RESOURCE_EXHAUSTED") {
       console.warn("Gemini Quota Exceeded (429) for Courses. Using empty cache.");
@@ -435,7 +488,7 @@ export async function getCareerAdvice(prompt: string, userContext: any, addition
       },
     });
 
-    return response.text;
+    return response.text ?? "";
   } catch (error: any) {
     if (error?.message?.includes("429") || error?.status === "RESOURCE_EXHAUSTED") {
       console.warn("Gemini Quota Exceeded (429) for Advisor. Providing cached logic.");
@@ -489,7 +542,7 @@ export async function generateCoverLetter(institution: any, userProfile: UserPro
       },
     });
 
-    return response.text;
+    return response.text ?? "";
   } catch (error: any) {
     if (error?.message?.includes("429") || error?.status === "RESOURCE_EXHAUSTED") {
       console.warn("Gemini Quota Exceeded (429) for Documents. Using template.");
@@ -543,7 +596,7 @@ export async function getLatestCareerNews(preferredCountry?: string): Promise<{ 
       }
     });
 
-    return JSON.parse(response.text);
+    return JSON.parse(response.text ?? "");
   } catch (error: any) {
     if (error?.message?.includes("429") || error?.status === "RESOURCE_EXHAUSTED") {
       console.warn("Gemini Quota Exceeded (429) for News Flash. Using localized intelligence fallback.");
@@ -632,7 +685,7 @@ export async function getTopGlobalCareers(): Promise<CareerPath[]> {
       }
     });
 
-    return JSON.parse(response.text);
+    return JSON.parse(response.text ?? "");
   } catch (error: any) {
     if (error?.message?.includes("429") || error?.status === "RESOURCE_EXHAUSTED") {
       console.warn("Gemini Quota Exceeded (429) for Careers. Using static dataset fallback.");
@@ -715,7 +768,7 @@ export async function aiSearchCareerPaths(query: string): Promise<CareerPath[]> 
       }
     });
 
-    return JSON.parse(response.text);
+    return JSON.parse(response.text ?? "");
   } catch (error: any) {
     console.error("AI Career Search Error:", error);
     return [];
@@ -759,7 +812,7 @@ Return JSON array with fields: id, name, country, city, type, programs[], avgCos
       }
     });
 
-    const institutions = JSON.parse(response.text);
+    const institutions = JSON.parse(response.text ?? "");
       const result = Array.isArray(institutions) ? institutions.slice(0, 20) : [];
 
       // Step 2: Save to database for caching on success
@@ -809,7 +862,7 @@ Return JSON array with: id, title, type (video|course|article|interactive), prov
       }
     });
 
-    const materials = JSON.parse(response.text);
+    const materials = JSON.parse(response.text ?? "");
       const result = Array.isArray(materials) ? materials.slice(0, 12) : [];
 
       // Step 2: Save to database for caching on success
@@ -829,45 +882,62 @@ Return JSON array with: id, title, type (video|course|article|interactive), prov
 // NEW: Get Visa Guidance
 export async function getVisaGuidance(profile: UserProfile, targetCountry: string, targetCareer: string): Promise<any> {
   const model = "gemini-2.0-flash";
-  
-  const systemInstruction = `You are an expert immigration consultant specializing in student visas and work permits.
-  Provide comprehensive, realistic visa guidance based on student profile and target location.`;
+
+  const homeCountry = profile.citizenCountry || profile.country || 'Unknown';
+  const visaType = profile.targetVisaType || 'Student Visa';
+
+  const systemInstruction = `You are a certified immigration attorney. Return ONLY a valid JSON object — no markdown, no explanation, no code fences. Use real, country-specific data for ${homeCountry} → ${targetCountry}.`;
+
+  const userPrompt = `Return a JSON object for visa guidance:
+Home: ${homeCountry}, Target: ${targetCountry}, Career: ${targetCareer}, Education: ${profile.education}, Budget: $${profile.budget}, VisaType: ${visaType}
+
+Required JSON fields:
+- recommendedVisaTypes: array of {name, code, description, maxDuration, workRights}
+- processingTimeline: {totalTimeline, documentCollection, applicationSubmission, visaProcessing, earliestApplyBeforeCourseStart}
+- estimatedCost: {visaApplicationFee, biometricsFee, healthSurcharge, medicalExamEstimate, totalEstimate, currency}
+- requiredDocuments: array of {name, description, issuedBy, mandatory, notes}
+- languageAndAcademicTests: array of {testName, minimumScore, alternativeTests, purpose, validity, waivable}
+- financialRequirements: {proofOfFundsAmount, currency, description, acceptedEvidence}
+- sponsorshipLikelihood: "High" or "Medium" or "Low"
+- sponsorshipNotes: string
+- embassyInfo: {processingLocation, officialPortalUrl, appointmentBookingUrl}
+- postArrivalRequirements: array of strings
+- nextSteps: array of strings
+- importantDeadlines: string
+- countrySpecificNotes: string`;
+
+  // Race the AI call against a 25-second timeout
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Visa guidance request timed out')), 25000)
+  );
 
   try {
-    const response = await ai.models.generateContent({
-      model,
-      contents: [{
-        role: "user",
-        parts: [{
-          text: `Visa Guidance for:
-Home Country: ${profile.citizenCountry || profile.country}
-Target Country: ${targetCountry}
-Career: ${targetCareer}
-Education: ${profile.education}
-Budget: $${profile.budget}
+    const response = await Promise.race([
+      ai.models.generateContent({
+        model,
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+          temperature: 0.1,
+          maxOutputTokens: 2048
+        }
+      }),
+      timeoutPromise
+    ]);
 
-Return JSON with: recommendedVisaTypes[], processingTimeline, estimatedCost, requirements[], sponsorshipLikelihood (High/Medium/Low), nextSteps[], processingLocation`
-        }]
-      }],
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json"
-      }
-    });
+    const raw = typeof (response as any).text === 'string'
+      ? (response as any).text
+      : JSON.stringify((response as any).text);
 
-    const visaInfo = JSON.parse(response.text);
-    return visaInfo;
+    if (!raw || raw === 'null' || raw === 'undefined') {
+      throw new Error('Empty response from AI');
+    }
+
+    return JSON.parse(raw);
   } catch (error) {
     console.error("Visa Guidance Error:", error);
-    return {
-      recommendedVisaTypes: ['Student Visa'],
-      processingTimeline: '2-4 months',
-      estimatedCost: 1500,
-      requirements: ['Valid Passport', 'Acceptance Letter', 'Proof of Funds', 'Medical Clearance'],
-      sponsorshipLikelihood: 'Medium',
-      nextSteps: ['Apply to institutions', 'Gather required documents', 'Schedule consulate appointment'],
-      processingLocation: 'Home Country Embassy'
-    };
+    return null;
   }
 }
 
@@ -882,74 +952,88 @@ export async function getCareerHubIntelligence(city: string, country: string): P
     return cachedData;
   }
 
-  const systemInstruction = `You are Spark.E, a Global Career Market Intelligence Specialist.
-  Provide comprehensive market insights for job markets in specific cities.
-  Return a valid JSON object with city, country, intensity (0-100), topCareers array, marketHealthScore, averageSalaryRange, costOfLiving, visaOpenness, hiringTrends, requiredSkills array, topEmployers array, internshipOpportunities, and remoteWorkPercentage.`;
+  const systemInstruction = `You are Spark.E, a Global Career Market Intelligence Specialist for 2026. Return ONLY valid JSON — no markdown, no explanation.`;
+
+  const userPrompt = `Analyze the real 2026 job market for ${city}, ${country}. Return a JSON object:
+{
+  "city": "${city}",
+  "country": "${country}",
+  "intensity": number (0-100 market heat),
+  "marketHealthScore": number (0-100),
+  "topCareers": [{ "title": string, "demandScore": number, "avgSalary": { "entry": number, "mid": number, "senior": number, "currency": "USD" }, "jobGrowth": number, "openings": number }],
+  "averageSalaryRange": { "min": number, "max": number, "currency": "USD" },
+  "costOfLiving": number (1.0 = global avg),
+  "visaOpenness": "High" | "Medium" | "Low",
+  "hiringTrends": string (2-3 sentences of real current trends),
+  "requiredSkills": [{ "skill": string, "demand": number }],
+  "topEmployers": [string],
+  "internshipOpportunities": number,
+  "remoteWorkPercentage": number
+}
+Use real salary data, real employer names, and real 2026 market conditions for ${city}.`;
+
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Hub intelligence request timed out')), 20000)
+  );
 
   try {
-    const response = await ai.models.generateContent({
-      model,
-      contents: [{
-        role: "user",
-        parts: [{
-          text: `Analyze the job market for ${city}, ${country}. Provide 2026 market insights including: Top 4-5 in-demand careers with demand scores and salary ranges (entry, mid, senior), Job market intensity (0-100), Cost of living index, Required technical skills with demand scores, Visa sponsorship openness (High/Medium/Low), Current hiring trends, Top 5 employers, Internship availability count, Remote work percentage (0-100), and Market health score (0-100).`
-        }]
-      }],
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json"
-      }
-    });
+    const response = await Promise.race([
+      ai.models.generateContent({
+        model,
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+          temperature: 0.1,
+          maxOutputTokens: 1024
+        }
+      }),
+      timeoutPromise
+    ]);
 
-    const hubData = JSON.parse(response.text);
-    const result = {
-      ...hubData,
-      city,
-      country
-    };
+    const raw = typeof (response as any).text === 'string' ? (response as any).text : JSON.stringify((response as any).text);
+    const hubData = JSON.parse(raw);
+    const result = { ...hubData, city, country };
 
-    // Step 2: Save to database for caching on success
-    await saveCachedCareerHub(result).catch(err => 
+    // Save to database for caching on success
+    await saveCachedCareerHub(result).catch(err =>
       console.warn("Failed to cache career hub data (non-blocking):", err)
     );
 
     return result;
   } catch (error) {
     console.error("Career Hub Intelligence Error:", error);
-    // Return structured fallback data
-    return {
-      city,
-      country,
-      intensity: 75,
-      topCareers: [
-        {
-          title: "Software Engineer",
-          demandScore: 95,
-          avgSalary: { entry: 60000, mid: 100000, senior: 150000, currency: "USD" },
-          jobGrowth: 12,
-          openings: 500
-        },
-        {
-          title: "Data Scientist",
-          demandScore: 90,
-          avgSalary: { entry: 70000, mid: 110000, senior: 160000, currency: "USD" },
-          jobGrowth: 15,
-          openings: 300
-        }
-      ],
-      marketHealthScore: 78,
-      averageSalaryRange: { min: 55000, max: 180000, currency: "USD" },
-      costOfLiving: 1.1,
-      requiredSkills: [
-        { skill: "Python", demand: 90 },
-        { skill: "Cloud Platforms", demand: 85 },
-        { skill: "System Design", demand: 80 }
-      ],
-      visaOpenness: "Medium",
-      hiringTrends: "Tech roles dominating the market with strong emphasis on AI/ML and Cloud Computing",
-      topEmployers: ["Tech Giants", "Startups", "Finance Firms", "Consulting"],
-      internshipOpportunities: 200,
-      remoteWorkPercentage: 45
-    };
+    return null; // Return null so UI can show error state per hub
+  }
+}
+
+export async function aiSearchCareerHubs(query: string): Promise<{ city: string; country: string }[]> {
+  const model = "gemini-2.0-flash";
+
+  const systemInstruction = `You are a Global Career Intelligence Engine. Return ONLY valid JSON — no markdown, no explanation.`;
+
+  const userPrompt = `The user is searching for career hubs with this query: "${query}".
+Identify 4-6 real global cities that best match this query (e.g. "tech jobs Europe", "best AI hubs", "finance cities Asia", "affordable coding hubs").
+Return a JSON array: [{ "city": string, "country": string }]
+Only use real cities with well-known job markets. Vary regions when possible.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        temperature: 0.2,
+        maxOutputTokens: 256
+      }
+    });
+
+    const raw = typeof response.text === 'string' ? response.text : JSON.stringify(response.text);
+    const results = JSON.parse(raw);
+    return Array.isArray(results) ? results : [];
+  } catch (error) {
+    console.error("AI Career Hub Search Error:", error);
+    return [];
   }
 }

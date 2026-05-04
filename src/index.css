@@ -2,6 +2,12 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
+/* Leaflet custom institution marker — remove default outline/background */
+.custom-hub-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
