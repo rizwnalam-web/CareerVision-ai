@@ -31,16 +31,19 @@ interface LandingPageProps {
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-indigo-100 italic-selection">
       <NewsFlash country="Global" />
 
       {/* Navigation */}
-      <nav className="flex items-center justify-between px-8 py-6 max-w-7xl mx-auto">
+      <nav className="flex items-center justify-between px-6 md:px-8 py-6 max-w-7xl mx-auto relative">
         <div className="flex items-center gap-2">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 font-bold text-white shadow-lg">CV</div>
           <span className="text-2xl font-black tracking-tighter text-slate-900">CareerVision<span className="text-indigo-600 italic">AI</span></span>
         </div>
+        {/* Desktop links */}
         <div className="hidden md:flex items-center gap-8">
           <a href="#features" style={{color:'#94a3b8',textDecoration:'none'}} className="text-xs font-bold uppercase tracking-widest hover:text-slate-900 transition-colors">Intelligence</a>
           <a href="#demo"     style={{color:'#94a3b8',textDecoration:'none'}} className="text-xs font-bold uppercase tracking-widest hover:text-slate-900 transition-colors">Demo</a>
@@ -53,6 +56,46 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
             Sign Up / Login
           </button>
         </div>
+        {/* Mobile: Sign-up button + hamburger */}
+        <div className="flex md:hidden items-center gap-3">
+          <button
+            onClick={onStart}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-lg"
+          >
+            Sign Up
+          </button>
+          <button
+            onClick={() => setMobileMenuOpen(v => !v)}
+            className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 transition-colors"
+            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+          >
+            {mobileMenuOpen
+              ? <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><line x1="2" y1="2" x2="16" y2="16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><line x1="16" y1="2" x2="2" y2="16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+              : <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect y="3" width="18" height="1.8" rx="0.9" fill="currentColor"/><rect y="8.1" width="18" height="1.8" rx="0.9" fill="currentColor"/><rect y="13.2" width="18" height="1.8" rx="0.9" fill="currentColor"/></svg>
+            }
+          </button>
+        </div>
+        {/* Mobile dropdown menu */}
+        {mobileMenuOpen && (
+          <div className="absolute top-full left-0 right-0 mx-4 mt-1 bg-white border border-slate-200 rounded-2xl shadow-2xl shadow-slate-200/60 py-3 z-50 md:hidden">
+            {[
+              { label: 'Intelligence', href: '#features' },
+              { label: 'Demo', href: '#demo' },
+              { label: 'Roadmaps', href: '#roadmap' },
+              { label: 'Global Demand', href: '#global' },
+            ].map(link => (
+              <a
+                key={link.href}
+                href={link.href}
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center px-5 py-3 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors"
+                style={{ textDecoration: 'none' }}
+              >
+                {link.label}
+              </a>
+            ))}
+          </div>
+        )}
       </nav>
 
       {/* Hero Section - Recipe 11: Split Layout Inspiration */}

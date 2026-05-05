@@ -3774,6 +3774,7 @@ export default function App() {
 function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   const [activeView, setActiveView] = useState<'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs'>('dashboard');
   const [showMoreNav, setShowMoreNav] = useState(false);
+  const [showMobileNav, setShowMobileNav] = useState(false);
   const [selectedPathId, setSelectedPathId] = useState<string>("ai-engineer");
   const [institutionSearchQuery, setInstitutionSearchQuery] = useState("");
   const [institutionRoadmapContext, setInstitutionRoadmapContext] = useState<InstitutionRoadmapContext | null>(null);
@@ -4016,8 +4017,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
           <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 font-black text-white shadow-xl shadow-indigo-200 group-hover:scale-110 transition-transform">CV</div>
           <span className="text-2xl font-black tracking-tighter text-slate-900">CareerVision<span className="text-indigo-600 italic">AI</span></span>
         </div>
-        <nav className="hidden lg:flex gap-1 items-center relative">
-          {(
+        <nav className="hidden lg:flex gap-1 items-center relative">          {(
             [
               { label: 'Control', view: 'dashboard', icon: LayoutDashboard },
               { label: 'Roadmap', view: 'roadmap', icon: Map },
@@ -4072,6 +4072,14 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
           </div>
         </nav>
         <div className="flex items-center gap-3">
+          {/* Hamburger – mobile/tablet only */}
+          <button
+            className="lg:hidden flex items-center justify-center w-9 h-9 rounded-xl bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 transition-colors"
+            onClick={() => setShowMobileNav(true)}
+            aria-label="Open navigation"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect y="3" width="18" height="1.8" rx="0.9" fill="currentColor"/><rect y="8.1" width="18" height="1.8" rx="0.9" fill="currentColor"/><rect y="13.2" width="18" height="1.8" rx="0.9" fill="currentColor"/></svg>
+          </button>
           {/* Auth Security Badge */}
           <div className="hidden md:flex flex-col items-end gap-1">
             <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-xl px-2.5 py-1.5">
@@ -4093,16 +4101,97 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                 <User size={16} className="text-indigo-600 group-hover:text-white transition-colors" />
               )}
             </div>
-            <div className="flex flex-col">
+            <div className="hidden sm:flex flex-col">
               <span className="text-xs font-black text-slate-800 uppercase tracking-tight">{profile.name}</span>
               <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none">Level 1 Trajectory</span>
             </div>
           </div>
         </div>
       </header>
+
+      {/* ── MOBILE DRAWER ── */}
+      <AnimatePresence>
+        {showMobileNav && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              key="mob-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden"
+              onClick={() => setShowMobileNav(false)}
+            />
+            {/* Drawer panel */}
+            <motion.div
+              key="mob-drawer"
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="fixed top-0 right-0 bottom-0 w-72 bg-white z-50 flex flex-col shadow-2xl lg:hidden"
+            >
+              {/* Drawer header */}
+              <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+                <span className="text-sm font-black text-slate-900 uppercase tracking-widest">Navigation</span>
+                <button
+                  onClick={() => setShowMobileNav(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+                  aria-label="Close navigation"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              {/* Nav items */}
+              <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+                {([
+                  { label: 'Control', view: 'dashboard', icon: LayoutDashboard },
+                  { label: 'Roadmap', view: 'roadmap', icon: Map },
+                  { label: 'Global', view: 'institutions', icon: School },
+                  { label: 'Academy', view: 'materials', icon: BookOpen },
+                  { label: 'Jobs Board', view: 'jobs', icon: Briefcase },
+                  { label: 'Market Hubs', view: 'heatmap', icon: Globe },
+                  { label: 'Finance', view: 'expenses', icon: CircleDollarSign },
+                ] as { label: string; view: typeof activeView; icon: React.ElementType }[]).map(item => (
+                  <button
+                    key={item.view}
+                    onClick={() => { handleNavigate(item.view); setShowMobileNav(false); }}
+                    className={cn(
+                      'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all',
+                      activeView === item.view
+                        ? 'bg-indigo-50 text-indigo-600'
+                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                    )}
+                  >
+                    <item.icon size={15} />
+                    {item.label}
+                    {activeView === item.view && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-500" />}
+                  </button>
+                ))}
+              </nav>
+              {/* Drawer footer */}
+              <div className="px-6 py-5 border-t border-slate-100 space-y-3">
+                <button
+                  onClick={() => setSparkEOpen(true)}
+                  className="w-full flex items-center gap-3 px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all group"
+                >
+                  <Sparkles size={15} />
+                  <span className="text-xs font-black uppercase tracking-widest">Ask Spark.E</span>
+                </button>
+                <button
+                  onClick={() => { handleLogout(); setShowMobileNav(false); }}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-rose-500 transition-colors"
+                >
+                  <LogOut size={13} /> Disconnect
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
       
       {/* Main Content Viewport */}
-      <main className="flex-1 overflow-y-auto scrollbar-hide relative z-10 px-6 lg:px-10 py-8">
+      <main className="flex-1 overflow-y-auto scrollbar-hide relative z-10 px-4 lg:px-10 py-6 pb-24 lg:pb-8">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeView}
@@ -4147,9 +4236,48 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
           </motion.div>
         </AnimatePresence>
       </main>
+
+      {/* ── MOBILE BOTTOM TAB BAR ── */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-slate-200 shadow-2xl shadow-slate-200/60">
+        <div className="grid grid-cols-5 h-16">
+          {([
+            { label: 'Home', view: 'dashboard', icon: LayoutDashboard },
+            { label: 'Roadmap', view: 'roadmap', icon: Map },
+            { label: 'Global', view: 'institutions', icon: School },
+            { label: 'Academy', view: 'materials', icon: BookOpen },
+            { label: 'More', view: '__more__', icon: ChevronDown },
+          ] as { label: string; view: typeof activeView | '__more__'; icon: React.ElementType }[]).map(item => {
+            const isMore = item.view === '__more__';
+            const isMoreActive = isMore && ['jobs', 'heatmap', 'expenses'].includes(activeView);
+            const isActive = !isMore && activeView === item.view;
+            return (
+              <button
+                key={item.view}
+                onClick={() => isMore ? setShowMobileNav(true) : handleNavigate(item.view as typeof activeView)}
+                className={cn(
+                  'flex flex-col items-center justify-center gap-1 transition-all relative',
+                  (isActive || isMoreActive) ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-700'
+                )}
+              >
+                {(isActive || isMoreActive) && (
+                  <motion.div
+                    layoutId="bottomNavIndicator"
+                    className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-indigo-500 rounded-full"
+                    transition={{ type: 'spring', bounce: 0.3, duration: 0.5 }}
+                  />
+                )}
+                <item.icon size={18} strokeWidth={(isActive || isMoreActive) ? 2.5 : 1.8} />
+                <span className="text-[9px] font-black uppercase tracking-widest">{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        {/* Safe area spacer for iOS */}
+        <div className="h-safe-bottom bg-white/95" style={{ height: 'env(safe-area-inset-bottom)' }} />
+      </nav>
       
       {/* Footer Status Bar */}
-      <footer className="flex items-center justify-between border-t border-slate-200 bg-white px-10 py-3 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] shrink-0 relative z-10">
+      <footer className="hidden lg:flex items-center justify-between border-t border-slate-200 bg-white px-10 py-3 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] shrink-0 relative z-10">
         <div className="flex gap-8">
           <span className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div> 
@@ -4174,7 +4302,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       />
 
       {/* Spark.E Floating Bubble */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+      <div className="fixed bottom-20 lg:bottom-6 right-6 z-50 flex flex-col items-end gap-3">
         {/* Tooltip label */}
         <AnimatePresence>
           {!sparkEOpen && (
