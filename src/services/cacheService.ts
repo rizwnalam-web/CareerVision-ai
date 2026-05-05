@@ -6,6 +6,7 @@
 // Use relative URL so it works both in dev (port 3000 proxied) and when
 // the backend is on 3001. Falls back gracefully if backend is not running.
 const API_BASE = "http://localhost:3001/api/market";
+const CAREERS_BASE = "http://localhost:3001/api/careers";
 
 interface CacheResponse {
   source: "cache" | "not-cached";
@@ -234,5 +235,61 @@ export async function getCachedInstitutions(
   } catch (error) {
     console.error("Institutions cache fetch failed:", error);
     return null;
+  }
+}
+
+/**
+ * Get top global careers from DB cache.
+ * Returns null if cache is empty or stale (< 10 items).
+ */
+export async function getCachedTopCareers(): Promise<any[] | null> {
+  try {
+    const response = await fetch(`${CAREERS_BASE}/top`);
+    if (!response.ok) return null;
+
+    const result: CacheResponse = await response.json();
+    if (result.source === "cache" && Array.isArray(result.data) && result.data.length >= 10) {
+      console.log(`✓ Top careers retrieved from DB cache (${result.data.length} paths)`);
+      return result.data;
+    }
+    return null;
+  } catch (error: any) {
+    if (error?.cause?.code === "ECONNREFUSED") {
+      console.warn("[Cache] Backend not reachable — skipping top careers cache read.");
+    } else {
+      console.error("Top careers cache fetch failed:", error);
+    }
+    return null;
+  }
+}
+
+/**
+ * Save AI-generated top global careers to DB (with milestones).
+ * Non-blocking — failure here does not affect the UI.
+ */
+export async function saveCachedTopCareers(careers: any[]): Promise<boolean> {
+  try {
+    const response = await fetch(`${CAREERS_BASE}/bulk`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ careers }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      console.warn(`[Cache] Failed to save top careers (${response.status}):`, text);
+      return false;
+    }
+
+    const result = await response.json();
+    console.log(`[Cache] ✓ ${result.saved} top global careers cached in DB`);
+    return true;
+  } catch (error: any) {
+    if (error?.cause?.code === "ECONNREFUSED") {
+      console.warn("[Cache] Backend not reachable — top careers not persisted.");
+    } else {
+      console.error("[Cache] Save top careers failed:", error);
+    }
+    return false;
   }
 }

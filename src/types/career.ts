@@ -178,3 +178,34 @@ export interface CareerHubIntelligence {
   internshipOpportunities: number;
   remoteWorkPercentage: number; // % of jobs that are remote/hybrid
 }
+
+export interface DashboardIntelligence {
+  readiness: {
+    overall: number;
+    skills: number;
+    education: number;
+    experience: number;
+  };
+  nextActions: {
+    title: string;
+    impact: string;
+    type: 'learn' | 'build' | 'practice';
+    urgent: boolean;
+  }[];
+  sectors: {
+    name: string;
+    trend: string;
+    score: number;
+    status: 'Hot' | 'Rising' | 'Stable' | 'Emerging';
+    color: string;
+    spark: { v: number }[];
+    news: string[];
+  }[];
+  salaryTrajectory: { y: string; v: number }[];
+}
+
+export interface CareerSkillGap {
+  skill: string;
+  owned: boolean;
+  demand: number;
+}

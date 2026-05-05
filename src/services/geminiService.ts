@@ -1,7 +1,7 @@
 import { ai, Type } from "../lib/gemini";
 import { FUNDING_OPPORTUNITIES, STUDY_MATERIALS } from "../constants/mockData";
-import { FundingOpportunity, UserProfile, CareerPath, StudyMaterial, JobListing, Institution, MarketInsights, CareerHubIntelligence } from "../types/career";
-import { getCachedCareerHub, saveCachedCareerHub, getCachedInstitutions, saveCachedInstitutions, getCachedStudyMaterialsByCareer, saveCachedStudyMaterials } from "./cacheService";
+import { FundingOpportunity, UserProfile, CareerPath, StudyMaterial, JobListing, Institution, MarketInsights, CareerHubIntelligence, DashboardIntelligence, CareerSkillGap } from "../types/career";
+import { getCachedCareerHub, saveCachedCareerHub, getCachedInstitutions, saveCachedInstitutions, getCachedStudyMaterialsByCareer, saveCachedStudyMaterials, getCachedTopCareers, saveCachedTopCareers } from "./cacheService";
 
 // ... existing functions ...
 
@@ -184,53 +184,114 @@ export async function getAiJobSuggestions(profile: UserProfile): Promise<JobList
   }
 }
 
-export async function getAiInstitutionRecommendations(profile: UserProfile, selectedPathId: string): Promise<{ institution: Institution, rationale: string }[]> {
+export async function getAiInstitutionRecommendations(
+  profile: UserProfile,
+  careerTitle: string
+): Promise<{ institution: Institution; rationale: string }[]> {
   const model = "gemini-2.0-flash";
-  
-  const systemInstruction = `You are Spark.E, a Global Admissions Strategist.
-  Analyze this user profile: ${JSON.stringify(profile)} and selected career path: ${selectedPathId}.
-  
-  1. Recommend 3 elite or highly relevant institutions/programs globally or in their country: ${profile.country}.
-  2. For each, provide a "rationale" explaining why it's perfect for their specific academic background and career goals.
-  3. Ensure the institutions exist and are known for the target field.
-  
-  Return a valid JSON array of objects: { "institution": Institution, "rationale": "string" }.
-  
-  Institution Schema:
-  {
-    "id": "string",
-    "name": "string",
-    "location": "string",
+
+  const systemInstruction = `You are Spark.E, a Global Admissions Strategist for 2026. Return ONLY valid JSON — no markdown, no explanation.`;
+
+  const prompt = `Recommend exactly 3 real, globally recognised institutions or training programs for this user.
+
+User profile:
+- Name: ${profile.name || "Student"}
+- Target career: ${careerTitle || "Technology"}
+- Education level: ${profile.education || "High School"}
+- Home country: ${profile.country || "Global"}
+- Target location: ${profile.targetLocation || profile.country || "Global"}
+- Annual budget: $${profile.budget || 20000}
+- Interests: ${Array.isArray(profile.interests) ? profile.interests.join(", ") : "technology"}
+- GPA: ${profile.academicPerformance?.gpa ?? "not specified"}
+
+Rules:
+- Institutions must be real and known for "${careerTitle}"
+- Prioritise institutions in or relevant to "${profile.targetLocation || profile.country || "Global"}"
+- Provide a personalised rationale for each (2-3 sentences) explaining why it suits this specific user
+- "image" must be a valid https://images.unsplash.com/photo-... URL
+- "website" must be a real institution URL
+- "applicationDeadline" must be a future date in YYYY-MM-DD format
+
+Return a JSON array of exactly 3 objects:
+[{
+  "institution": {
+    "id": "kebab-slug",
+    "name": "Institution Name",
+    "location": "City, Country",
+    "city": "City",
+    "country": "Country",
     "type": "University" | "Vocational" | "Polytechnic" | "Medical School" | "Business School",
-    "avgCost": number (annual fees),
-    "programs": ["string"],
-    "ranking": number,
-    "image": "https://images.unsplash.com/photo-...",
-    "applicationDeadline": "YYYY-MM-DD",
-    "website": "string",
-    "allowsInternationalStudents": boolean,
+    "avgCost": 25000,
+    "programs": ["Program 1", "Program 2"],
+    "ranking": 50,
+    "image": "https://images.unsplash.com/photo-1562774053-701939374585?w=400",
+    "applicationDeadline": "2027-01-15",
+    "website": "https://www.institution.edu",
+    "allowsInternationalStudents": true,
     "visaSupport": "Full" | "Partial" | "None",
-    "coordinates": { "lat": number, "lng": number },
-    "city": "string",
-    "country": "string",
-    "costOfLivingIndex": number
-  }`;
+    "coordinates": { "lat": 0.0, "lng": 0.0 },
+    "costOfLivingIndex": 65
+  },
+  "rationale": "Why this institution is perfect for this specific user and their career goal."
+}]`;
 
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: [{ role: "user", parts: [{ text: "Recommend the best institutions for my career choice." }] }],
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         systemInstruction,
-        responseMimeType: "application/json"
-      }
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              institution: {
+                type: Type.OBJECT,
+                properties: {
+                  id:                          { type: Type.STRING },
+                  name:                        { type: Type.STRING },
+                  location:                    { type: Type.STRING },
+                  city:                        { type: Type.STRING },
+                  country:                     { type: Type.STRING },
+                  type:                        { type: Type.STRING },
+                  avgCost:                     { type: Type.NUMBER },
+                  programs:                    { type: Type.ARRAY, items: { type: Type.STRING } },
+                  ranking:                     { type: Type.NUMBER },
+                  image:                       { type: Type.STRING },
+                  applicationDeadline:         { type: Type.STRING },
+                  website:                     { type: Type.STRING },
+                  allowsInternationalStudents: { type: Type.BOOLEAN },
+                  visaSupport:                 { type: Type.STRING, enum: ["Full", "Partial", "None"] },
+                  coordinates: {
+                    type: Type.OBJECT,
+                    properties: {
+                      lat: { type: Type.NUMBER },
+                      lng: { type: Type.NUMBER },
+                    },
+                    required: ["lat", "lng"],
+                  },
+                  costOfLivingIndex: { type: Type.NUMBER },
+                },
+                required: ["id", "name", "location", "city", "country", "type", "avgCost", "programs", "ranking", "image", "website", "allowsInternationalStudents", "visaSupport"],
+              },
+              rationale: { type: Type.STRING },
+            },
+            required: ["institution", "rationale"],
+          },
+        },
+        temperature: 0.2,
+        maxOutputTokens: 2000,
+      },
     });
 
-    const results = JSON.parse(response.text ?? "");
-    return Array.isArray(results) ? results : [];
+    const raw = typeof response.text === "string" ? response.text : JSON.stringify(response.text);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
-    console.error("AI Institution Recommendations Failed:", error);
-    return [];
+    console.error("[AI Curated Programs] Failed:", error);
+    throw error;
   }
 }
 
@@ -614,124 +675,117 @@ export async function getLatestCareerNews(preferredCountry?: string): Promise<{ 
 }
 
 export async function getTopGlobalCareers(): Promise<CareerPath[]> {
-  const model = "gemini-3.1-pro-preview";
-  
-  const systemInstruction = `
-    You are an AI Career Strategist specializing in the 2026 global job market.
-    Your task is to identify the TOP 10 highest-growth, most impactful global career paths for 2026.
-    
-    Output Format:
-    Return an array of 10 objects following this strict JSON schema:
-    [{
-      "id": "slug-id",
-      "title": "Full Career Title",
-      "description": "Short, punchy 1-2 sentence description",
-      "growth": "high" | "medium" | "stable",
-      "category": "Technology & Digital" | "Healthcare & Life Sciences" | "Business, Finance & Management" | "Engineering, Science & Environment" | "Arts, Design & Media" | "Education, Law & Public Service" | "Skilled Trades & Technical Services",
-      "subCategory": "The specific field (e.g. Data & AI, Clinical Practice, etc.)",
-      "workType": "Remote" | "On-site" | "Hybrid" | "Mobile",
-      "tags": ["AI Integration", "Green Transition", "Remote Economy", "Global Demand"],
-      "milestones": [
-        {
-          "ageRange": "e.g. 13-17",
-          "title": "Exploratory Phase",
-          "description": "What to do at this age",
-          "requirements": ["Skill 1", "Skill 2"]
-        },
-        ... (provide 3-4 milestones per path)
-      ]
-    }]
-  `;
+  // ── 1. DB cache check (avoids AI call when data is fresh) ────────────────
+  const cached = await getCachedTopCareers();
+  if (cached && cached.length >= 10) {
+    console.log(`[Careers] Serving ${cached.length} paths from DB cache`);
+    return cached as CareerPath[];
+  }
 
-  const prompt = "Generate the top 10 global career paths for 2026 accurately following the schema. Ensure categories match the defined industry sectors.";
+  // ── 2. AI fetch (only when cache is empty or stale) ──────────────────────
+  const model = "gemini-2.0-flash";
+
+  const systemInstruction = `You are an AI Career Strategist for the 2026 global job market. Return ONLY valid JSON — no markdown, no explanation.`;
+
+  const prompt = `Generate exactly 10 of the highest-growth, most in-demand global career paths for 2026.
+
+Return a JSON array of exactly 10 objects with this schema:
+[{
+  "id": "kebab-case-slug",
+  "title": "Full Career Title",
+  "description": "Punchy 1-2 sentence description of the role and its impact",
+  "growth": "high",
+  "category": "Technology & Digital" | "Healthcare & Life Sciences" | "Business, Finance & Management" | "Engineering, Science & Environment" | "Arts, Design & Media" | "Education, Law & Public Service" | "Skilled Trades & Technical Services",
+  "subCategory": "e.g. Data & AI",
+  "workType": "Remote" | "On-site" | "Hybrid" | "Mobile",
+  "tags": ["tag1", "tag2", "tag3"],
+  "milestones": [
+    { "ageRange": "13-17", "title": "Phase title", "description": "What to do", "requirements": ["req1", "req2"] },
+    { "ageRange": "18-22", "title": "Phase title", "description": "What to do", "requirements": ["req1", "req2"] },
+    { "ageRange": "23-27", "title": "Phase title", "description": "What to do", "requirements": ["req1", "req2"] },
+    { "ageRange": "28+",   "title": "Phase title", "description": "What to do", "requirements": ["req1", "req2"] }
+  ]
+}]
+
+Rules:
+- Exactly 10 careers, varied across sectors (min 4 different categories)
+- All growth values must be "high"
+- Each career must have exactly 4 milestones
+- Use 2026 job market data — prioritize AI, Climate, Health, FinTech, Cybersecurity, Biotech roles
+- Milestones must be age-appropriate and progressively build on each other`;
 
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: prompt,
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         systemInstruction,
         responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              title: { type: Type.STRING },
-              description: { type: Type.STRING },
-              growth: { type: Type.STRING, enum: ["high", "medium", "stable"] },
-              category: { type: Type.STRING },
-              subCategory: { type: Type.STRING },
-              workType: { type: Type.STRING, enum: ["Remote", "On-site", "Hybrid", "Mobile"] },
-              tags: { type: Type.ARRAY, items: { type: Type.STRING } },
-              milestones: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    ageRange: { type: Type.STRING },
-                    title: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    requirements: { type: Type.ARRAY, items: { type: Type.STRING } }
-                  },
-                  required: ["ageRange", "title", "description", "requirements"]
-                }
-              }
-            },
-            required: ["id", "title", "description", "growth", "category", "milestones"]
-          }
-        }
-      }
+        temperature: 0.2,
+        maxOutputTokens: 3000,
+      },
     });
 
-    return JSON.parse(response.text ?? "");
+    const raw = typeof response.text === "string" ? response.text : JSON.stringify(response.text);
+    const careers: CareerPath[] = JSON.parse(raw);
+
+    if (!Array.isArray(careers) || careers.length === 0) return [];
+
+    // ── 3. Persist to DB cache (non-blocking, 24-hour TTL) ──────────────────
+    saveCachedTopCareers(careers).catch((err) =>
+      console.warn("[Careers] Cache save failed (non-blocking):", err)
+    );
+
+    console.log(`[Careers] Fetched ${careers.length} paths from AI and queued DB cache save`);
+    return careers;
   } catch (error: any) {
     if (error?.message?.includes("429") || error?.status === "RESOURCE_EXHAUSTED") {
-      console.warn("Gemini Quota Exceeded (429) for Careers. Using static dataset fallback.");
+      console.warn("[Careers] Gemini quota hit — returning empty list");
     } else {
-      console.error("Fetch Careers Error:", error);
+      console.error("[Careers] AI fetch failed:", error);
     }
-    // Fallback to locally defined mock data if API fails or quota hit
     return [];
   }
 }
 
 export async function aiSearchCareerPaths(query: string): Promise<CareerPath[]> {
-  const model = "gemini-3.1-pro-preview";
-  const systemInstruction = `
-    You are an AI Career Strategist. The user is searching for global career paths.
-    Analyze the query: "${query}".
-    Return up to 8 high-quality career paths that match the query and the global job market in 2026.
-    Use the exact JSON schema below and nothing else.
+  const model = "gemini-2.0-flash"; // use the reliable fast model
 
-    CareerPath Schema:
-    [{
-      "id": "slug-id",
-      "title": "Full Career Title",
-      "description": "Short, punchy 1-2 sentence description",
-      "growth": "high" | "medium" | "stable",
-      "category": "Technology & Digital" | "Healthcare & Life Sciences" | "Business, Finance & Management" | "Engineering, Science & Environment" | "Arts, Design & Media" | "Education, Law & Public Service" | "Skilled Trades & Technical Services",
-      "subCategory": "The specific field (e.g. Data & AI, Clinical Practice, etc.)",
-      "workType": "Remote" | "On-site" | "Hybrid" | "Mobile",
-      "tags": ["string"],
-      "milestones": [
-        {
-          "ageRange": "e.g. 13-17",
-          "title": "Exploratory Phase",
-          "description": "What to do at this age",
-          "requirements": ["Skill 1", "Skill 2"]
-        }
-      ]
-    }]
-  `;
+  const systemInstruction = `You are an AI Career Strategist for 2026. Return ONLY valid JSON — no markdown, no explanation.`;
 
-  const prompt = `Provide AI-powered global career paths matching: ${query}. Return valid JSON only.`;
+  const prompt = `The user searched for: "${query}"
+
+Generate exactly 10 highly relevant career paths for 2026 that match this search. If the query mentions a specific country or region, tailor the careers to reflect the actual job market demand in that location.
+
+Return a JSON array of exactly 10 objects:
+[{
+  "id": "kebab-case-slug",
+  "title": "Full Career Title",
+  "description": "Punchy 1-2 sentence description of the role and its impact",
+  "growth": "high" | "medium" | "stable",
+  "category": "Technology & Digital" | "Healthcare & Life Sciences" | "Business, Finance & Management" | "Engineering, Science & Environment" | "Arts, Design & Media" | "Education, Law & Public Service" | "Skilled Trades & Technical Services",
+  "subCategory": "e.g. Data & AI",
+  "workType": "Remote" | "On-site" | "Hybrid" | "Mobile",
+  "tags": ["tag1", "tag2", "tag3"],
+  "milestones": [
+    { "ageRange": "13-17", "title": "Phase title", "description": "What to do", "requirements": ["req1", "req2"] },
+    { "ageRange": "18-22", "title": "Phase title", "description": "What to do", "requirements": ["req1", "req2"] },
+    { "ageRange": "23-27", "title": "Phase title", "description": "What to do", "requirements": ["req1", "req2"] },
+    { "ageRange": "28+",   "title": "Phase title", "description": "What to do", "requirements": ["req1", "req2"] }
+  ]
+}]
+
+Rules:
+- Return exactly 10 careers — no more, no less
+- Each career must have exactly 4 milestones
+- growth must be one of: "high", "medium", "stable"
+- workType must be one of: "Remote", "On-site", "Hybrid", "Mobile"
+- If a country is mentioned, prioritise careers with high hiring demand in that country in 2026`;
 
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: prompt,
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         systemInstruction,
         responseMimeType: "application/json",
@@ -740,38 +794,46 @@ export async function aiSearchCareerPaths(query: string): Promise<CareerPath[]> 
           items: {
             type: Type.OBJECT,
             properties: {
-              id: { type: Type.STRING },
-              title: { type: Type.STRING },
+              id:          { type: Type.STRING },
+              title:       { type: Type.STRING },
               description: { type: Type.STRING },
-              growth: { type: Type.STRING, enum: ["high", "medium", "stable"] },
-              category: { type: Type.STRING },
+              growth:      { type: Type.STRING, enum: ["high", "medium", "stable"] },
+              category:    { type: Type.STRING },
               subCategory: { type: Type.STRING },
-              workType: { type: Type.STRING, enum: ["Remote", "On-site", "Hybrid", "Mobile"] },
-              tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+              workType:    { type: Type.STRING, enum: ["Remote", "On-site", "Hybrid", "Mobile"] },
+              tags:        { type: Type.ARRAY, items: { type: Type.STRING } },
               milestones: {
                 type: Type.ARRAY,
                 items: {
                   type: Type.OBJECT,
                   properties: {
-                    ageRange: { type: Type.STRING },
-                    title: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    requirements: { type: Type.ARRAY, items: { type: Type.STRING } }
+                    ageRange:     { type: Type.STRING },
+                    title:        { type: Type.STRING },
+                    description:  { type: Type.STRING },
+                    requirements: { type: Type.ARRAY, items: { type: Type.STRING } },
                   },
-                  required: ["ageRange", "title", "description", "requirements"]
-                }
-              }
+                  required: ["ageRange", "title", "description", "requirements"],
+                },
+              },
             },
-            required: ["id", "title", "description", "growth", "category", "milestones"]
-          }
-        }
-      }
+            required: ["id", "title", "description", "growth", "category", "milestones"],
+          },
+        },
+        temperature: 0.2,
+        maxOutputTokens: 3000,
+      },
     });
 
-    return JSON.parse(response.text ?? "");
+    const raw = typeof response.text === "string" ? response.text : JSON.stringify(response.text);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
   } catch (error: any) {
-    console.error("AI Career Search Error:", error);
-    return [];
+    if (error?.message?.includes("429") || error?.status === "RESOURCE_EXHAUSTED") {
+      console.warn("[CareerSearch] Gemini quota hit");
+    } else {
+      console.error("[CareerSearch] AI search failed:", error);
+    }
+    throw error; // propagate so caller can show a real error message
   }
 }
 
@@ -1035,5 +1097,261 @@ Only use real cities with well-known job markets. Vary regions when possible.`;
   } catch (error) {
     console.error("AI Career Hub Search Error:", error);
     return [];
+  }
+}
+
+export async function getDashboardIntelligence(
+  profile: UserProfile,
+  primaryCareerId: string
+): Promise<DashboardIntelligence | null> {
+  const model = "gemini-2.0-flash";
+
+  const systemInstruction = `You are Spark.E, a precision career analytics engine. Return ONLY valid JSON — no markdown, no explanation, no code fences.`;
+
+  const userPrompt = `Analyze this user profile and return a comprehensive dashboard intelligence object.
+
+User profile:
+- Name: ${profile.name}
+- Age: ${profile.age}
+- Education: ${profile.education}
+- Interests: ${profile.interests.join(', ')}
+- Country: ${profile.country}
+- Target Location: ${profile.targetLocation || profile.country}
+- Target Career: ${primaryCareerId}
+- GPA: ${profile.academicPerformance?.gpa ?? 'N/A'}
+- Achievements: ${profile.academicPerformance?.achievements?.join(', ') || 'None'}
+- Completed milestones: ${profile.completedMilestones?.length ?? 0}
+
+Return EXACTLY this JSON structure (no extra fields, all required):
+{
+  "readiness": {
+    "overall": <integer 0-100 based on profile completeness, milestones, education, experience>,
+    "skills": <integer 0-100 match between interests/education and ${primaryCareerId} skill requirements>,
+    "education": <integer 0-100 based on education level and GPA for ${primaryCareerId}>,
+    "experience": <integer 0-100 based on age, milestones completed, and achievements>
+  },
+  "nextActions": [
+    {
+      "title": "<specific actionable task tailored to the profile and ${primaryCareerId}>",
+      "impact": "<+X% Readiness or descriptive outcome>",
+      "type": "<learn|build|practice>",
+      "urgent": <true|false>
+    }
+  ],
+  "sectors": [
+    {
+      "name": "<sector name relevant to ${profile.targetLocation || profile.country} 2026 market>",
+      "trend": "<+XX%>",
+      "score": <integer 0-100>,
+      "status": "<Hot|Rising|Stable|Emerging>",
+      "color": "<hex color e.g. #f87171>",
+      "spark": [{"v": <int>}, {"v": <int>}, {"v": <int>}, {"v": <int>}, {"v": <int>}, {"v": <int>}],
+      "news": ["<real 2026 market headline>", "<real 2026 market headline>"]
+    }
+  ],
+  "salaryTrajectory": [
+    {"y": "22", "v": <integer USD annual>},
+    {"y": "23", "v": <integer>},
+    {"y": "24", "v": <integer>},
+    {"y": "25", "v": <integer>},
+    {"y": "26", "v": <integer>},
+    {"y": "27", "v": <integer projected>}
+  ]
+}
+
+Rules:
+- nextActions: exactly 3 items, tailored to the actual profile — reference real skills needed for ${primaryCareerId}
+- sectors: exactly 4 sectors relevant to ${profile.targetLocation || profile.country} and the user's interests
+- salaryTrajectory: realistic USD salary progression for ${primaryCareerId} from 2022-2027
+- spark values: 6 integers showing the sector score trend over the past 6 periods (earlier → later)
+- All data must be realistic for 2026`;
+
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Dashboard intelligence timed out')), 20000)
+  );
+
+  try {
+    const response = await Promise.race([
+      ai.models.generateContent({
+        model,
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+          temperature: 0.1,
+          maxOutputTokens: 1200,
+        },
+      }),
+      timeout,
+    ]);
+
+    const raw = typeof (response as any).text === 'string'
+      ? (response as any).text
+      : JSON.stringify((response as any).text);
+
+    return JSON.parse(raw) as DashboardIntelligence;
+  } catch (error) {
+    console.error("Dashboard Intelligence Error:", error);
+    return null;
+  }
+}
+
+export async function getCareerSkillGap(
+  profile: UserProfile,
+  careerTitle: string
+): Promise<CareerSkillGap[]> {
+  const model = "gemini-2.0-flash";
+
+  const education = profile.education || "Not specified";
+  const interests = Array.isArray(profile.interests) && profile.interests.length > 0
+    ? profile.interests.join(", ")
+    : "general technology";
+  const milestoneCount = profile.completedMilestones?.length ?? 0;
+
+  const systemInstruction = `You are a career skills analyst. Return ONLY valid JSON — no markdown, no explanation.`;
+
+  const userPrompt = `Analyze the skill gap for this user targeting "${careerTitle}".
+
+User profile:
+- Education: ${education}
+- Interests: ${interests}
+- Completed milestones: ${milestoneCount}
+
+Return a JSON array of exactly 4 skill objects. Each object must have:
+- "skill": the skill name (string, required for ${careerTitle})
+- "owned": true if the user's interests or education clearly covers this skill, false otherwise
+- "demand": integer 0-100, market demand score for this skill in ${careerTitle} in 2026
+
+Pick the 4 most critical skills for "${careerTitle}". Example format:
+[{"skill":"Python","owned":true,"demand":95},{"skill":"MLOps","owned":false,"demand":88},{"skill":"LLM Fine-tuning","owned":false,"demand":92},{"skill":"System Design","owned":true,"demand":85}]`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              skill:   { type: Type.STRING },
+              owned:   { type: Type.BOOLEAN },
+              demand:  { type: Type.INTEGER },
+            },
+            required: ["skill", "owned", "demand"],
+          },
+        },
+        temperature: 0.1,
+        maxOutputTokens: 400,
+      },
+    });
+
+    const raw = typeof response.text === "string" ? response.text : JSON.stringify(response.text);
+
+    // Handle both array and object-wrapped responses from Gemini
+    let parsed: any = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      // Try to unwrap if Gemini returned {skills: [...]} or {data: [...]}
+      const inner = parsed?.skills ?? parsed?.data ?? parsed?.skillGap ?? Object.values(parsed)[0];
+      parsed = Array.isArray(inner) ? inner : [];
+    }
+
+    // Validate shape and clamp demand to [0, 100]
+    const result: CareerSkillGap[] = parsed
+      .filter((s: any) => s && typeof s.skill === "string")
+      .slice(0, 4)
+      .map((s: any) => ({
+        skill: s.skill,
+        owned: Boolean(s.owned),
+        demand: Math.min(100, Math.max(0, Number(s.demand) || 75)),
+      }));
+
+    if (result.length === 0) throw new Error("Empty skill gap response");
+    return result;
+  } catch (error) {
+    console.error("Career Skill Gap Error:", error);
+    // Return an error sentinel so callers know to show retry
+    throw error;
+  }
+}
+
+export interface GlobalInsight {
+  flag: string;
+  city: string;
+  country: string;
+  stat: string;
+  category: string;
+  color: 'emerald' | 'indigo' | 'amber' | 'rose' | 'purple';
+}
+
+export async function getGlobalContextInsights(
+  targetLocation: string,
+  interests: string[],
+  targetCareerId: string
+): Promise<GlobalInsight[]> {
+  const model = "gemini-2.0-flash";
+
+  const systemInstruction = `You are a real-time global career market intelligence feed for 2026. Return ONLY valid JSON — no markdown, no explanation.`;
+
+  const userPrompt = `Generate 6 live global market insight tags for a career professional dashboard bar.
+Context: user targets "${targetLocation}", interests: ${interests.slice(0, 4).join(', ')}, career: ${targetCareerId}.
+
+Return a JSON array of exactly 6 objects:
+[
+  {
+    "flag": "<country flag emoji>",
+    "city": "<CITY NAME IN CAPS>",
+    "country": "<Country>",
+    "stat": "<SHORT STAT max 20 chars, e.g. 'AI +24%' or 'FINTECH +18%' or 'HIRING UP'>",
+    "category": "<sector, e.g. AI, FinTech, BioTech, Cloud>",
+    "color": "<one of: emerald | indigo | amber | rose | purple>"
+  }
+]
+
+Rules:
+- First insight MUST be for ${targetLocation || 'a major tech city'}
+- Use real 2026 market data: job growth rates, hiring surges, salary trends
+- Each city must be different; vary regions (EU, Asia, Americas, MENA)
+- stat must be under 20 chars — no arrows (use + or % only)
+- colors: emerald for positive/growth, rose for hot demand, indigo for tech, amber for finance, purple for emerging`;
+
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Global insights timed out')), 12000)
+  );
+
+  try {
+    const response = await Promise.race([
+      ai.models.generateContent({
+        model,
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+          temperature: 0.3,
+          maxOutputTokens: 400,
+        },
+      }),
+      timeout,
+    ]);
+
+    const raw = typeof (response as any).text === 'string'
+      ? (response as any).text
+      : JSON.stringify((response as any).text);
+    const result = JSON.parse(raw);
+    return Array.isArray(result) ? result.slice(0, 6) : [];
+  } catch (error) {
+    console.error("Global Context Insights Error:", error);
+    // Graceful fallback with real 2026 data
+    return [
+      { flag: '🇩🇪', city: 'BERLIN', country: 'Germany', stat: 'AI +24%', category: 'AI', color: 'emerald' },
+      { flag: '🇸🇬', city: 'SINGAPORE', country: 'Singapore', stat: 'TECH +31%', category: 'Tech', color: 'indigo' },
+      { flag: '🇬🇧', city: 'LONDON', country: 'UK', stat: 'FINTECH +18%', category: 'FinTech', color: 'amber' },
+      { flag: '🇺🇸', city: 'NYC', country: 'USA', stat: 'AI ROLES +32%', category: 'AI', color: 'rose' },
+      { flag: '🇦🇪', city: 'DUBAI', country: 'UAE', stat: 'CLOUD +28%', category: 'Cloud', color: 'purple' },
+      { flag: '🇨🇦', city: 'TORONTO', country: 'Canada', stat: 'HIRING +21%', category: 'Tech', color: 'emerald' },
+    ];
   }
 }

@@ -163,7 +163,7 @@ class MaterialsService {
   async getMaterialsByCareer(careerId: string): Promise<StudyMaterial[]> {
     try {
       // Check cache first
-      const cached = getCachedStudyMaterialsByCareer(careerId);
+      const cached = await getCachedStudyMaterialsByCareer(careerId);
       if (cached && cached.length > 0) {
         return cached;
       }
@@ -180,7 +180,7 @@ class MaterialsService {
       const materials = await response.json();
 
       // Cache the results
-      saveCachedStudyMaterials(careerId, materials);
+      saveCachedStudyMaterials(materials, careerId);
       return materials;
     } catch (error) {
       console.error('Get materials by career error:', error);

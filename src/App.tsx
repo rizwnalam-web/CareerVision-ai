@@ -55,7 +55,8 @@ import {
   Loader2,
   BrainCircuit,
   Lightbulb,
-  AlertCircle
+  AlertCircle,
+  ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MapContainer, TileLayer, Marker } from 'react-leaflet';
@@ -91,8 +92,8 @@ import {
 } from 'recharts';
 import { cn } from './lib/utils';
 import { CAREER_PATHS, INSTITUTIONS, STUDY_MATERIALS, FUNDING_OPPORTUNITIES } from './constants/mockData';
-import { CareerPath, UserProfile, Institution, FundingOpportunity } from './types/career';
-import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobalCareers, aiSearchCareerPaths, generateCoverLetter, getLatestCareerNews, getAiInstitutionRecommendations, getDynamicInstitutions, getDynamicStudyMaterials, getVisaGuidance, getCareerHubIntelligence, aiSearchInstitutions, aiSearchCareerHubs } from './services/geminiService';
+import { CareerPath, UserProfile, Institution, FundingOpportunity, DashboardIntelligence, CareerSkillGap } from './types/career';
+import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobalCareers, aiSearchCareerPaths, generateCoverLetter, getLatestCareerNews, getAiInstitutionRecommendations, getDynamicInstitutions, getDynamicStudyMaterials, getVisaGuidance, getCareerHubIntelligence, aiSearchInstitutions, aiSearchCareerHubs, getDashboardIntelligence, getCareerSkillGap, getGlobalContextInsights, GlobalInsight } from './services/geminiService';
 import ReactMarkdown from 'react-markdown';
 
 import { LandingPage } from './components/LandingPage';
@@ -117,17 +118,18 @@ type InstitutionRoadmapContext = {
   ageRange: string;
 };
 
-const NavItem = ({ label, active, onClick }: { label: string, active: boolean, onClick: () => void }) => (
-  <button 
-  onClick={onClick}
+const NavItem = ({ label, active, onClick, icon: Icon }: { label: string, active: boolean, onClick: () => void, icon?: React.ElementType }) => (
+  <button
+    onClick={onClick}
     className={cn(
-      "relative px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 group",
+      "relative px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 group flex items-center gap-1.5",
       active ? "text-indigo-600" : "text-slate-400 hover:text-slate-900"
     )}
   >
+    {Icon && <Icon size={11} className={active ? "text-indigo-600" : "text-slate-400 group-hover:text-slate-700 transition-colors"} />}
     <span className="relative z-10">{label}</span>
     {active && (
-      <motion.div 
+      <motion.div
         layoutId="activeNav"
         className="absolute inset-0 bg-indigo-50/60 rounded-xl -z-0"
         transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
@@ -588,253 +590,754 @@ const FinancialBreakdownWidget = ({ profile }: { profile: UserProfile }) => {
 
 // NewsFlash is now imported from components/NewsFlash.tsx
 
-const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview, onAiCareerSearch, isAiCareerLoading, aiCareerSearchMessage, onNavigate }: { profile: UserProfile, onSelectPath: (id: string) => void, careers: CareerPath[], isLoading: boolean, onInitInterview: (role: string, company?: string) => void, onAiCareerSearch: (query: string) => Promise<void>, isAiCareerLoading: boolean, aiCareerSearchMessage: string, onNavigate: (view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs') => void }) => {
-  const [activeCategory, setActiveCategory] = useState<string>("All");
-  const [activeWorkType, setActiveWorkType] = useState<string>("All");
-  const [searchQuery, setSearchQuery] = useState<string>("");
+const GlobalContextBar = ({ profile }: { profile: UserProfile }) => {
+  const COLOR_MAP: Record<GlobalInsight['color'], { pill: string; dot: string }> = {
+    emerald: { pill: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25', dot: 'bg-emerald-400' },
+    indigo:  { pill: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/25',   dot: 'bg-indigo-400' },
+    amber:   { pill: 'bg-amber-500/15 text-amber-300 border-amber-500/25',      dot: 'bg-amber-400' },
+    rose:    { pill: 'bg-rose-500/15 text-rose-300 border-rose-500/25',         dot: 'bg-rose-400' },
+    purple:  { pill: 'bg-purple-500/15 text-purple-300 border-purple-500/25',   dot: 'bg-purple-400' },
+  };
 
-  const categories = ["All", ...Array.from(new Set(careers.filter(p => !p.category.includes('Custom')).map(p => p.category)))];
-  const workTypes = ["All", "Remote", "On-site", "Hybrid", "Mobile"];
-  
-  const filteredPaths = careers.filter(p => {
-    const categoryMatch = activeCategory === "All" || p.category === activeCategory;
-    const workTypeMatch = activeWorkType === "All" || p.workType === activeWorkType;
-    const searchMatch = searchQuery.trim() === "" || 
-      p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      p.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return categoryMatch && workTypeMatch && searchMatch;
-  });
+  const FALLBACK: GlobalInsight[] = [
+    { flag: '🇩🇪', city: 'BERLIN', country: 'Germany', stat: 'AI +24%', category: 'AI', color: 'emerald' },
+    { flag: '🇸🇬', city: 'SINGAPORE', country: 'Singapore', stat: 'TECH +31%', category: 'Tech', color: 'indigo' },
+    { flag: '🇬🇧', city: 'LONDON', country: 'UK', stat: 'FINTECH +18%', category: 'FinTech', color: 'amber' },
+    { flag: '🇺🇸', city: 'NYC', country: 'USA', stat: 'AI ROLES +32%', category: 'AI', color: 'rose' },
+    { flag: '🇦🇪', city: 'DUBAI', country: 'UAE', stat: 'CLOUD +28%', category: 'Cloud', color: 'purple' },
+    { flag: '🇨🇦', city: 'TORONTO', country: 'Canada', stat: 'HIRING +21%', category: 'Tech', color: 'emerald' },
+  ];
+
+  const [insights, setInsights] = useState<GlobalInsight[]>(FALLBACK);
+  const [loading, setLoading] = useState(true);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [now, setNow] = useState(() => new Date().toISOString().slice(0, 16).replace('T', ' '));
+
+  // Fetch live insights once on mount
+  useEffect(() => {
+    let cancelled = false;
+    const fetch = async () => {
+      setLoading(true);
+      const data = await getGlobalContextInsights(
+        profile.targetLocation || profile.country || 'Global',
+        profile.interests || [],
+        profile.targetCareerId || 'technology'
+      );
+      if (!cancelled && data.length > 0) {
+        setInsights(data);
+      }
+      if (!cancelled) setLoading(false);
+    };
+    fetch();
+    return () => { cancelled = true; };
+  }, [profile.targetLocation, profile.country, profile.targetCareerId]);
+
+  // Cycle through insights every 3.5 seconds
+  useEffect(() => {
+    if (insights.length <= 4) return;
+    const timer = setInterval(() => {
+      setActiveIdx(i => (i + 1) % Math.max(1, insights.length - 3));
+    }, 3500);
+    return () => clearInterval(timer);
+  }, [insights.length]);
+
+  // Update clock every minute
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date().toISOString().slice(0, 16).replace('T', ' '));
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Show 4 insights at a time, cycling through the list
+  const visible = insights.slice(activeIdx, activeIdx + 4);
+
+  return (
+    <div className="bg-slate-950 border-b border-white/[0.06] shrink-0 z-30 overflow-hidden">
+      <div className="px-6 py-2 flex items-center justify-between gap-4">
+
+        {/* Left: label */}
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.25em] hidden sm:block">
+            Global Intel
+          </span>
+        </div>
+
+        {/* Center: cycling insight pills */}
+        <div className="flex-1 flex items-center gap-3 overflow-hidden min-w-0">
+          {loading ? (
+            // Skeleton placeholders while fetching
+            [0, 1, 2, 3].map(i => (
+              <div key={i} className="h-6 w-28 rounded-full bg-white/5 animate-pulse shrink-0" />
+            ))
+          ) : (
+            <AnimatePresence mode="popLayout" initial={false}>
+              {visible.map((item) => {
+                const c = COLOR_MAP[item.color] ?? COLOR_MAP.indigo;
+                return (
+                  <motion.div
+                    key={`${item.city}-${item.stat}`}
+                    initial={{ opacity: 0, x: 24 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -24 }}
+                    transition={{ duration: 0.35, ease: 'easeInOut' }}
+                    className="flex items-center gap-1.5 shrink-0"
+                  >
+                    <span className="text-base leading-none select-none">{item.flag}</span>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider hidden md:block">
+                      {item.city}:
+                    </span>
+                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider whitespace-nowrap ${c.pill}`}>
+                      {item.stat}
+                    </span>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          )}
+        </div>
+
+        {/* Right: timestamp + live dot */}
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[9px] text-slate-600 font-medium hidden lg:block tabular-nums">
+            {now} UTC
+          </span>
+          <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest">Live</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const COUNTRY_FILTERS: { flag: string; label: string; query: string | null }[] = [
+  { flag: '🌐', label: 'Global',    query: null },
+  { flag: '🇺🇸', label: 'USA',       query: 'top 10 most in-demand jobs in United States 2026' },
+  { flag: '🇬🇧', label: 'UK',        query: 'top 10 most in-demand jobs in United Kingdom 2026' },
+  { flag: '🇨🇦', label: 'Canada',    query: 'top 10 most in-demand jobs in Canada 2026' },
+  { flag: '🇩🇪', label: 'Germany',   query: 'top 10 most in-demand jobs in Germany 2026' },
+  { flag: '🇦🇺', label: 'Australia', query: 'top 10 most in-demand jobs in Australia 2026' },
+  { flag: '🇸🇬', label: 'Singapore', query: 'top 10 most in-demand jobs in Singapore 2026' },
+  { flag: '🇦🇪', label: 'UAE',       query: 'top 10 most in-demand jobs in UAE 2026' },
+  { flag: '🇮🇳', label: 'India',     query: 'top 10 most in-demand jobs in India 2026' },
+  { flag: '🇯🇵', label: 'Japan',     query: 'top 10 most in-demand jobs in Japan 2026' },
+  { flag: '🇫🇷', label: 'France',    query: 'top 10 most in-demand jobs in France 2026' },
+  { flag: '🇳🇱', label: 'Netherlands', query: 'top 10 most in-demand jobs in Netherlands 2026' },
+];
+
+const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview, onAiCareerSearch, isAiCareerLoading, aiCareerSearchMessage, onNavigate, dashboardIntel, isDashboardIntelLoading, onResetToGlobal }: { profile: UserProfile, onSelectPath: (id: string) => void, careers: CareerPath[], isLoading: boolean, onInitInterview: (role: string, company?: string) => void, onAiCareerSearch: (query: string) => Promise<void>, isAiCareerLoading: boolean, aiCareerSearchMessage: string, onNavigate: (view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs') => void, dashboardIntel: DashboardIntelligence | null, isDashboardIntelLoading: boolean, onResetToGlobal: () => Promise<void> }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedPath, setExpandedPath] = useState<string | null>(null);
+  const [skillGapCache, setSkillGapCache] = useState<Record<string, CareerSkillGap[]>>({});
+  const [skillGapLoading, setSkillGapLoading] = useState<Record<string, boolean>>({});
+  const [skillGapError, setSkillGapError] = useState<Record<string, boolean>>({});
+  const [selectedCountry, setSelectedCountry] = useState<string>('Global');
+  const [isCountryLoading, setIsCountryLoading] = useState(false);
+
+  const handleCountrySelect = async (chip: typeof COUNTRY_FILTERS[0]) => {
+    if (chip.label === selectedCountry) return; // already active
+    setSelectedCountry(chip.label);
+    setExpandedPath(null);
+    setSkillGapCache({});
+    setSkillGapError({});
+    if (chip.query === null) {
+      // Reset to global top careers
+      setIsCountryLoading(true);
+      await onResetToGlobal();
+      setIsCountryLoading(false);
+    } else {
+      setIsCountryLoading(true);
+      await onAiCareerSearch(chip.query);
+      setIsCountryLoading(false);
+    }
+  };
+
+  // Derive readiness from AI or fall back to milestone-based estimate
+  const READINESS = dashboardIntel?.readiness.overall ??
+    Math.min(95, Math.max(20, Math.round((profile.completedMilestones?.length ?? 0) / Math.max(careers.reduce((a, c) => a + c.milestones.length, 0), 1) * 100)));
+  const RADIUS = 36;
+  const CIRC = 2 * Math.PI * RADIUS;
+  const dashOffset = CIRC - (READINESS / 100) * CIRC;
+
+  const readinessBreakdown = dashboardIntel ? [
+    { label: 'Skills', value: dashboardIntel.readiness.skills, color: '#6366f1' },
+    { label: 'Education', value: dashboardIntel.readiness.education, color: '#10b981' },
+    { label: 'Experience', value: dashboardIntel.readiness.experience, color: '#f59e0b' },
+  ] : [
+    { label: 'Skills', value: 0, color: '#6366f1' },
+    { label: 'Education', value: 0, color: '#10b981' },
+    { label: 'Experience', value: 0, color: '#f59e0b' },
+  ];
+
+  const nextActions = dashboardIntel?.nextActions ?? [];
+
+  const sectorData = dashboardIntel?.sectors ?? [];
+  const [activeSector, setActiveSector] = useState<string>('');
+  const activeSectorObj = sectorData.find(s => s.name === (activeSector || sectorData[0]?.name)) ?? sectorData[0];
+
+  const salaryTrendData = dashboardIntel?.salaryTrajectory ?? [];
+
+  // Derive execSync sublabels from real profile data (no hardcoding)
+  const targetLoc = profile.targetLocation || profile.country || 'Global';
+  const docsCompleted = (profile.visaRequirements ?? []).filter(Boolean).length;
+  const execSync = [
+    { label: 'Visa Hub', sublabel: profile.targetVisaType ? `${profile.targetVisaType}` : 'Review Required', icon: Globe, view: 'institutions' as const, iconBg: 'bg-indigo-100', iconColor: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', statusColor: 'text-emerald-500', checklist: docsCompleted > 0 ? `${docsCompleted} docs` : null },
+    { label: 'Markets', sublabel: `${targetLoc}: Live`, icon: BarChart3, view: 'heatmap' as const, iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100', statusColor: 'text-emerald-500', checklist: null },
+    { label: 'Budget', sublabel: profile.financialProfile ? `$${(profile.financialProfile.monthlyExpenses.reduce((a, e) => a + e.amount, 0)).toLocaleString()}/mo` : 'Not set', icon: PiggyBank, view: 'expenses' as const, iconBg: 'bg-amber-100', iconColor: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', statusColor: 'text-amber-500', checklist: null },
+    { label: 'Network', sublabel: careers.length > 0 ? `${careers.length} paths active` : 'Explore Listings', icon: Briefcase, view: 'jobs' as const, iconBg: 'bg-purple-100', iconColor: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100', statusColor: 'text-purple-500', checklist: null },
+  ];
+
+  // Fetch skill gap — used on expand and on manual retry
+  const fetchSkillGap = async (pathId: string, pathTitle: string) => {
+    setSkillGapLoading(prev => ({ ...prev, [pathId]: true }));
+    setSkillGapError(prev => ({ ...prev, [pathId]: false }));
+    try {
+      const gap = await getCareerSkillGap(profile, pathTitle);
+      setSkillGapCache(prev => ({ ...prev, [pathId]: gap }));
+    } catch {
+      setSkillGapError(prev => ({ ...prev, [pathId]: true }));
+    } finally {
+      setSkillGapLoading(prev => ({ ...prev, [pathId]: false }));
+    }
+  };
+
+  const handleTogglePath = (pathId: string, pathTitle: string) => {
+    const next = expandedPath === pathId ? null : pathId;
+    setExpandedPath(next);
+    if (next && !skillGapCache[pathId] && !skillGapLoading[pathId]) {
+      fetchSkillGap(pathId, pathTitle);
+    }
+  };
+
+  const filteredPaths = careers.filter(p =>
+    searchQuery.trim() === '' ||
+    p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 pb-12 animate-in fade-in duration-700">
-      {/* Left Sidebar: Intelligence & Profile */}
-      <div className="xl:col-span-3 space-y-6">
-         <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
-            <div className="flex items-center gap-4 mb-6">
-               <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black text-lg">
-                  {profile.name[0]}
-               </div>
-               <div>
-                  <h4 className="text-sm font-black text-slate-900 leading-none mb-1">{profile.name}</h4>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate max-w-[120px]">{profile.targetCareerId}</p>
-               </div>
-            </div>
-            <div className="space-y-3">
-               <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase tracking-tight">
-                  <span>Current Readiness</span>
-                  <span className="text-indigo-600">68%</span>
-               </div>
-               <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full w-[68%] bg-indigo-600 rounded-full" />
-               </div>
-            </div>
 
-            <button 
-              onClick={() => onInitInterview(profile.targetCareerId || careers[0]?.id)}
-              className="mt-6 w-full py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all flex items-center justify-center gap-2"
-            >
-              <Mic size={14} className="text-rose-400" /> Start Mock Interview
-            </button>
+      {/* ── LEFT SIDEBAR ── */}
+      <div className="xl:col-span-3 space-y-5">
+
+        {/* Profile card with circular progress ring */}
+        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
+          <div className="flex items-start gap-4 mb-6">
+            {/* Circular progress */}
+            <div className="relative shrink-0">
+              <svg width={88} height={88} className="-rotate-90">
+                <circle cx={44} cy={44} r={RADIUS} fill="none" stroke="#f1f5f9" strokeWidth={7} />
+                <motion.circle
+                  cx={44} cy={44} r={RADIUS} fill="none"
+                  stroke="url(#readGrad)" strokeWidth={7} strokeLinecap="round"
+                  strokeDasharray={CIRC}
+                  initial={{ strokeDashoffset: CIRC }}
+                  animate={{ strokeDashoffset: dashOffset }}
+                  transition={{ duration: 1.5, ease: 'easeOut', delay: 0.3 }}
+                />
+                <defs>
+                  <linearGradient id="readGrad" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#818cf8" />
+                    <stop offset="100%" stopColor="#6366f1" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-[17px] font-black text-slate-900 leading-none">{READINESS}%</span>
+                <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Ready</span>
+              </div>
+            </div>
+            <div className="flex-1 min-w-0 pt-1">
+              <h4 className="text-sm font-black text-slate-900 leading-none mb-1 truncate">{profile.name}</h4>
+              <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest truncate mb-4">{profile.targetCareerId || 'Career Explorer'}</p>
+              <div className="space-y-2">
+                {isDashboardIntelLoading ? (
+                  [0,1,2].map(i => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="w-14 h-2 bg-slate-100 rounded-full animate-pulse" />
+                      <div className="flex-1 h-1 bg-slate-100 rounded-full" />
+                      <div className="w-7 h-2 bg-slate-100 rounded-full animate-pulse" />
+                    </div>
+                  ))
+                ) : readinessBreakdown.map(m => (
+                  <div key={m.label} className="flex items-center gap-2">
+                    <span className="text-[7px] font-black text-slate-400 uppercase w-14 shrink-0">{m.label}</span>
+                    <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
+                      <motion.div initial={{ width: 0 }} animate={{ width: `${m.value}%` }} transition={{ duration: 1, delay: 0.6 }} className="h-full rounded-full" style={{ backgroundColor: m.color }} />
+                    </div>
+                    <span className="text-[7px] font-black w-7 text-right" style={{ color: m.color }}>{m.value}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
-         <FinancialBreakdownWidget profile={profile} />
-      </div>
-
-      {/* Center: Main Explorer */}
-      <div className="xl:col-span-6 space-y-10">
-         <div className="relative group">
-            <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-[2.5rem] blur opacity-20 group-hover:opacity-30 transition duration-1000"></div>
-            <div className="relative bg-slate-950 rounded-[2.5rem] p-10 text-white overflow-hidden shadow-2xl">
-               <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-10">
-                  <div className="flex-1">
-                     <h2 className="text-4xl font-black mb-4 tracking-tighter leading-tight italic">
-                       Welcome back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-indigo-200">{profile.name.split(' ')[0]}</span>.
-                     </h2>
-                     <p className="text-slate-400 text-sm mb-8 leading-relaxed max-w-xl font-medium">
-                       Our AI clusters have analyzed <span className="text-white font-bold">4.2M career nodes</span> for 2026. 
-                       Here are your optimized growth trajectories.
-                     </p>
-                     <button 
-                       onClick={() => onSelectPath(careers[0]?.id || "")}
-                       disabled={isLoading || careers.length === 0}
-                       className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black uppercase tracking-widest hover:bg-indigo-500 transition-all flex items-center gap-3 text-[10px] shadow-xl shadow-indigo-500/20 disabled:opacity-50 group/btn"
-                     >
-                       {isLoading ? "Syncing Logic..." : "Optimize Future"} 
-                       <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                     </button>
-                  </div>
-                  <div className="hidden md:block w-32 h-32 relative">
-                     <div className="absolute inset-0 border-2 border-dashed border-indigo-500/30 rounded-full animate-spin-slow" />
-                     <div className="absolute inset-4 border border-indigo-400/20 rounded-full" />
-                     <div className="absolute inset-0 flex items-center justify-center">
-                        <Target size={32} className="text-indigo-400" />
-                     </div>
-                  </div>
-               </div>
-               <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-[80px]"></div>
+          {/* Next Actions panel */}
+          <div className="border-t border-slate-100 pt-5">
+            <div className="flex items-center justify-between mb-4">
+              <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Next Actions</h5>
+              {isDashboardIntelLoading ? (
+                <div className="w-14 h-4 bg-slate-100 rounded-full animate-pulse" />
+              ) : (
+                <span className="text-[7px] font-black text-indigo-500 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">{nextActions.length} pending</span>
+              )}
             </div>
-         </div>
-
-         <div className="space-y-8">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
-               <div>
-                  <h3 className="text-xl font-black text-slate-900 tracking-tight leading-none mb-1">Future Trajectories</h3>
-                  <p className="text-[9px] text-indigo-500 font-black uppercase tracking-widest leading-none">2026 Sector Correlation</p>
-               </div>
-               <div className="flex items-center gap-2 flex-wrap">
-                  <div className="relative">
-                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={12} />
-                     <input 
-                        type="text" 
-                        placeholder="Search clusters..." 
-                        className="pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none w-32 focus:w-48 transition-all"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                     />
+            <div className="space-y-2">
+              {isDashboardIntelLoading ? (
+                [0,1,2].map(i => (
+                  <div key={i} className="h-14 bg-slate-50 rounded-2xl border border-slate-100 animate-pulse" />
+                ))
+              ) : nextActions.length === 0 ? (
+                <p className="text-[10px] text-slate-400 text-center py-3">No actions yet — AI is analyzing your profile.</p>
+              ) : nextActions.map((action, i) => (
+                <motion.div
+                  key={i}
+                  whileHover={{ x: 2 }}
+                  onClick={action.type === 'practice' ? () => onInitInterview(profile.targetCareerId || careers[0]?.id) : undefined}
+                  className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border ${action.urgent ? 'bg-indigo-50/90 border-indigo-100' : 'bg-slate-50 border-slate-100 hover:border-indigo-100 hover:bg-indigo-50/50'}`}
+                >
+                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${action.urgent ? 'bg-indigo-600' : 'bg-white border border-slate-200'}`}>
+                    {action.type === 'learn' && <BookOpen size={11} className={action.urgent ? 'text-white' : 'text-slate-400'} />}
+                    {action.type === 'build' && <Pencil size={11} className={action.urgent ? 'text-white' : 'text-slate-400'} />}
+                    {action.type === 'practice' && <Mic size={11} className={action.urgent ? 'text-white' : 'text-slate-400'} />}
                   </div>
-                  <button
-                    onClick={() => onAiCareerSearch(searchQuery)}
-                    disabled={isAiCareerLoading || !searchQuery.trim()}
-                    className="h-10 px-4 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 transition-all disabled:opacity-50"
-                  >
-                    {isAiCareerLoading ? 'Searching...' : 'AI Global Search'}
-                  </button>
-               </div>
-               {aiCareerSearchMessage && (
-                 <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-2">{aiCareerSearchMessage}</p>
-               )}
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-[9px] font-bold leading-snug truncate ${action.urgent ? 'text-indigo-900' : 'text-slate-700'}`}>{action.title}</p>
+                    <p className={`text-[7px] font-black uppercase tracking-widest mt-0.5 ${action.urgent ? 'text-indigo-600' : 'text-emerald-600'}`}>{action.impact}</p>
+                  </div>
+                  <ChevronRight size={11} className="text-slate-300 shrink-0" />
+                </motion.div>
+              ))}
             </div>
+          </div>
+        </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-               {isLoading ? (
-                 [...Array(4)].map((_, idx) => (
-                   <div key={idx} className="h-64 bg-slate-50 border border-slate-100 rounded-[2.5rem] animate-pulse" />
-                 ))
-               ) : filteredPaths.length > 0 ? (
-                 filteredPaths.map((path, idx) => (
-                   <motion.div
-                     key={path.id}
-                     initial={{ opacity: 0, y: 10 }}
-                     animate={{ opacity: 1, y: 0 }}
-                     transition={{ delay: idx * 0.1 }}
-                     whileHover={{ y: -4 }}
-                     onClick={() => onSelectPath(path.id)}
-                     className="bg-white border border-slate-100 rounded-[2.5rem] p-8 cursor-pointer shadow-sm hover:shadow-2xl hover:border-indigo-100 transition-all flex flex-col justify-between group h-full"
-                   >
-                     <div className="mb-8">
-                       <div className="flex justify-between items-start mb-6">
-                          <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
-                             <TrendingUp size={24} />
-                          </div>
-                          <span className="bg-slate-950 text-white text-[8px] font-black px-2.5 py-1 rounded-lg uppercase tracking-widest">{path.growth} GROWTH</span>
-                       </div>
-                       <h3 className="text-xl font-black text-slate-900 leading-none mb-3 tracking-tighter group-hover:text-indigo-600 transition-colors uppercase italic">{path.title}</h3>
-                       <p className="text-slate-500 text-xs font-medium leading-relaxed line-clamp-2">{path.description}</p>
-                       
-                       {/* Career Intelligence Badges */}
-                       <div className="mt-6 space-y-3 pt-4 border-t border-slate-100">
-                         <div className="flex items-center justify-between gap-2">
-                           <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">Market Demand</span>
-                           <div className="flex items-center gap-2">
-                             <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                               <div className="h-full w-[85%] bg-emerald-500 rounded-full" />
-                             </div>
-                             <span className="text-[9px] font-black text-emerald-600">85%</span>
-                           </div>
-                         </div>
-                         <div className="flex items-center justify-between gap-2">
-                           <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">2-Year Growth</span>
-                           <span className="text-[9px] font-black text-indigo-600">+{Math.floor(Math.random() * 20 + 10)}%</span>
-                         </div>
-                         <div className="flex items-center justify-between gap-2">
-                           <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">Avg Salary Range</span>
-                           <span className="text-[9px] font-black text-slate-700">$65k - $150k</span>
-                         </div>
-                       </div>
-                     </div>
-                     <div className="flex items-center justify-between pt-6 border-t border-slate-50">
-                        <div className="flex items-center gap-2">
-                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{path.milestones.length} Adaptive Stages</span>
-                        </div>
-                        <ChevronRight size={18} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
-                     </div>
-                   </motion.div>
-                 ))
-               ) : (
-                 <div className="col-span-full py-20 bg-slate-50/50 rounded-[2.5rem] border border-dashed border-slate-200 flex flex-col items-center text-center px-6">
-                    <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-slate-300 mb-4 shadow-sm">
-                       <Search size={24} />
+        {/* Compact Burn Rate */}
+        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
+          <div className="flex justify-between items-center mb-5">
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Burn Rate</h4>
+            <span className="text-[8px] font-black text-rose-500 bg-rose-50 border border-rose-100 px-2 py-1 rounded-lg uppercase tracking-widest flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse inline-block" /> Live
+            </span>
+          </div>
+          {(profile.financialProfile?.monthlyExpenses || []).length === 0 ? (
+            <p className="text-[10px] text-slate-400 text-center py-4">No expense data yet</p>
+          ) : (
+            <div className="space-y-3">
+              {(profile.financialProfile?.monthlyExpenses || []).slice(0, 4).map((e, i) => {
+                const total = (profile.financialProfile?.monthlyExpenses || []).reduce((acc, curr) => acc + curr.amount, 0);
+                const pct = total > 0 ? Math.round((e.amount / total) * 100) : 0;
+                const colors = ['bg-indigo-500', 'bg-pink-500', 'bg-amber-400', 'bg-emerald-500'];
+                return (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight w-16 shrink-0 truncate">{e.category}</span>
+                    <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className={`h-full ${colors[i]} rounded-full`} style={{ width: `${pct}%` }} />
                     </div>
-                    <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-2">No Matching Trajectories</h4>
-                    <p className="text-[10px] text-slate-400 font-medium max-w-[200px]">Adjust your filters to discover other global career clusters.</p>
-                 </div>
-               )}
+                    <span className="text-[9px] font-black text-slate-700 w-12 text-right">${e.amount}</span>
+                  </div>
+                );
+              })}
             </div>
-         </div>
+          )}
+          <button onClick={() => onNavigate('expenses')} className="w-full mt-5 py-2.5 bg-slate-50 text-slate-500 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center gap-1.5">
+            Full Budget Analysis <ArrowUpRight size={10} />
+          </button>
+        </div>
       </div>
 
-      {/* Right Sidebar: Sector Intelligence & Quick Actions */}
-      <div className="xl:col-span-3 space-y-6">
-         <div className="bg-indigo-900 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-2xl">
+      {/* ── CENTER COLUMN ── */}
+      <div className="xl:col-span-6 space-y-8">
+
+        {/* Hero: AI Career Catalyst Hub */}
+        <div className="relative group">
+          <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-[2.5rem] blur opacity-20 group-hover:opacity-30 transition duration-1000" />
+          <div className="relative bg-slate-950 rounded-[2.5rem] p-9 text-white overflow-hidden shadow-2xl">
+            {/* Animated network visualization */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none select-none">
+              <svg className="absolute inset-0 w-full h-full opacity-[0.12]" viewBox="0 0 600 220" preserveAspectRatio="xMidYMid slice">
+                {([[110,55,240,110],[240,110,390,70],[390,70,520,130],[240,110,290,175],[290,175,440,185],[110,55,170,175],[520,130,560,80]] as [number,number,number,number][]).map(([x1,y1,x2,y2], i) => (
+                  <motion.line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#818cf8" strokeWidth="1.5"
+                    initial={{ opacity: 0.15 }} animate={{ opacity: [0.15, 0.55, 0.15] }}
+                    transition={{ duration: 2.5 + i * 0.4, repeat: Infinity, delay: i * 0.25 }}
+                  />
+                ))}
+                {([[110,55],[240,110],[390,70],[520,130],[290,175],[440,185],[170,175],[560,80]] as [number,number][]).map(([cx,cy], i) => (
+                  <motion.circle key={i} cx={cx} cy={cy} r={i === 1 ? 7 : 4} fill="#6366f1"
+                    animate={{ r: i === 1 ? [6,9,6] : [3,5,3], opacity: [0.4,1,0.4] }}
+                    transition={{ duration: 2 + i * 0.35, repeat: Infinity, delay: i * 0.18 }}
+                  />
+                ))}
+              </svg>
+            </div>
+
             <div className="relative z-10">
-               <h4 className="text-[9px] font-black uppercase tracking-widest mb-8 text-indigo-400">Sector Health Index</h4>
-               <div className="space-y-8">
-                  {[
-                    { name: 'AI & ML', value: 85, trend: '+24%' },
-                    { name: 'BioTech', value: 60, trend: '+12%' },
-                    { name: 'Sustainability', value: 45, trend: '+38%' }
-                  ].map((sector, i) => (
-                     <div key={sector.name} className="space-y-3">
-                        <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-tighter">
-                           <span>{sector.name}</span>
-                           <span className="text-indigo-300">{sector.trend}</span>
-                        </div>
-                        <div className="h-1 bg-white/10 rounded-full overflow-hidden">
-                           <motion.div 
-                              initial={{ width: 0 }}
-                              animate={{ width: `${sector.value}%` }}
-                              transition={{ duration: 1, delay: 0.5 + (i * 0.2) }}
-                              className="h-full bg-indigo-400 rounded-full" 
-                           />
-                        </div>
-                     </div>
+              <div className="flex items-start justify-between gap-4 mb-5">
+                <div>
+                  <p className="text-[8px] font-black text-indigo-400 uppercase tracking-[0.25em] mb-2">AI Career Catalyst Hub</p>
+                  <h2 className="text-3xl font-black tracking-tighter leading-tight italic">
+                    Welcome back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-300">{profile.name.split(' ')[0]}</span>.
+                  </h2>
+                </div>
+                <div className="flex flex-col items-end gap-1.5 shrink-0 mt-1">
+                  <div className="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/25 rounded-full px-3 py-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-[7px] font-black text-emerald-400 uppercase tracking-widest">Live</span>
+                  </div>
+                  <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest">4.2M nodes</span>
+                </div>
+              </div>
+
+              <p className="text-slate-400 text-xs mb-6 leading-relaxed max-w-lg">
+                Analyzed <span className="text-white font-bold">4.2M career nodes</span> for 2026. Your personalized trajectories are live below.
+              </p>
+
+              {/* Live mini-stats */}
+              <div className="flex flex-wrap gap-2.5 mb-7">
+                {[
+                  { label: 'Market', value: 'Hot 🔥', bg: 'bg-rose-500/15 border-rose-500/25', text: 'text-rose-300' },
+                  { label: 'Profile Fit', value: `${READINESS}%`, bg: 'bg-indigo-500/15 border-indigo-500/25', text: 'text-indigo-300' },
+                  { label: 'Top Sector', value: activeSector, bg: 'bg-emerald-500/15 border-emerald-500/25', text: 'text-emerald-300' },
+                  { label: 'Open Actions', value: '3 pending', bg: 'bg-purple-500/15 border-purple-500/25', text: 'text-purple-300' },
+                ].map(stat => (
+                  <div key={stat.label} className={`flex flex-col px-3.5 py-2 rounded-xl border ${stat.bg}`}>
+                    <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest leading-none">{stat.label}</span>
+                    <span className={`text-sm font-black ${stat.text} leading-tight mt-1`}>{stat.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={() => onSelectPath(careers[0]?.id || '')}
+                disabled={isLoading || careers.length === 0}
+                className="bg-indigo-600 text-white px-7 py-2.5 rounded-2xl font-black uppercase tracking-widest hover:bg-indigo-500 transition-all flex items-center gap-3 text-[10px] shadow-xl shadow-indigo-500/20 disabled:opacity-50 group/btn"
+              >
+                {isLoading && <Loader2 size={12} className="animate-spin" />}
+                {isLoading ? 'Syncing...' : 'Optimize Future'}
+                <ChevronRight size={14} className="group-hover/btn:translate-x-1 transition-transform" />
+              </button>
+            </div>
+            <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-600/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-[60px]" />
+          </div>
+        </div>
+
+        {/* Multi-path Trajectory Timeline */}
+        <div className="space-y-5">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 px-1">
+            <div>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight leading-none mb-1">Career Trajectories</h3>
+              <p className="text-[9px] text-indigo-500 font-black uppercase tracking-widest">AI-Optimized Multi-Path Analysis · 2026</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Country dropdown */}
+              <div className="relative">
+                <Globe size={10} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none" />
+                {isCountryLoading && <Loader2 size={9} className="absolute right-6 top-1/2 -translate-y-1/2 text-indigo-400 animate-spin pointer-events-none" />}
+                <select
+                  value={selectedCountry}
+                  disabled={isCountryLoading || isAiCareerLoading}
+                  onChange={e => {
+                    const chip = COUNTRY_FILTERS.find(c => c.label === e.target.value);
+                    if (chip) handleCountrySelect(chip);
+                  }}
+                  className="pl-7 pr-7 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none appearance-none cursor-pointer hover:border-indigo-300 focus:border-indigo-400 transition-all disabled:opacity-50 text-slate-700"
+                >
+                  {COUNTRY_FILTERS.map(chip => (
+                    <option key={chip.label} value={chip.label}>
+                      {chip.flag} {chip.label}
+                    </option>
                   ))}
-               </div>
+                </select>
+                <ChevronDown size={9} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={11} />
+                <input type="text" placeholder="Filter paths..."
+                  className="pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none w-32 focus:w-44 transition-all"
+                  value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+              </div>
+              <button onClick={() => onAiCareerSearch(searchQuery)} disabled={isAiCareerLoading || !searchQuery.trim()}
+                className="h-9 px-3 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 transition-all disabled:opacity-50 flex items-center gap-1.5">
+                {isAiCareerLoading ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />} AI
+              </button>
             </div>
-            <div className="absolute bottom-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mb-16 -mr-16" />
-         </div>
+          </div>
 
-         <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Execution Sync</h4>
-            <div className="grid grid-cols-2 gap-3">
-               {[
-                 { label: 'Visa Hub', icon: Globe, view: 'institutions' as const, description: 'Global institutions & visa roadmaps' },
-                 { label: 'Market', icon: BarChart3, view: 'heatmap' as const, description: 'Career hub intelligence' },
-                 { label: 'Housing', icon: Landmark, view: 'expenses' as const, description: 'Financial planning & budget' },
-                 { label: 'Network', icon: UserCheck, view: 'jobs' as const, description: 'Jobs & career board' }
-               ].map(item => (
-                 <button
-                   key={item.label}
-                   onClick={() => onNavigate(item.view)}
-                   className="p-4 bg-slate-50 rounded-[1.5rem] border border-slate-100 flex flex-col items-center gap-3 hover:bg-indigo-50 hover:border-indigo-100 hover:shadow-md hover:shadow-indigo-100/50 transition-all group active:scale-95"
-                   title={item.description}
-                 >
-                    <item.icon size={20} className="text-slate-300 group-hover:text-indigo-600 transition-colors" />
-                    <span className="text-[8px] font-black text-slate-500 group-hover:text-indigo-700 uppercase tracking-widest leading-none transition-colors">{item.label}</span>
-                 </button>
-               ))}
-            </div>
-         </div>
+          {aiCareerSearchMessage && <p className="text-[10px] text-slate-400 uppercase tracking-widest px-1">{aiCareerSearchMessage}</p>}
 
-         <div className="p-8 bg-indigo-600 rounded-[2.5rem] text-white flex flex-col items-center text-center shadow-xl shadow-indigo-200">
-            <div className="bg-white/20 p-3 rounded-2xl mb-4">
-               <ShieldCheck size={28} />
+          {/* Timeline spine + path rows */}
+          <div className="relative">
+            <div className="absolute left-[11px] top-5 bottom-5 w-0.5 bg-gradient-to-b from-indigo-500 via-indigo-200 to-transparent" />
+            <div className="space-y-3 relative">
+              {isLoading ? (
+                [...Array(3)].map((_, i) => <div key={i} className="ml-7 h-20 bg-slate-100 rounded-3xl animate-pulse" />)
+              ) : filteredPaths.length === 0 ? (
+                <div className="ml-7 py-12 bg-slate-50 rounded-3xl border border-dashed border-slate-200 flex flex-col items-center gap-2">
+                  <Search size={20} className="text-slate-300" />
+                  <p className="text-[10px] font-black text-slate-400 uppercase">No paths match your search</p>
+                </div>
+              ) : filteredPaths.slice(0, 10).map((path, idx) => {
+                const isExpanded = expandedPath === path.id;
+                const matchScore = Math.max(58, 95 - idx * 8);
+                const skillGap = skillGapCache[path.id] ?? [];
+                const isSkillGapLoading = skillGapLoading[path.id] ?? false;
+                const isSkillGapError = skillGapError[path.id] ?? false;
+                return (
+                  <div key={path.id}>
+                    <div className="flex items-start gap-4 cursor-pointer group/row" onClick={() => handleTogglePath(path.id, path.title)}>
+                      {/* Node */}
+                      <div className={`mt-5 w-6 h-6 rounded-full flex items-center justify-center ring-4 ring-white shadow-sm shrink-0 transition-all ${isExpanded ? 'bg-indigo-600 scale-110' : idx === 0 ? 'bg-slate-900' : 'bg-slate-300 group-hover/row:bg-indigo-400'}`}>
+                        {isExpanded ? <ChevronDown size={10} className="text-white" /> : <span className="text-[7px] font-black text-white">{idx + 1}</span>}
+                      </div>
+                      {/* Card row */}
+                      <div className={`flex-1 bg-white border rounded-3xl p-5 shadow-sm transition-all hover:shadow-md ${isExpanded ? 'border-indigo-200 shadow-indigo-50/60' : 'border-slate-100 hover:border-indigo-100'}`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <h4 className={`text-base font-black tracking-tight uppercase transition-colors ${isExpanded ? 'text-indigo-600' : 'text-slate-900 group-hover/row:text-indigo-600'}`}>{path.title}</h4>
+                            <p className="text-slate-500 text-[10px] font-medium leading-relaxed line-clamp-1 mt-0.5">{path.description}</p>
+                          </div>
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            <span className="bg-slate-950 text-white text-[7px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest">{path.growth} Growth</span>
+                            <span className={`text-[7px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest ${matchScore >= 80 ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-700'}`}>{matchScore}% Match</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-50">
+                          <div className="flex items-center gap-1"><TrendingUp size={10} className="text-indigo-400" /><span className="text-[9px] font-black text-slate-400">{path.milestones.length} stages</span></div>
+                          <div className="flex items-center gap-1"><CircleDollarSign size={10} className="text-emerald-500" /><span className="text-[9px] font-black text-slate-400">$65k–$180k</span></div>
+                          <div className="flex items-center gap-1"><Globe size={10} className="text-indigo-400" /><span className="text-[9px] font-black text-slate-400">Global</span></div>
+                          <ChevronRight size={12} className={`ml-auto transition-all ${isExpanded ? 'rotate-90 text-indigo-500' : 'text-slate-300 group-hover/row:text-indigo-400'}`} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Expanded detail panel */}
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.28, ease: 'easeInOut' }}
+                          className="overflow-hidden"
+                        >
+                          <div className="ml-10 mt-2 mb-1 bg-gradient-to-b from-indigo-50/70 to-white/90 border border-indigo-100 rounded-3xl p-6">
+                            <div className="grid grid-cols-2 gap-6">
+                              {/* Salary trend area chart */}
+                              <div>
+                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                                  <TrendingUp size={9} className="text-indigo-500" /> Salary Trajectory
+                                </p>
+                                <div className="h-28">
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={salaryTrendData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+                                      <defs>
+                                        <linearGradient id={`sg-${idx}`} x1="0" y1="0" x2="0" y2="1">
+                                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
+                                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                        </linearGradient>
+                                      </defs>
+                                      <XAxis dataKey="y" fontSize={7} axisLine={false} tickLine={false} tick={{ fill: '#94a3b8' }} />
+                                      <YAxis fontSize={7} axisLine={false} tickLine={false} tick={{ fill: '#94a3b8' }} tickFormatter={v => `$${v / 1000}k`} />
+                                      <Tooltip contentStyle={{ fontSize: '9px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} formatter={(v: any) => [`$${(v / 1000).toFixed(0)}k avg`, '']} />
+                                      <Area type="monotone" dataKey="v" stroke="#6366f1" strokeWidth={2} fill={`url(#sg-${idx})`} dot={false} />
+                                    </AreaChart>
+                                  </ResponsiveContainer>
+                                </div>
+                                <div className="flex items-center gap-2 mt-2">
+                                  {salaryTrendData.length > 0 ? (
+                                    <>
+                                      <span className="text-xs font-black text-slate-800">${((salaryTrendData[salaryTrendData.length - 1]?.v ?? 0) / 1000).toFixed(0)}k</span>
+                                      <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-md">
+                                        +{salaryTrendData.length >= 2 ? Math.round(((salaryTrendData[salaryTrendData.length-1].v - salaryTrendData[0].v) / salaryTrendData[0].v) * 100 / (salaryTrendData.length - 1)) : 14}% YoY
+                                      </span>
+                                    </>
+                                  ) : <span className="text-xs font-black text-slate-400">Loading...</span>}
+                                  <span className="text-[7px] text-slate-400">(AI projected)</span>
+                                </div>
+                              </div>
+
+                              {/* Skill Gap Analysis */}
+                              <div>
+                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                                  <Target size={9} className="text-indigo-500" /> Skill Gap Analysis
+                                </p>
+                                <div className="space-y-3">
+                                  {isSkillGapLoading ? (
+                                    [0,1,2,3].map(i => <div key={i} className="h-8 bg-slate-100 rounded-xl animate-pulse" />)
+                                  ) : isSkillGapError ? (
+                                    <div className="flex flex-col items-center gap-2 py-3">
+                                      <p className="text-[9px] text-rose-400 text-center">Failed to load skill data</p>
+                                      <button
+                                        onClick={e => { e.stopPropagation(); fetchSkillGap(path.id, path.title); }}
+                                        className="text-[8px] font-black uppercase tracking-widest px-3 py-1.5 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all"
+                                      >
+                                        ↻ Retry
+                                      </button>
+                                    </div>
+                                  ) : skillGap.length === 0 ? (
+                                    <div className="flex flex-col items-center gap-2 py-3">
+                                      <div className="flex gap-1 items-center">
+                                        <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                        <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                        <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                      </div>
+                                      <p className="text-[9px] text-slate-400 text-center">Fetching skill data…</p>
+                                    </div>
+                                  ) : skillGap.map(s => (
+                                    <div key={s.skill} className="space-y-1">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5">
+                                          <div className={`w-1.5 h-1.5 rounded-full ${s.owned ? 'bg-emerald-500' : 'bg-rose-400'}`} />
+                                          <span className="text-[9px] font-bold text-slate-700">{s.skill}</span>
+                                        </div>
+                                        <span className={`text-[7px] font-black uppercase ${s.owned ? 'text-emerald-600' : 'text-rose-500'}`}>{s.owned ? 'Owned' : 'Gap'}</span>
+                                      </div>
+                                      <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+                                        <div className={`h-full rounded-full ${s.owned ? 'bg-emerald-400' : 'bg-rose-300'}`} style={{ width: `${s.demand}%` }} />
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mt-5 pt-4 border-t border-indigo-100 flex items-center justify-between">
+                              <div className="flex flex-wrap gap-1.5">
+                                {(skillGapCache[path.id] ?? []).filter(s => s.owned).slice(0, 3).map(s => (
+                                  <span key={s.skill} className="text-[7px] font-black px-2 py-1 bg-white text-slate-500 border border-slate-200 rounded-lg uppercase tracking-widest">{s.skill}</span>
+                                ))}
+                              </div>
+                              <button onClick={() => onSelectPath(path.id)} className="px-4 py-2 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-500 transition-all flex items-center gap-1.5">
+                                Full Roadmap <ChevronRight size={10} />
+                              </button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
             </div>
-            <h5 className="text-sm font-black uppercase tracking-tight mb-2">Security Verified</h5>
-            <p className="text-[10px] text-indigo-100/80 leading-relaxed font-medium">
-               Your career progression is end-to-end encrypted and verified via AI logic clusters.
-            </p>
-         </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── RIGHT SIDEBAR ── */}
+      <div className="xl:col-span-3 space-y-5">
+
+        {/* Sector Health Index with sparklines */}
+        <div className="bg-indigo-900 rounded-[2.5rem] p-6 text-white relative overflow-hidden shadow-2xl">
+          <div className="relative z-10">
+            <div className="flex justify-between items-start mb-5">
+              <div>
+                <h4 className="text-[9px] font-black uppercase tracking-widest text-indigo-400 mb-0.5">Sector Health Index</h4>
+                <p className="text-[7px] text-white/30">Click to filter news feed ↓</p>
+              </div>
+              <div className="group relative cursor-default">
+                <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[8px] font-black text-indigo-300 hover:bg-white/20 transition-all">?</div>
+                <div className="absolute right-0 top-6 hidden group-hover:block bg-slate-900 text-[8px] text-slate-300 p-3 rounded-xl w-44 z-20 leading-relaxed border border-white/10 shadow-2xl">
+                  Calculated daily from live job openings, salary growth, and hiring velocity across 80+ sources.
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {isDashboardIntelLoading ? (
+                [0,1,2,3].map(i => (
+                  <div key={i} className="h-14 rounded-2xl bg-white/10 animate-pulse" />
+                ))
+              ) : sectorData.length === 0 ? (
+                <p className="text-[10px] text-white/30 text-center py-4">AI is loading sector data…</p>
+              ) : sectorData.map(sector => (
+                <div
+                  key={sector.name}
+                  onClick={() => setActiveSector(sector.name)}
+                  className={`p-3 rounded-2xl cursor-pointer transition-all border ${(activeSector || sectorData[0]?.name) === sector.name ? 'bg-white/15 border-white/20' : 'border-transparent hover:bg-white/[0.07] hover:border-white/10'}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="text-[10px] font-black uppercase tracking-tight truncate">{sector.name}</span>
+                        <span className={`text-[6px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-widest shrink-0 ${sector.status === 'Hot' ? 'bg-rose-500/30 text-rose-300' : sector.status === 'Rising' ? 'bg-emerald-500/30 text-emerald-300' : sector.status === 'Stable' ? 'bg-blue-500/30 text-blue-300' : 'bg-amber-500/30 text-amber-300'}`}>{sector.status}</span>
+                      </div>
+                      <span className="text-[8px] font-black" style={{ color: sector.color }}>{sector.trend}</span>
+                    </div>
+                    {/* Sparkline */}
+                    <div className="w-20 h-9 shrink-0">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={sector.spark}>
+                          <Line type="monotone" dataKey="v" stroke={sector.color} strokeWidth={1.5} dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="absolute bottom-0 right-0 w-28 h-28 bg-white/5 rounded-full blur-2xl -mb-14 -mr-14" />
+        </div>
+
+        {/* Talent Intelligence — filtered by active sector */}
+        <div className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Talent Intelligence</h4>
+              <p className="text-[7px] font-black text-indigo-500 uppercase tracking-widest mt-0.5">{activeSectorObj?.name ?? '...'} · Live</p>
+            </div>
+            <span className="text-[8px] font-black bg-emerald-50 text-emerald-600 border border-emerald-100 px-2 py-1 rounded-lg flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" /> Live
+            </span>
+          </div>
+          <AnimatePresence mode="wait">
+            <motion.div key={activeSectorObj?.name ?? 'loading'} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2 }} className="space-y-2.5">
+              {isDashboardIntelLoading ? (
+                [0,1].map(i => <div key={i} className="h-14 bg-slate-50 rounded-2xl animate-pulse" />)
+              ) : (activeSectorObj?.news ?? []).map((headline, i) => (
+                <div key={i} className="flex gap-2.5 items-start p-3 rounded-2xl bg-slate-50/80 border border-slate-50 hover:bg-indigo-50/60 hover:border-indigo-50 transition-all">
+                  <div className="w-6 h-6 bg-indigo-100 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
+                    <Zap size={9} className="text-indigo-600" />
+                  </div>
+                  <p className="text-[9px] font-bold text-slate-700 leading-snug">{headline}</p>
+                </div>
+              ))}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* Execution Sync — data-driven status */}
+        <div className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-sm">
+          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Execution Sync</h4>
+          <div className="grid grid-cols-2 gap-2.5">
+            {execSync.map(item => (
+              <button
+                key={item.label}
+                onClick={() => onNavigate(item.view)}
+                className={`p-3.5 rounded-[1.5rem] border ${item.border} ${item.bg} flex flex-col items-start gap-2 transition-all group active:scale-95 hover:shadow-md text-left`}
+              >
+                <div className="flex items-start justify-between w-full">
+                  <div className={`w-9 h-9 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                    <item.icon size={16} className={item.iconColor} />
+                  </div>
+                  {item.checklist && (
+                    <div className="flex items-center gap-0.5 bg-white/80 px-1.5 py-0.5 rounded-md border border-slate-100">
+                      <Check size={7} className="text-emerald-500" />
+                      <span className="text-[7px] font-black text-slate-500">{item.checklist}</span>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest leading-none">{item.label}</p>
+                  <p className={`text-[7px] font-bold mt-0.5 leading-none ${item.statusColor}`}>{item.sublabel}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -943,7 +1446,7 @@ const RoadmapView = ({ profile, pathId, careers, onNavigate, onInitInterview }: 
 };
 
 
-const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitInterview, institutions = INSTITUTIONS, isLoading = false, visaGuidance, isVisaLoading = false, roadmapContext = null }: { profile: UserProfile, selectedPathId: string, initialSearch?: string, onInitInterview: (role: string, company?: string) => void, institutions?: Institution[], isLoading?: boolean, visaGuidance?: any, isVisaLoading?: boolean, roadmapContext?: InstitutionRoadmapContext | null }) => {
+const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch = "", onInitInterview, institutions = INSTITUTIONS, isLoading = false, visaGuidance, isVisaLoading = false, roadmapContext = null }: { profile: UserProfile, selectedPathId: string, careerTitle?: string, initialSearch?: string, onInitInterview: (role: string, company?: string) => void, institutions?: Institution[], isLoading?: boolean, visaGuidance?: any, isVisaLoading?: boolean, roadmapContext?: InstitutionRoadmapContext | null }) => {
   const [search, setSearch] = useState(initialSearch);
   const [intlOnly, setIntlOnly] = useState(false);
   const [maxCost, setMaxCost] = useState(100000);
@@ -973,10 +1476,12 @@ const InstitutionsView = ({ profile, selectedPathId, initialSearch = "", onInitI
     setIsAiLoading(true);
     setShowAiRecs(true);
     try {
-      const results = await getAiInstitutionRecommendations(profile, selectedPathId);
+      const title = careerTitle || selectedPathId.replace(/-/g, ' ');
+      const results = await getAiInstitutionRecommendations(profile, title);
       setAiRecs(results);
     } catch (error) {
       console.error("AI Recommendation Error:", error);
+      setAiRecs([]);
     } finally {
       setIsAiLoading(false);
     }
@@ -3268,6 +3773,7 @@ export default function App() {
 
 function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   const [activeView, setActiveView] = useState<'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs'>('dashboard');
+  const [showMoreNav, setShowMoreNav] = useState(false);
   const [selectedPathId, setSelectedPathId] = useState<string>("ai-engineer");
   const [institutionSearchQuery, setInstitutionSearchQuery] = useState("");
   const [institutionRoadmapContext, setInstitutionRoadmapContext] = useState<InstitutionRoadmapContext | null>(null);
@@ -3351,6 +3857,8 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   const [isMaterialsLoading, setIsMaterialsLoading] = useState(false);
   const [visaGuidance, setVisaGuidance] = useState<any>(null);
   const [isVisaLoading, setIsVisaLoading] = useState(false);
+  const [dashboardIntel, setDashboardIntel] = useState<DashboardIntelligence | null>(null);
+  const [isDashboardIntelLoading, setIsDashboardIntelLoading] = useState(false);
   
   const handleSelectPath = (id: string) => {
     setSelectedPathId(id);
@@ -3366,39 +3874,60 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
     }
 
     setIsAiCareerLoading(true);
-    setAiCareerSearchMessage(`Searching global careers for "${trimmedQuery}"...`);
+    setAiCareerSearchMessage(`Searching careers for "${trimmedQuery}"…`);
 
     try {
       const results = await aiSearchCareerPaths(trimmedQuery);
       if (results.length > 0) {
         setCareers(results);
         setSelectedPathId(results[0].id);
-        setAiCareerSearchMessage(`Found ${results.length} AI-powered global career paths for "${trimmedQuery}".`);
+        setAiCareerSearchMessage(`Found ${results.length} career paths for "${trimmedQuery}".`);
       } else {
-        setAiCareerSearchMessage(`No AI career paths found for "${trimmedQuery}". Try another search term.`);
+        // AI returned an empty array — try a simpler prompt automatically
+        setAiCareerSearchMessage(`Refining search for "${trimmedQuery}"…`);
+        const retry = await aiSearchCareerPaths(trimmedQuery.split(' ').slice(0, 5).join(' '));
+        if (retry.length > 0) {
+          setCareers(retry);
+          setSelectedPathId(retry[0].id);
+          setAiCareerSearchMessage(`Found ${retry.length} career paths for "${trimmedQuery}".`);
+        } else {
+          setAiCareerSearchMessage(`No career paths found for "${trimmedQuery}". Try a different term.`);
+        }
       }
     } catch (error) {
       console.error('AI career search failed:', error);
-      setAiCareerSearchMessage('AI global career search failed. Please try again later.');
+      setAiCareerSearchMessage('AI search failed. Check your connection and try again.');
     } finally {
       setIsAiCareerLoading(false);
     }
   };
 
-  useEffect(() => {
-    const fetchCareers = async () => {
-      setIsCareersLoading(true);
-      const dynamicCareers = await getTopGlobalCareers();
-      if (dynamicCareers && dynamicCareers.length > 0) {
-        setCareers(dynamicCareers);
-        if (!dynamicCareers.some(p => p.id === selectedPathId)) {
-          setSelectedPathId(dynamicCareers[0].id);
-        }
+  const fetchTopGlobalCareers = async () => {
+    setIsCareersLoading(true);
+    setAiCareerSearchMessage("");
+    const dynamicCareers = await getTopGlobalCareers();
+    if (dynamicCareers && dynamicCareers.length > 0) {
+      setCareers(dynamicCareers);
+      if (!dynamicCareers.some(p => p.id === selectedPathId)) {
+        setSelectedPathId(dynamicCareers[0].id);
       }
-      setIsCareersLoading(false);
+    }
+    setIsCareersLoading(false);
+  };
+
+  useEffect(() => { fetchTopGlobalCareers(); }, []);
+
+  // Fetch dashboard intelligence when component mounts or primary career changes
+  useEffect(() => {
+    const fetchDashboardIntel = async () => {
+      if (!profile.targetCareerId && !selectedPathId) return;
+      setIsDashboardIntelLoading(true);
+      const intel = await getDashboardIntelligence(profile, profile.targetCareerId || selectedPathId);
+      setDashboardIntel(intel);
+      setIsDashboardIntelLoading(false);
     };
-    fetchCareers();
-  }, []);
+    fetchDashboardIntel();
+  }, [profile.targetCareerId, selectedPathId]);
 
   // Fetch institutions dynamically when navigating to institutions view
   useEffect(() => {
@@ -3475,7 +4004,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
 
   return (
     <div className="flex flex-col h-screen bg-[#F8FAFC] font-sans text-slate-900 overflow-hidden relative">
-      <NewsFlash country={profile.country} />
+      <GlobalContextBar profile={profile} />
       {/* Decorative Background Elements */}
       <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-b from-indigo-50/50 to-transparent pointer-events-none" />
       <div className="absolute top-[20%] right-[-10%] w-[500px] h-[500px] bg-indigo-100/30 rounded-full blur-[120px] pointer-events-none" />
@@ -3487,24 +4016,74 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
           <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 font-black text-white shadow-xl shadow-indigo-200 group-hover:scale-110 transition-transform">CV</div>
           <span className="text-2xl font-black tracking-tighter text-slate-900">CareerVision<span className="text-indigo-600 italic">AI</span></span>
         </div>
-        <nav className="hidden lg:flex gap-4">
-          <NavItem label="Control" active={activeView === 'dashboard'} onClick={() => handleNavigate('dashboard')} />
-          <NavItem label="Jobs" active={activeView === 'jobs'} onClick={() => handleNavigate('jobs')} />
-          <NavItem label="Roadmap" active={activeView === 'roadmap'} onClick={() => handleNavigate('roadmap')} />
-          <NavItem label="Institutions" active={activeView === 'institutions'} onClick={() => handleNavigate('institutions')} />
-          <NavItem label="Hubs" active={activeView === 'heatmap'} onClick={() => handleNavigate('heatmap')} />
-          <NavItem label="Academy" active={activeView === 'materials'} onClick={() => handleNavigate('materials')} />
-          <NavItem label="Fin-Bot" active={activeView === 'expenses'} onClick={() => handleNavigate('expenses')} />
+        <nav className="hidden lg:flex gap-1 items-center relative">
+          {(
+            [
+              { label: 'Control', view: 'dashboard', icon: LayoutDashboard },
+              { label: 'Roadmap', view: 'roadmap', icon: Map },
+              { label: 'Global', view: 'institutions', icon: School },
+              { label: 'Academy', view: 'materials', icon: BookOpen },
+            ] as { label: string; view: 'dashboard' | 'roadmap' | 'institutions' | 'materials'; icon: React.ElementType }[]
+          ).map(item => (
+            <NavItem key={item.view} label={item.label} icon={item.icon} active={activeView === item.view} onClick={() => handleNavigate(item.view)} />
+          ))}
+          {/* More dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowMoreNav(v => !v)}
+              className={cn(
+                "relative px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-1.5",
+                ['jobs', 'heatmap', 'expenses'].includes(activeView) ? "text-indigo-600" : "text-slate-400 hover:text-slate-900"
+              )}
+            >
+              {['jobs', 'heatmap', 'expenses'].includes(activeView) && (
+                <motion.div layoutId="activeNav" className="absolute inset-0 bg-indigo-50/60 rounded-xl -z-0" transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }} />
+              )}
+              <span className="relative z-10">More</span>
+              <ChevronDown size={10} className={cn('transition-transform duration-200 relative z-10', showMoreNav && 'rotate-180')} />
+            </button>
+            <AnimatePresence>
+              {showMoreNav && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl shadow-slate-200/60 py-2 z-50 min-w-[160px]"
+                >
+                  {([
+                    { label: 'Jobs Board', view: 'jobs', icon: Briefcase },
+                    { label: 'Market Hubs', view: 'heatmap', icon: Globe },
+                    { label: 'Finance', view: 'expenses', icon: CircleDollarSign },
+                  ] as { label: string; view: 'jobs' | 'heatmap' | 'expenses'; icon: React.ElementType }[]).map(item => (
+                    <button key={item.view}
+                      onClick={() => { handleNavigate(item.view); setShowMoreNav(false); }}
+                      className={cn(
+                        'w-full flex items-center gap-2.5 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all',
+                        activeView === item.view ? 'text-indigo-600 bg-indigo-50' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                      )}
+                    >
+                      <item.icon size={12} /> {item.label}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </nav>
-        <div className="flex items-center gap-4">
-          <div className="hidden md:flex flex-col items-end mr-2">
-             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Authentication</span>
-             <button 
-               onClick={handleLogout}
-               className="text-[10px] font-bold text-rose-500 flex items-center gap-1 hover:underline"
-             >
-               <LogOut size={10} /> Disconnect Protocol
-             </button>
+        <div className="flex items-center gap-3">
+          {/* Auth Security Badge */}
+          <div className="hidden md:flex flex-col items-end gap-1">
+            <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-xl px-2.5 py-1.5">
+              <ShieldCheck size={10} className="text-emerald-600" />
+              <span className="text-[7px] font-black text-emerald-700 uppercase tracking-widest">Auth Secure</span>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="text-[8px] font-bold text-slate-400 hover:text-rose-500 flex items-center gap-1 transition-colors"
+            >
+              <LogOut size={8} /> Disconnect
+            </button>
           </div>
           <div className="flex items-center gap-3 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm pr-4 group cursor-pointer hover:border-indigo-200 transition-colors">
             <div className="h-8 w-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center group-hover:bg-indigo-600 transition-colors overflow-hidden">
@@ -3533,14 +4112,14 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
             transition={{ duration: 0.3, ease: "circOut" }}
             className={activeView === 'institutions' ? 'min-h-full' : 'h-full'}
           >
-            {activeView === 'dashboard' && <Dashboard profile={profile} onSelectPath={handleSelectPath} careers={careers} isLoading={isCareersLoading} onInitInterview={initiateInterview} onAiCareerSearch={handleAiCareerSearch} isAiCareerLoading={isAiCareerLoading} aiCareerSearchMessage={aiCareerSearchMessage} onNavigate={handleNavigate} />}
+            {activeView === 'dashboard' && <Dashboard profile={profile} onSelectPath={handleSelectPath} careers={careers} isLoading={isCareersLoading} onInitInterview={initiateInterview} onAiCareerSearch={handleAiCareerSearch} isAiCareerLoading={isAiCareerLoading} aiCareerSearchMessage={aiCareerSearchMessage} onNavigate={handleNavigate} dashboardIntel={dashboardIntel} isDashboardIntelLoading={isDashboardIntelLoading} onResetToGlobal={fetchTopGlobalCareers} />}
             
             {activeView !== 'dashboard' && (
               <div className={activeView === 'institutions' ? 'grid grid-cols-12 gap-8' : 'grid grid-cols-12 gap-8 h-full'}>
                 <section className={activeView === 'institutions' ? 'col-span-12 xl:col-span-9 space-y-8' : 'col-span-12 xl:col-span-9 space-y-8 h-full'}>
                    {activeView === 'roadmap' && <RoadmapView profile={profile} pathId={selectedPathId} careers={careers} onNavigate={handleNavigate} onInitInterview={initiateInterview} />}
                    {activeView === 'jobs' && <JobBoardView profile={profile} />}
-                   {activeView === 'institutions' && <InstitutionsView profile={profile} selectedPathId={selectedPathId} initialSearch={institutionSearchQuery} onInitInterview={initiateInterview} institutions={dynamicInstitutions.length > 0 ? dynamicInstitutions : INSTITUTIONS} isLoading={isInstitutionsLoading} visaGuidance={visaGuidance} isVisaLoading={isVisaLoading} roadmapContext={institutionRoadmapContext} />}
+                   {activeView === 'institutions' && <InstitutionsView profile={profile} selectedPathId={selectedPathId} careerTitle={careers.find(c => c.id === selectedPathId)?.title || selectedPathId} initialSearch={institutionSearchQuery} onInitInterview={initiateInterview} institutions={dynamicInstitutions.length > 0 ? dynamicInstitutions : INSTITUTIONS} isLoading={isInstitutionsLoading} visaGuidance={visaGuidance} isVisaLoading={isVisaLoading} roadmapContext={institutionRoadmapContext} />}
                    {activeView === 'heatmap' && <HeatmapView />}
                    {activeView === 'materials' && <MaterialsView materials={dynamicMaterials.length > 0 ? dynamicMaterials : STUDY_MATERIALS} isLoading={isMaterialsLoading} />}
                    {activeView === 'parent' && <ParentalDashboard profile={profile} onBack={() => setActiveView('dashboard')} careers={careers} />}

@@ -276,13 +276,20 @@ router.get("/study-materials/:careerId", async (req: Request, res: Response) => 
     const { careerId } = req.params;
     const { db } = await import("../db/database.js");
 
-    // Get study materials from database
-    const materials = await db.many(
+    // career_id is a UUID column — skip the query entirely for non-UUID values
+    // (e.g. slug strings like "nursing" passed from the frontend)
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_RE.test(careerId)) {
+      return res.json({ source: "not-cached", data: null });
+    }
+
+    // Use manyOrNone so an empty result set returns [] instead of throwing
+    const materials = await db.manyOrNone(
       `SELECT * FROM study_materials WHERE career_id = $1 ORDER BY created_at DESC`,
       [careerId]
     );
 
-    if (materials.length > 0) {
+    if (materials && materials.length > 0) {
       return res.json({
         source: "cache",
         data: materials.map((m) => ({
@@ -334,9 +341,10 @@ router.get("/institutions", async (req: Request, res: Response) => {
 
     query += ` ORDER BY ranking ASC NULLS LAST LIMIT 30`;
 
-    const institutions = await db.many(query, params);
+    // Use manyOrNone so an empty result set returns [] instead of throwing
+    const institutions = await db.manyOrNone(query, params);
 
-    if (institutions.length > 0) {
+    if (institutions && institutions.length > 0) {
       return res.json({
         source: "cache",
         data: institutions.map((i) => ({

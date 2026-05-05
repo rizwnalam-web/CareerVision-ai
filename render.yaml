@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: careervision-server
+    runtime: node
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false
+      - key: BOCLIPS_API_KEY
+        sync: false
+      - key: PORT
+        value: 3001
