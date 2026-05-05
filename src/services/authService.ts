@@ -1,6 +1,6 @@
 import { RegistrationRequest, LoginRequest, AuthResponse, ForgotPasswordRequest, ResetPasswordRequest } from '../types/auth';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_URL || 'https://careervision-ai-skn4.onrender.com/api';
 
 export async function registerUser(data: RegistrationRequest): Promise<any> {
   try {

@@ -1,7 +1,7 @@
 import { StudyMaterial } from '../types/career';
 import { getCachedStudyMaterialsByCareer, saveCachedStudyMaterials } from './cacheService';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://careervision-ai-skn4.onrender.com/api';
 
 interface SearchOptions {
   query: string;
