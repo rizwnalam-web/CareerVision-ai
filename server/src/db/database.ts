@@ -14,19 +14,19 @@ const pgp = pgPromise();
 (pgp.pg as any).Pool = Pool;
 (pgp.pg as any).Client = Client;
 
-const connection = process.env.DATABASE_URL
-  ? {
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-    }
-  : {
-      host: process.env.DB_HOST || "localhost",
-      port: parseInt(process.env.DB_PORT || "5432"),
-      database: process.env.DB_NAME || "careervision",
-      user: process.env.DB_USER || "postgres",
-      password: process.env.DB_PASSWORD || "postgres",
-      ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : false,
-    };
+if (!process.env.DATABASE_URL) {
+  console.error(
+    "FATAL: DATABASE_URL environment variable is not set.\n" +
+    "  - Locally: ensure server/.env contains DATABASE_URL\n" +
+    "  - Render:  add DATABASE_URL in the Environment Variables dashboard"
+  );
+  process.exit(1);
+}
+
+const connection = {
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+};
 
 export const db = pgp(connection);
 
