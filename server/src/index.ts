@@ -57,7 +57,15 @@ app.use(
   })
 );
 
-// Health check endpoint
+// Health check endpoint (also handles Render's HEAD / probe)
+app.all("/", (req, res) => {
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    service: "CareerVision API",
+  });
+});
+
 app.get("/health", (req, res) => {
   res.json({
     status: "ok",
