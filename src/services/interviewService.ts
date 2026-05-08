@@ -1,4 +1,4 @@
-import { ai, Type } from "../lib/gemini";
+import { ai, Type } from "../lib/aiProxy";
 import { InterviewQuestion, QuestionTier, STARScore, InterviewFeedback, EtiquetteInsight } from "../types/interview";
 
 // Remove local initialization

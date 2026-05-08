@@ -3938,15 +3938,10 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
         const selectedCareer = careers.find(c => c.id === selectedPathId);
         const targetLocation = profile.targetLocation || 'Global';
         
-        const roadmapFocus = institutionRoadmapContext
-          ? `${institutionRoadmapContext.milestoneTitle}: ${institutionRoadmapContext.milestoneDescription}. Requirements: ${institutionRoadmapContext.requirements.join(', ')}`
-          : undefined;
-
         const dynamicInsts = await getDynamicInstitutions(
           profile,
           selectedCareer?.title || selectedPathId,
           targetLocation,
-          roadmapFocus,
         );
         if (dynamicInsts && dynamicInsts.length > 0) {
           setDynamicInstitutions(dynamicInsts);

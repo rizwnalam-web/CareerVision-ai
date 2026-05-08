@@ -1,7 +1,16 @@
 import { StudyMaterial } from '../types/career';
 import { getCachedStudyMaterialsByCareer, saveCachedStudyMaterials } from './cacheService';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://careervision-ai-skn4.onrender.com/api';
+const RAW_API_URL = import.meta.env.VITE_API_URL || 'https://careervision-ai-skn4.onrender.com/api';
+
+function normalizeApiUrl(url: string) {
+  return url.replace(/\/+$/, '').replace(/\/api\/api(\/|$)/g, '/api$1');
+}
+
+function buildApiPath(path: string) {
+  const baseUrl = normalizeApiUrl(RAW_API_URL);
+  return `${baseUrl}/${path.replace(/^\/+/, '')}`;
+}
 
 interface SearchOptions {
   query: string;
@@ -24,7 +33,7 @@ class MaterialsService {
         skillLevel: options.skillLevel || 'Beginner',
       });
 
-      const response = await fetch(`${API_BASE}/materials/search/all?${params}`, {
+      const response = await fetch(`${buildApiPath('materials/search/all')}?${params}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -48,7 +57,7 @@ class MaterialsService {
         limit: (options.limit || 10).toString(),
       });
 
-      const response = await fetch(`${API_BASE}/materials/search/boclips?${params}`, {
+      const response = await fetch(`${buildApiPath('materials/search/boclips')}?${params}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -72,7 +81,7 @@ class MaterialsService {
         limit: (options.limit || 10).toString(),
       });
 
-      const response = await fetch(`${API_BASE}/materials/search/youtube?${params}`, {
+      const response = await fetch(`${buildApiPath('materials/search/youtube')}?${params}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -96,7 +105,7 @@ class MaterialsService {
         limit: (options.limit || 5).toString(),
       });
 
-      const response = await fetch(`${API_BASE}/materials/search/coursera?${params}`, {
+      const response = await fetch(`${buildApiPath('materials/search/coursera')}?${params}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -120,7 +129,7 @@ class MaterialsService {
         limit: (options.limit || 10).toString(),
       });
 
-      const response = await fetch(`${API_BASE}/materials/search/udemy?${params}`, {
+      const response = await fetch(`${buildApiPath('materials/search/udemy')}?${params}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -144,7 +153,7 @@ class MaterialsService {
         limit: (options.limit || 5).toString(),
       });
 
-      const response = await fetch(`${API_BASE}/materials/search/mit-ocw?${params}`, {
+      const response = await fetch(`${buildApiPath('materials/search/mit-ocw')}?${params}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -169,7 +178,7 @@ class MaterialsService {
       }
 
       const response = await fetch(
-        `${API_BASE}/materials?careerId=${careerId}&limit=50`,
+        `${buildApiPath('materials')}?careerId=${careerId}&limit=50`,
         {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
@@ -204,7 +213,7 @@ class MaterialsService {
       if (filters?.skillLevel) params.append('skillLevel', filters.skillLevel);
       if (filters?.language) params.append('language', filters.language);
 
-      const response = await fetch(`${API_BASE}/materials?${params}`, {
+      const response = await fetch(`${buildApiPath('materials')}?${params}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });

@@ -13,6 +13,8 @@ import fundingRouter from "./routes/funding.js";
 import interviewsRouter from "./routes/interviews.js";
 import usersRouter from "./routes/users.js";
 import marketRouter from "./routes/market.js";
+import llmRouter from "./routes/llm.js";
+import careersAiRouter from "./routes/careers-ai.js";
 
 dotenv.config();
 
@@ -82,6 +84,8 @@ app.use("/api/funding", fundingRouter);
 app.use("/api/interviews", interviewsRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/market", marketRouter);
+app.use("/api/llm", llmRouter);
+app.use("/api/careers-ai", careersAiRouter);
 
 // 404 handler
 app.use(notFoundHandler);

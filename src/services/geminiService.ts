@@ -1,57 +1,31 @@
-import { ai, Type } from "../lib/gemini";
-import { FUNDING_OPPORTUNITIES, STUDY_MATERIALS } from "../constants/mockData";
-import { FundingOpportunity, UserProfile, CareerPath, StudyMaterial, JobListing, Institution, MarketInsights, CareerHubIntelligence, DashboardIntelligence, CareerSkillGap } from "../types/career";
-import { getCachedCareerHub, saveCachedCareerHub, getCachedInstitutions, saveCachedInstitutions, getCachedStudyMaterialsByCareer, saveCachedStudyMaterials, getCachedTopCareers, saveCachedTopCareers } from "./cacheService";
+// Frontend wrapper re-exporting all functions from the server-side backend proxy
+export {
+  aiSearchStudyMaterials,
+  aiSearchJobs,
+  aiSearchInstitutions,
+  getTopGlobalCareers,
+  aiSearchCareerPaths,
+  getDynamicInstitutions,
+  getDynamicStudyMaterials,
+  getCareerHubIntelligence,
+  aiSearchCareerHubs,
+  getDashboardIntelligence,
+  getCareerSkillGap,
+  getCareerAdvice,
+  matchScholarships,
+  getRecommendedCourses,
+  generateCoverLetter,
+  getLatestCareerNews,
+  getVisaGuidance,
+  getGlobalContextInsights,
+  getAiJobSuggestions,
+  getAiInstitutionRecommendations,
+  getAiProactiveJobRecommendations,
+  getMarketInsights,
+} from "./careerAiProxy.js";
 
-// ... existing functions ...
-
-export async function aiSearchStudyMaterials(query: string): Promise<StudyMaterial[]> {
-  const model = "gemini-2.0-flash";
-  
-  const systemInstruction = `You are Spark.E, a Global Career Academy Librarian. 
-  The user is searching for study materials. 
-  1. Analyze the query: "${query}".
-  2. If the query matches existing local materials, suggest them.
-  3. If not, synthesize 2-3 REAL, high-quality global resources (from YouTube, Coursera, MIT OpenCourseWare, etc.) that would help the user.
-  4. Return the result in a valid JSON array of StudyMaterial objects.
-  
-  StudyMaterial Schema:
-  {
-    "id": "string",
-    "title": "string",
-    "type": "video" | "audio" | "course" | "article",
-    "provider": "string",
-    "url": "string (valid URL)",
-    "careerId": "string (best fit)",
-    "duration": "string",
-    "thumbnail": "string (use high quality Unsplash URL: https://images.unsplash.com/photo-...)",
-    "region": "Global",
-    "language": "English",
-    "rating": number (4.0 - 5.0),
-    "skillLevel": "Beginner" | "Intermediate" | "Advanced",
-    "description": "string",
-    "tags": ["string"]
-  }`;
-
-  try {
-    const response = await ai.models.generateContent({
-      model,
-      contents: [{ role: "user", parts: [{ text: `Search for materials matching: ${query}` }] }],
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json"
-      }
-    });
-
-    const results = JSON.parse(response.text ?? "");
-    return Array.isArray(results) ? results : [];
-  } catch (error) {
-    console.error("AI Search Failed:", error);
-    return [];
-  }
-}
-
-export async function aiSearchJobs(query: string, location: string): Promise<JobListing[]> {
+export type { GlobalInsight } from "./careerAiProxy.js";
+/*
   const model = "gemini-2.0-flash";
   
   const systemInstruction = `You are Spark.E, a Global Career Academy Recruiter. 
@@ -1354,4 +1328,4 @@ Rules:
       { flag: '🇨🇦', city: 'TORONTO', country: 'Canada', stat: 'HIRING +21%', category: 'Tech', color: 'emerald' },
     ];
   }
-}
+}*/

@@ -1,10 +1,19 @@
 import { RegistrationRequest, LoginRequest, AuthResponse, ForgotPasswordRequest, ResetPasswordRequest } from '../types/auth';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://careervision-ai-skn4.onrender.com/api';
+const RAW_API_URL = import.meta.env.VITE_API_URL || 'https://careervision-ai-skn4.onrender.com/api';
+
+function normalizeApiUrl(url: string) {
+  return url.replace(/\/+$/, '').replace(/\/api\/api(\/|$)/g, '/api$1');
+}
+
+function buildApiPath(path: string) {
+  const baseUrl = normalizeApiUrl(RAW_API_URL);
+  return `${baseUrl}/${path.replace(/^\/+/, '')}`;
+}
 
 export async function registerUser(data: RegistrationRequest): Promise<any> {
   try {
-    const response = await fetch(`${API_URL}/users/auth/register`, {
+    const response = await fetch(buildApiPath('users/auth/register'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -28,7 +37,7 @@ export async function registerUser(data: RegistrationRequest): Promise<any> {
 
 export async function loginUser(data: LoginRequest): Promise<any> {
   try {
-    const response = await fetch(`${API_URL}/users/auth/login`, {
+    const response = await fetch(buildApiPath('users/auth/login'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -52,7 +61,7 @@ export async function loginUser(data: LoginRequest): Promise<any> {
 
 export async function forgotPassword(data: ForgotPasswordRequest): Promise<AuthResponse> {
   try {
-    const response = await fetch(`${API_URL}/users/auth/password/forgot`, {
+    const response = await fetch(buildApiPath('users/auth/password/forgot'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -75,7 +84,7 @@ export async function forgotPassword(data: ForgotPasswordRequest): Promise<AuthR
 
 export async function resetPassword(data: ResetPasswordRequest): Promise<AuthResponse> {
   try {
-    const response = await fetch(`${API_URL}/users/auth/password/reset`, {
+    const response = await fetch(buildApiPath('users/auth/password/reset'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -98,7 +107,7 @@ export async function resetPassword(data: ResetPasswordRequest): Promise<AuthRes
 
 export async function getUserProfile(userId: string): Promise<any> {
   try {
-    const response = await fetch(`${API_URL}/api/users/${userId}`, {
+    const response = await fetch(buildApiPath(`users/${userId}`), {
       headers: {
         'Content-Type': 'application/json',
       },

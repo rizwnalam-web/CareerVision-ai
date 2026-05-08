@@ -163,6 +163,177 @@ export async function getCareerHubFromDb(
   }
 }
 
+export async function getCachedCareerHub(
+  city: string,
+  country: string
+): Promise<any | null> {
+  return getCareerHubFromDb(city, country);
+}
+
+export async function saveCachedCareerHub(hubData: any): Promise<any> {
+  return saveCareerHub(hubData);
+}
+
+export async function getCachedTopCareers(): Promise<any[] | null> {
+  try {
+    const careers = await db.manyOrNone(
+      `SELECT id, title, description, growth, category, sub_category, work_type, tags
+       FROM career_paths
+       WHERE is_top_global = true
+         AND (expires_at IS NULL OR expires_at > NOW())
+       ORDER BY cached_at DESC
+       LIMIT 10`
+    );
+    return careers.length > 0 ? careers : null;
+  } catch (error) {
+    console.error("Error fetching cached top careers:", error);
+    return null;
+  }
+}
+
+export async function saveCachedTopCareers(careers: any[]): Promise<boolean> {
+  try {
+    for (const career of careers) {
+      await db.none(
+        `INSERT INTO career_paths (id, title, description, growth, category, sub_category, work_type, tags, is_top_global, cached_at, expires_at)
+         VALUES (COALESCE($1, uuid_generate_v4()), $2, $3, $4, $5, $6, $7, $8, true, NOW(), NOW() + INTERVAL '7 days')
+         ON CONFLICT (title) DO UPDATE SET
+           description = EXCLUDED.description,
+           growth = EXCLUDED.growth,
+           category = EXCLUDED.category,
+           sub_category = EXCLUDED.sub_category,
+           work_type = EXCLUDED.work_type,
+           tags = EXCLUDED.tags,
+           is_top_global = true,
+           cached_at = NOW(),
+           expires_at = NOW() + INTERVAL '7 days'`,
+        [
+          career.id || null,
+          career.title,
+          career.description,
+          career.growth || "high",
+          career.category || "General",
+          career.subCategory || career.sub_category || "",
+          career.workType || career.work_type || "Remote",
+          Array.isArray(career.tags) ? JSON.stringify(career.tags) : career.tags || "[]",
+        ]
+      );
+    }
+    return true;
+  } catch (error) {
+    console.error("Error saving cached top careers:", error);
+    return false;
+  }
+}
+
+export async function getCachedInstitutions(
+  targetLocation: string
+): Promise<any[] | null> {
+  try {
+    const institutions = await db.manyOrNone(
+      `SELECT * FROM institutions
+       WHERE city ILIKE $1
+          OR country ILIKE $1
+          OR location ILIKE $1
+       ORDER BY updated_at DESC
+       LIMIT 20`,
+      [`%${targetLocation}%`]
+    );
+    return institutions.length > 0 ? institutions : null;
+  } catch (error) {
+    console.error("Error fetching cached institutions:", error);
+    return null;
+  }
+}
+
+export async function saveCachedInstitutions(institutions: any[]): Promise<boolean> {
+  try {
+    for (const institution of institutions) {
+      await db.none(
+        `INSERT INTO institutions (id, name, location, city, country, type, avg_cost, programs, ranking, image, application_deadline, website, allows_international_students, visa_support, latitude, longitude, cost_of_living_index)
+         VALUES (COALESCE($1, uuid_generate_v4()), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+         ON CONFLICT DO NOTHING`,
+        [
+          institution.id || null,
+          institution.name,
+          institution.location || `${institution.city || ""}, ${institution.country || ""}`,
+          institution.city || "",
+          institution.country || "",
+          institution.type || "University",
+          institution.avgCost || institution.avg_cost || 0,
+          Array.isArray(institution.programs) ? JSON.stringify(institution.programs) : institution.programs || "[]",
+          institution.ranking || null,
+          institution.image || institution.logo || "",
+          institution.applicationDeadline || institution.application_deadline || null,
+          institution.website || "",
+          institution.allowsInternationalStudents ?? institution.allows_international_students ?? true,
+          institution.visaSupport || institution.visa_support || "Full",
+          institution.coordinates?.lat || institution.latitude || null,
+          institution.coordinates?.lng || institution.longitude || null,
+          institution.costOfLivingIndex || institution.cost_of_living_index || 1.0,
+        ]
+      );
+    }
+    return true;
+  } catch (error) {
+    console.error("Error saving cached institutions:", error);
+    return false;
+  }
+}
+
+export async function getCachedStudyMaterialsByCareer(
+  careerId: string
+): Promise<any[] | null> {
+  try {
+    const materials = await db.manyOrNone(
+      `SELECT * FROM study_materials
+       WHERE career_id = $1
+       ORDER BY updated_at DESC
+       LIMIT 20`,
+      [careerId]
+    );
+    return materials.length > 0 ? materials : null;
+  } catch (error) {
+    console.error("Error fetching cached study materials:", error);
+    return null;
+  }
+}
+
+export async function saveCachedStudyMaterials(
+  materials: any[],
+  careerId: string
+): Promise<boolean> {
+  try {
+    for (const material of materials) {
+      await db.none(
+        `INSERT INTO study_materials (id, title, type, provider, url, career_id, duration, thumbnail, region, language, rating, skill_level, tags, description)
+         VALUES (COALESCE($1, uuid_generate_v4()), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         ON CONFLICT DO NOTHING`,
+        [
+          material.id || null,
+          material.title,
+          material.type || "article",
+          material.provider || "",
+          material.url || "",
+          careerId || material.careerId || null,
+          material.duration || "",
+          material.thumbnail || "",
+          material.region || "Global",
+          material.language || "English",
+          material.rating || 0,
+          material.skillLevel || material.skill_level || "Beginner",
+          Array.isArray(material.tags) ? JSON.stringify(material.tags) : material.tags || "[]",
+          material.description || "",
+        ]
+      );
+    }
+    return true;
+  } catch (error) {
+    console.error("Error saving cached study materials:", error);
+    return false;
+  }
+}
+
 /**
  * Save Job Market Insights to database
  */
