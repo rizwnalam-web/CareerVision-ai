@@ -1,4 +1,5 @@
 import { generateDeepSeekResponse } from "./deepseekService.js";
+import { DeepSeekCostCalculator, type DeepSeekCostCalculatorOptions, type MonthlyCostUsage, type MonthlyCostResult } from "./costCalculator.js";
 import { db } from "../db/database.js";
 import {
   getCachedCareerHub,
@@ -22,6 +23,88 @@ import type {
   DashboardIntelligence,
   CareerSkillGap,
 } from "../../src/types/career";
+
+const CAREER_PROFILES = {
+  "AI Engineer": {
+    required_skills: ["Python", "PyTorch", "LLM fine-tuning", "RAG"],
+    certifications: ["AWS Certified AI Practitioner ($150)", "DeepLearning.AI TensorFlow Developer Professional Certificate ($49/mo)"],
+    salary_range: { entry: 120000, senior: 220000, principal: 350000 },
+    growth_rate: "+32% annually",
+    visa_sponsorship: "High (85% for L1-A/H1-B)"
+  },
+  "Full-Stack Developer": {
+    required_skills: ["JavaScript", "TypeScript", "React", "Node.js", "AWS"],
+    certifications: ["AWS Certified Developer – Associate ($150)", "Google Professional Cloud Developer ($200)"],
+    salary_range: { entry: 90000, senior: 140000, principal: 190000 },
+    growth_rate: "+22% annually",
+    visa_sponsorship: "Medium-High (70% for H1-B/TN)"
+  },
+  "Cybersecurity Analyst": {
+    required_skills: ["Network Security", "SIEM", "Incident Response", "Cloud Security"],
+    certifications: ["CompTIA Security+ ($376)", "Certified Information Systems Security Professional (CISSP) ($749)"] ,
+    salary_range: { entry: 85000, senior: 130000, principal: 180000 },
+    growth_rate: "+28% annually",
+    visa_sponsorship: "Medium (65% for H1-B, limited for TN)"
+  },
+  "Biotech Researcher": {
+    required_skills: ["Molecular Biology", "Data Analysis", "CRISPR", "Regulatory Compliance"],
+    certifications: ["Certified Clinical Research Professional ($1000)", "GLP/GMP Training ($299)"],
+    salary_range: { entry: 80000, senior: 130000, principal: 200000 },
+    growth_rate: "+18% annually",
+    visa_sponsorship: "Medium (70% for H1-B, dependent on research institution)"
+  }
+};
+
+const CACHEABLE_SYSTEM_PREFIX = `
+You are CareerVision AI, an expert career guidance system with the following fixed parameters:
+
+[DATA_SOURCES]
+- IPEDS (Integrated Postsecondary Education Data System) - real-time
+- O*NET OnLine - occupational database
+- Bureau of Labor Statistics - 2026 projections
+- Global immigration pathways (L1-A, H1-B, TN, Global Talent Visa)
+
+[CORE_RULES]
+1. Always provide specific timelines in months (3, 6, 9, 12)
+2. Include exact certification names and costs
+3. Show salary progression in USD
+4. Highlight visa sponsorship probability as percentage
+5. Estimate skill gap closure hours
+6. Provide ROI calculation (cost vs. expected salary increase)
+7. Always end with 3 immediate action items
+
+[OUTPUT_FORMAT]
+### Executive Summary
+[2 sentences]
+
+### 3-Month Sprint
+- Technical skills: [list]
+- Certifications: [names + cost]
+- Project portfolio: [specific projects]
+- Expected outcome: [measurable result]
+
+### 6-Month Sprint
+- [same structure]
+
+### 12-Month Sprint
+- [same structure]
+
+### Financial Projection
+- Investment required: $X
+- Expected salary (Year 1): $X
+- Expected salary (Year 3): $X
+- ROI period: X months
+
+### Immigration Assessment (if target location specified)
+- Visa type: [L1-A/H1-B/TN/etc]
+- Sponsorship likelihood: X%
+- Employer requirements: [list]
+
+### Immediate Actions (next 7 days)
+1. [action with estimated hours]
+2. [action with estimated hours]
+3. [action with estimated hours]
+`;
 
 interface DeepSeekRequest {
   model?: string;
@@ -482,29 +565,84 @@ export async function getCareerAdvice(
   profile: UserProfile,
   additionalContext: { resume?: string; linkedIn?: string } = {}
 ): Promise<string> {
-  const systemInstruction = `You are Vision, an expert AI Career Mentor for the CareerVision platform. Provide personalized, practical, and actionable career advice based on the user's profile and requested prompt.`;
 
-  const userInstructions = `User Profile:
-- Name: ${profile.name}
-- Age: ${profile.age || 'N/A'}
-- Education: ${profile.education || 'N/A'}
-- Interests: ${profile.interests || 'N/A'}
-- Budget: $${profile.budget || 'N/A'}
-- Country: ${profile.country || 'Global'}
-- Target Career: ${profile.targetCareerId || 'Undecided'}
-${additionalContext.resume ? `- Resume: ${additionalContext.resume}` : ''}
-${additionalContext.linkedIn ? `- LinkedIn: ${additionalContext.linkedIn}` : ''}
+  const targetCareerKey = profile.targetCareer || profile.targetCareerId || "Unknown Career";
+  const careerProfile = CAREER_PROFILES[targetCareerKey] || null;
+  const cacheableCareerData = careerProfile ? JSON.stringify(careerProfile) : "null";
 
-Request:
-${prompt}`;
+  const userSpecificPrompt = `
+Now analyze for this specific user:
+
+Current Role: ${profile.currentRole || 'N/A'}
+Target Career: ${targetCareerKey}
+Age: ${profile.age ?? 'N/A'}
+Education: ${profile.education || 'N/A'}
+Budget: $${profile.budget ?? 'N/A'}
+Target Location: ${profile.targetLocation || 'N/A'}
+Timeline: ${profile.timeline || 'N/A'}
+Current Skills: ${Array.isArray(profile.interests) ? profile.interests.join(', ') : profile.skills?.join(', ') || 'N/A'}
+${additionalContext.resume ? `Resume: ${additionalContext.resume}` : ''}
+${additionalContext.linkedIn ? `LinkedIn: ${additionalContext.linkedIn}` : ''}
+
+User Request: ${prompt}
+
+Generate personalized roadmap following the exact format above.
+`;
+
+  const fullPrompt = `
+[CAREER_PROFILE]
+${cacheableCareerData}
+
+[USER_DATA]
+${userSpecificPrompt}`;
 
   try {
-    const result = await callLLM(userInstructions, systemInstruction, { temperature: 0.7, maxTokens: 1200 });
+    const result = await callLLM(fullPrompt, CACHEABLE_SYSTEM_PREFIX, {
+      temperature: 0.7,
+      maxTokens: 1200,
+    });
     return result || "I'm sorry, I couldn't generate advice right now.";
   } catch (error) {
     console.error("Career Advice Error:", error);
     return "I'm sorry, I couldn't generate career advice right now.";
   }
+}
+
+export async function getCareerAdviceBatch(
+  requests: Array<{ prompt: string; profile: UserProfile; additionalContext?: { resume?: string; linkedIn?: string } }>
+): Promise<string[]> {
+  const prompts = requests.map((request, index) => {
+    const targetCareerKey = request.profile.targetCareer || request.profile.targetCareerId || "Unknown Career";
+    const careerProfile = CAREER_PROFILES[targetCareerKey] || null;
+    const cacheableCareerData = JSON.stringify(careerProfile);
+
+    return `User ${index + 1}:\n[CAREER_PROFILE]\n${cacheableCareerData}\n\n[USER_DATA]\nCurrent Role: ${request.profile.currentRole || 'N/A'}\nTarget Career: ${targetCareerKey}\nAge: ${request.profile.age ?? 'N/A'}\nEducation: ${request.profile.education || 'N/A'}\nBudget: $${request.profile.budget ?? 'N/A'}\nTarget Location: ${request.profile.targetLocation || 'N/A'}\nTimeline: ${request.profile.timeline || 'N/A'}\nCurrent Skills: ${Array.isArray(request.profile.interests) ? request.profile.interests.join(', ') : request.profile.skills?.join(', ') || 'N/A'}\n${request.additionalContext?.resume ? `Resume: ${request.additionalContext.resume}` : ''}\n${request.additionalContext?.linkedIn ? `LinkedIn: ${request.additionalContext.linkedIn}` : ''}\n\nUser Request: ${request.prompt}`;
+  });
+
+  const fullPrompt = `\n${CACHEABLE_SYSTEM_PREFIX}\n\nAnalyze these ${requests.length} users together (batch processing):\n\n${prompts.join("\\n\\n---\\n\\n")}\n\nGenerate individual roadmaps for each user following the exact format above.\nReturn a JSON array of strings, one roadmap per user, in the same order as the users listed.\n`;
+
+  try {
+    const text = await callLLM(fullPrompt, CACHEABLE_SYSTEM_PREFIX, {
+      temperature: 0.7,
+      maxTokens: 10000,
+    });
+    const parsed = JSON.parse(text ?? "[]");
+    if (!Array.isArray(parsed)) {
+      throw new Error("Batch response was not a JSON array");
+    }
+    return parsed.map((item) => String(item));
+  } catch (error) {
+    console.error("Career Advice Batch Error:", error);
+    throw error;
+  }
+}
+
+export function estimateDeepSeekCost(
+  usage: MonthlyCostUsage,
+  options: DeepSeekCostCalculatorOptions = {}
+): MonthlyCostResult {
+  const calculator = new DeepSeekCostCalculator(options);
+  return calculator.calculateMonthlyCost(usage);
 }
 
 export async function matchScholarships(profile: UserProfile): Promise<any[]> {

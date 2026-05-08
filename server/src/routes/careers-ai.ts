@@ -217,6 +217,55 @@ router.post("/career-advice", async (req: Request, res: Response) => {
   }
 });
 
+router.post("/deepseek-cost", (req: Request, res: Response) => {
+  try {
+    const {
+      monthlyActiveUsers,
+      avgRoadmapsPerUser,
+      avgInputTokens,
+      avgOutputTokens,
+      model,
+      cacheHitRate,
+      batchSize,
+    } = req.body;
+
+    if (typeof monthlyActiveUsers !== "number" || typeof avgRoadmapsPerUser !== "number") {
+      return res.status(400).json({
+        error: "monthlyActiveUsers and avgRoadmapsPerUser are required and must be numbers",
+      });
+    }
+
+    const estimate = careerAiService.estimateDeepSeekCost(
+      {
+        monthlyActiveUsers,
+        avgRoadmapsPerUser,
+        avgInputTokens: typeof avgInputTokens === "number" ? avgInputTokens : undefined,
+        avgOutputTokens: typeof avgOutputTokens === "number" ? avgOutputTokens : undefined,
+      },
+      { model, cacheHitRate, batchSize }
+    );
+
+    res.json({ success: true, data: estimate });
+  } catch (error) {
+    console.error("DeepSeek cost estimate error:", error);
+    res.status(500).json({ error: "Failed to estimate DeepSeek cost" });
+  }
+});
+
+router.post("/career-advice/batch", async (req: Request, res: Response) => {
+  try {
+    const { requests } = req.body;
+    if (!Array.isArray(requests) || requests.length === 0) {
+      return res.status(400).json({ error: "requests must be a non-empty array" });
+    }
+    const results = await careerAiService.getCareerAdviceBatch(requests);
+    res.json({ success: true, data: results });
+  } catch (error) {
+    console.error("Get career advice batch error:", error);
+    res.status(500).json({ error: "Failed to get career advice batch" });
+  }
+});
+
 router.post("/match-scholarships", async (req: Request, res: Response) => {
   try {
     const { profile } = req.body;

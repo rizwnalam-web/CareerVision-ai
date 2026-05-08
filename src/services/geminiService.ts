@@ -12,6 +12,7 @@ export {
   getDashboardIntelligence,
   getCareerSkillGap,
   getCareerAdvice,
+  getCareerAdviceBatch,
   matchScholarships,
   getRecommendedCourses,
   generateCoverLetter,

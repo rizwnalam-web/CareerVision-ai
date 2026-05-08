@@ -141,6 +141,12 @@ export async function getCareerAdvice(
   return callBackend<string>('/career-advice', 'POST', { prompt, profile, additionalContext });
 }
 
+export async function getCareerAdviceBatch(
+  requests: Array<{ prompt: string; profile: UserProfile; additionalContext?: { resume?: string; linkedIn?: string } }>
+): Promise<string[]> {
+  return callBackend<string[]>('/career-advice/batch', 'POST', { requests });
+}
+
 export async function matchScholarships(profile: UserProfile): Promise<any[]> {
   return callBackend<any[]>('/match-scholarships', 'POST', { profile });
 }

@@ -99,6 +99,10 @@ export interface UserProfile {
   visaSponsorshipNeeded?: boolean;
   targetVisaType?: string; // e.g., "F-1 Student Visa", "H-1B Work Visa", "Green Card"
   citizenCountry?: string; // Home country for visa matching
+  currentRole?: string;
+  targetCareer?: string;
+  timeline?: string;
+  skills?: string[];
   // Auth and System fields
   uid?: string;
   email?: string;
