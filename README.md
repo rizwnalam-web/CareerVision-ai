@@ -24,7 +24,7 @@ Add the following variables to your backend `.env` file before starting the serv
 ```env
 DEEPSEEK_API_KEY=your_deepseek_api_key_here
 LLM_PROVIDER=deepseek
-LLM_MODEL=deepseek-v4-flash
+LLM_MODEL=deepseek-chat
 OFF_PEAK_HOURS=23-7
 PORT=8080
 LLM_GATEWAY_URL=https://api.deepseek.com/v1

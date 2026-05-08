@@ -538,8 +538,8 @@ const FinancialBreakdownWidget = ({ profile }: { profile: UserProfile }) => {
       </div>
       
       <div className="relative w-full aspect-square max-w-[180px] mb-6">
-        <div className="w-full h-full">
-           <ResponsiveContainer width="100%" height="100%">
+        <div className="w-full h-full" style={{ minWidth: 1, minHeight: 1 }}>
+           <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
              <PieChart>
                <Pie
                  data={data}
@@ -3808,6 +3808,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
 
   // Sync profile to Firestore when it changes
   useEffect(() => {
+    if (!user?.uid) return;
     const syncProfile = async () => {
       try {
         const userDocRef = doc(db, 'users', user.uid);

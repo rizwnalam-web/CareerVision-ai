@@ -1,9 +1,9 @@
 import axios from "axios";
 import crypto from "crypto";
 
-const API_KEY = process.env.DEESEEK_API_KEY;
+const API_KEY = process.env.DEEPSEEK_API_KEY;
 const GATEWAY_URL = process.env.LLM_GATEWAY_URL || "https://api.deepseek.com/v1";
-const DEFAULT_MODEL = process.env.LLM_MODEL || "deepseek-v4-flash";
+const DEFAULT_MODEL = process.env.LLM_MODEL || "deepseek-chat";
 const CACHE_TTL_SECONDS = Number(process.env.LLM_CACHE_TTL_SECONDS || "86400");
 const MAX_CONCURRENCY = Number(process.env.LLM_MAX_CONCURRENCY || "3");
 const COST_PER_TOKEN_USD = Number(process.env.LLM_COST_PER_TOKEN_USD || "0.000002");
@@ -218,7 +218,7 @@ function updateCostState(tokens: number, costUsd: number) {
 
 async function callDeepSeek(prompt: string, options: Required<DeepSeekRequestOptions>) {
   if (!API_KEY) {
-    throw new Error("Missing DEESEEK_API_KEY environment variable");
+    throw new Error("Missing DEEPSEEK_API_KEY environment variable");
   }
 
   const url = getRequestUrl();
@@ -269,7 +269,11 @@ async function generateResponse(prompt: string, options: DeepSeekRequestOptions 
     cache.set(cacheKey, response, CACHE_TTL_SECONDS);
     return response;
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unknown DeepSeek error";
+    const message = axios.isAxiosError(error)
+      ? `DeepSeek request failed${error.response?.status ? ` with status ${error.response.status}` : ""}${error.response?.data ? `: ${typeof error.response.data === "string" ? error.response.data : JSON.stringify(error.response.data)}` : error.message ? `: ${error.message}` : ""}`
+      : error instanceof Error
+        ? error.message
+        : "Unknown DeepSeek error";
     const errorResponse: DeepSeekResult = {
       prompt,
       text: null,

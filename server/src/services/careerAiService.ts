@@ -22,9 +22,19 @@ import type {
   CareerHubIntelligence,
   DashboardIntelligence,
   CareerSkillGap,
-} from "../../src/types/career";
+} from "../../../src/types/career";
 
-const CAREER_PROFILES = {
+const CAREER_PROFILES: Record<string, {
+  required_skills: string[];
+  certifications: string[];
+  salary_range: {
+    entry: number;
+    senior: number;
+    principal: number;
+  };
+  growth_rate: string;
+  visa_sponsorship: string;
+}> = {
   "AI Engineer": {
     required_skills: ["Python", "PyTorch", "LLM fine-tuning", "RAG"],
     certifications: ["AWS Certified AI Practitioner ($150)", "DeepLearning.AI TensorFlow Developer Professional Certificate ($49/mo)"],
@@ -112,6 +122,32 @@ interface DeepSeekRequest {
   maxTokens?: number;
 }
 
+function buildSkillGapFallback(profile: UserProfile, careerTitle: string): CareerSkillGap[] {
+  const normalizedCareer = careerTitle.toLowerCase();
+  const interestSet = new Set<string>((profile.interests || []).map((interest: string) => interest.toLowerCase()));
+  const educationText = (profile.education || "").toLowerCase();
+  const skillPool = normalizedCareer.includes("ai") || normalizedCareer.includes("machine")
+    ? ["Python", "Data Analysis", "Machine Learning", "System Design"]
+    : normalizedCareer.includes("data")
+      ? ["SQL", "Data Visualization", "Statistics", "Python"]
+      : normalizedCareer.includes("design")
+        ? ["Portfolio Development", "User Research", "Figma", "Communication"]
+        : ["Communication", "Problem Solving", "Digital Literacy", "Project Planning"];
+
+  return skillPool.map((skill, index) => {
+    const normalizedSkill = skill.toLowerCase();
+    const owned = interestSet.has(normalizedSkill)
+      || Array.from(interestSet).some((interest: string) => normalizedSkill.includes(interest) || interest.includes(normalizedSkill))
+      || (index === 0 && /(computer|engineering|science|technology)/.test(educationText));
+
+    return {
+      skill,
+      owned,
+      demand: 90 - index * 7,
+    };
+  });
+}
+
 async function callLLM(prompt: string, systemInstruction: string, options: DeepSeekRequest = {}) {
   const result = await generateDeepSeekResponse(
     `${systemInstruction}\n\n${prompt}`,
@@ -122,7 +158,7 @@ async function callLLM(prompt: string, systemInstruction: string, options: DeepS
     throw new Error(result.error || "LLM request failed");
   }
 
-  return result.text;
+  return result.text ?? "";
 }
 
 export async function aiSearchStudyMaterials(query: string): Promise<StudyMaterial[]> {
@@ -556,7 +592,7 @@ Return a JSON array of exactly 4 skill objects with: skill (string), owned (bool
     return skills;
   } catch (error) {
     console.error("Career Skill Gap Error:", error);
-    throw error;
+    return buildSkillGapFallback(profile, careerTitle);
   }
 }
 

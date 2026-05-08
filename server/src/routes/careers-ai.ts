@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import * as careerAiService from "../services/careerAiService.js";
-import type { UserProfile } from "../../src/types/career";
+import type { UserProfile } from "../../../src/types/career";
 
 const router = Router();
 

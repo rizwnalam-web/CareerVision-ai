@@ -360,6 +360,7 @@ router.post("/auth/login", async (req, res) => {
       message: "Login successful",
       user: {
         ...rest,
+        uid: firebase_uid || undefined,
         registrationMethod: registrationMethod || registration_method,
         createdAt: created_at,
         updatedAt: updated_at
