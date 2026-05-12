@@ -5,6 +5,7 @@ import {
   getCachedCareerHub,
   saveCachedCareerHub,
   getCachedInstitutions,
+  getCachedInstitutionsByQuery,
   saveCachedInstitutions,
   getCachedStudyMaterialsByCareer,
   saveCachedStudyMaterials,
@@ -120,6 +121,7 @@ interface DeepSeekRequest {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  systemInstruction?: string;
 }
 
 function buildSkillGapFallback(profile: UserProfile, careerTitle: string): CareerSkillGap[] {
@@ -148,11 +150,50 @@ function buildSkillGapFallback(profile: UserProfile, careerTitle: string): Caree
   });
 }
 
+function buildSalaryTrajectoryFallback(primaryCareerId: string): { y: string; v: number }[] {
+  const profile = CAREER_PROFILES[primaryCareerId];
+  const start = profile?.salary_range.entry ?? 60000;
+  const end = profile?.salary_range.principal ?? profile?.salary_range.senior ?? start + 40000;
+  const step = Math.max(5000, Math.round((end - start) / 5));
+
+  return [22, 23, 24, 25, 26, 27].map((year, index) => ({
+    y: String(year),
+    v: Math.round(start + step * index),
+  }));
+}
+
+function parseAIJson<T>(text: string | null | undefined): T | null {
+  if (!text) return null;
+  let cleaned = text.trim();
+
+  const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (codeBlockMatch) {
+    cleaned = codeBlockMatch[1].trim();
+  }
+
+  const jsonMatch = cleaned.match(/(\[.*\]|\{.*\})/s);
+  if (jsonMatch) {
+    cleaned = jsonMatch[1];
+  }
+
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch (error) {
+    console.warn("parseAIJson failed:", error);
+    return null;
+  }
+}
+
+function isInsufficientBalanceError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return /status\s*402|insufficient balance|402/i.test(message);
+}
+
 async function callLLM(prompt: string, systemInstruction: string, options: DeepSeekRequest = {}) {
-  const result = await generateDeepSeekResponse(
-    `${systemInstruction}\n\n${prompt}`,
-    options
-  );
+  const result = await generateDeepSeekResponse(prompt, {
+    ...options,
+    systemInstruction,
+  });
 
   if (result.source === "error") {
     throw new Error(result.error || "LLM request failed");
@@ -244,26 +285,61 @@ export async function aiSearchInstitutions(
   profile: UserProfile
 ): Promise<Institution[]> {
   const systemInstruction = `You are Spark.E, an elite Global Admissions Intelligence Engine.
-The user is performing a GLOBAL institutional search with this natural language query: "${query}".
-Their profile: country=${profile.country}, budget=$${profile.budget}/yr, career=${
-    profile.targetCareerId || "undecided"
-  }, interests=${profile.interests?.join(", ")}.
+Your output MUST be valid JSON only. No markdown, no explanation, no extra text.
+Find 4-6 REAL, globally recognized institutions that best match the user's query and profile.
+Do not invent institutions, fake URLs, or fictional programs.
 
-Your task:
-1. Interpret the query semantically (e.g. "affordable engineering in Europe", "top medical schools Asia", "online MBA Canada").
-2. Find 4-6 REAL, globally recognized institutions that best match the query and the user's profile.
-3. Prioritize institutions that exist in reality — include accurate coordinates, real websites, and real programs.
-4. Vary the results across regions if the query allows.
-5. Ensure "image" is a high-quality Unsplash URL representing the institution's city/campus.
+Institution schema:
+{
+  "id": "string",
+  "name": "string",
+  "location": "string",
+  "city": "string",
+  "country": "string",
+  "type": "University" | "Vocational" | "Polytechnic" | "Medical School" | "Business School",
+  "programs": ["string"],
+  "avgCost": number,
+  "ranking": number,
+  "image": "string",
+  "applicationDeadline": "string",
+  "website": "string",
+  "allowsInternationalStudents": boolean,
+  "visaSupport": "Full" | "Partial" | "None",
+  "coordinates": { "lat": number, "lng": number },
+  "costOfLivingIndex": number
+}`;
 
-Return a valid JSON array of Institution objects.`;
+  const prompt = `Search globally for institutions matching: "${query}"
+Profile:
+- Country: ${profile.country}
+- Target career: ${profile.targetCareer || profile.targetCareerId || "undecided"}
+- Budget: $${profile.budget ?? 0}/year
+- Interests: ${profile.interests?.join(", ") || "N/A"}
+- Target location: ${profile.targetLocation || "Global"}
 
-  const prompt = `Search globally for institutions matching: "${query}"`;
+Return an array of 4 to 6 institutions only.
+The output must be valid JSON with no markdown, no code fences, no explanation.`;
 
   try {
-    const text = await callLLM(prompt, systemInstruction, { temperature: 0.7 });
-    const results = JSON.parse(text ?? "");
-    return Array.isArray(results) ? results : [];
+    const cachedInstitutions = await getCachedInstitutionsByQuery(query);
+    if (cachedInstitutions && cachedInstitutions.length > 0) {
+      return cachedInstitutions as Institution[];
+    }
+
+    const text = await callLLM(prompt, systemInstruction, { temperature: 0.7, maxTokens: 2000 });
+    const results = parseAIJson<Institution[]>(text);
+    if (!Array.isArray(results)) {
+      console.warn("AI Institution Search returned non-array or invalid JSON:", text);
+      return [];
+    }
+
+    if (results.length > 0) {
+      await saveCachedInstitutions(results).catch((err) =>
+        console.warn("Failed to cache AI institution search results:", err)
+      );
+    }
+
+    return results;
   } catch (error) {
     console.error("AI Institution Search Failed:", error);
     return [];
@@ -289,15 +365,29 @@ export async function getAiInstitutionRecommendations(
   profile: UserProfile,
   careerTitle: string
 ): Promise<{ institution: Institution; rationale: string }[]> {
-  const systemInstruction = `You are Spark.E, a Global Admissions Strategist. Recommend 3 real institutions or training programs for the user based on the target career title. Return only valid JSON.`;
+  const systemInstruction = `You are Spark.E, a Global Admissions Strategist.
+Return ONLY valid JSON. No markdown, no explanation, no lists outside JSON.
+Recommend 3 real institutions or training programs for the user based on the target career title.`;
   const prompt = `Provide 3 institution recommendations for a user targeting: ${careerTitle}
-User Profile:
-${JSON.stringify(profile, null, 2)}`;
+Profile:
+- Country: ${profile.country}
+- Target career: ${profile.targetCareer || profile.targetCareerId || "undecided"}
+- Budget: $${profile.budget ?? 0}/year
+- Interests: ${profile.interests?.join(", ") || "N/A"}
+- Target location: ${profile.targetLocation || "Global"}
+
+Return an array of 3 objects only.
+Each object must include an "institution" field with valid Institution schema values, and a "rationale" field.
+The output must be valid JSON with no markdown, no code fences, no explanation.`;
 
   try {
     const text = await callLLM(prompt, systemInstruction, { temperature: 0.4, maxTokens: 1200 });
-    const results = JSON.parse(text ?? "");
-    return Array.isArray(results) ? results : [];
+    const results = parseAIJson<{ institution: Institution; rationale: string }[]>(text);
+    if (!Array.isArray(results)) {
+      console.warn("AI Institution Recommendations returned non-array or invalid JSON:", text);
+      return [];
+    }
+    return results;
   } catch (error) {
     console.error("AI Institution Recommendations Failed:", error);
     return [];
@@ -407,8 +497,29 @@ export async function getDynamicInstitutions(
     return cached as Institution[];
   }
 
-  const systemInstruction = `You are an expert global education consultant. Recommend top 20 institutions matching the student's profile and career goals.
-  Return valid JSON array of Institution objects with realistic data.`;
+  const systemInstruction = `You are an expert global education consultant.
+Return ONLY valid JSON. No markdown, no explanation, no extra text.
+Recommend top 20 REAL institutions matching the student's profile and career goals.
+Use actual, existing institutions with real websites, realistic programs, and valid locations.
+Institution schema:
+{
+  "id": "string",
+  "name": "string",
+  "location": "string",
+  "city": "string",
+  "country": "string",
+  "type": "University" | "Vocational" | "Polytechnic" | "Medical School" | "Business School",
+  "programs": ["string"],
+  "avgCost": number,
+  "ranking": number,
+  "image": "string",
+  "applicationDeadline": "string",
+  "website": "string",
+  "allowsInternationalStudents": boolean,
+  "visaSupport": "Full" | "Partial" | "None",
+  "coordinates": { "lat": number, "lng": number },
+  "costOfLivingIndex": number
+}`;
 
   const prompt = `Find top 20 institutions for:
 Career: ${careerId}
@@ -418,11 +529,11 @@ Home Country: ${profile.country}
 Education Level: ${profile.education}
 GPA: ${profile.academicPerformance?.gpa || 3.5}
 
-Return JSON array with fields: id, name, country, city, type, programs[], avgCost, ranking, visaSupport, allowsInternationalStudents, website, applicationDeadline, costOfLivingIndex.`;
+Return only a JSON array of institutions matching the schema above.`;
 
   try {
-    const text = await callLLM(prompt, systemInstruction, { temperature: 0.7 });
-    const institutions = JSON.parse(text ?? "");
+    const text = await callLLM(prompt, systemInstruction, { temperature: 0.7, maxTokens: 3000 });
+    const institutions = parseAIJson<Institution[]>(text);
     const result = Array.isArray(institutions) ? institutions.slice(0, 20) : [];
 
     if (result.length > 0) {
@@ -542,14 +653,82 @@ User profile:
 - Target Career: ${primaryCareerId}
 - GPA: ${profile.academicPerformance?.gpa ?? "N/A"}
 
-Return dashboard intelligence JSON with readiness, nextActions, sectors, salaryTrajectory fields.`;
+Return EXACTLY this JSON structure with the required fields:
+{
+  "readiness": {
+    "overall": <integer 0-100>,
+    "skills": <integer 0-100>,
+    "education": <integer 0-100>,
+    "experience": <integer 0-100>
+  },
+  "nextActions": [
+    {
+      "title": "<specific actionable task>",
+      "impact": "<+X% readiness or descriptive outcome>",
+      "type": "<learn|build|practice>",
+      "urgent": <true|false>
+    }
+  ],
+  "sectors": [
+    {
+      "name": "<sector>",
+      "trend": "<+XX%>",
+      "score": <integer 0-100>,
+      "status": "<Hot|Rising|Stable|Emerging>",
+      "color": "<hex color>",
+      "spark": [{ "v": <int> }, { "v": <int> }, { "v": <int> }, { "v": <int> }, { "v": <int> }, { "v": <int> }],
+      "news": ["<real 2026 market headline>", "<real 2026 market headline>"]
+    }
+  ],
+  "salaryTrajectory": [
+    { "y": "22", "v": <integer USD annual> },
+    { "y": "23", "v": <integer USD annual> },
+    { "y": "24", "v": <integer USD annual> },
+    { "y": "25", "v": <integer USD annual> },
+    { "y": "26", "v": <integer USD annual> },
+    { "y": "27", "v": <integer USD annual> }
+  ]
+}
+
+Rules:
+- salaryTrajectory must include 6 objects covering 2022-2027.
+- nextActions must contain exactly 3 recommendations.
+- sectors must contain exactly 4 sector objects.
+- Return valid JSON only, with no markdown, no text outside the JSON object.`;
 
   try {
     const text = await callLLM(prompt, systemInstruction, {
       temperature: 0.1,
       maxTokens: 1200,
     });
-    return JSON.parse(text ?? "") as DashboardIntelligence;
+
+    const parsed = parseAIJson<DashboardIntelligence>(text);
+    if (!parsed) {
+      console.warn("Dashboard Intelligence parse failed, using fallback salary trajectory", text);
+      return {
+        readiness: {
+          overall: 50,
+          skills: 50,
+          education: 50,
+          experience: 50,
+        },
+        nextActions: [],
+        sectors: [],
+        salaryTrajectory: buildSalaryTrajectoryFallback(primaryCareerId),
+      };
+    }
+
+    if (!Array.isArray(parsed.salaryTrajectory) || parsed.salaryTrajectory.length === 0) {
+      console.warn("Dashboard Intelligence missing salaryTrajectory, applying fallback", text);
+      parsed.salaryTrajectory = buildSalaryTrajectoryFallback(primaryCareerId);
+    } else {
+      parsed.salaryTrajectory = parsed.salaryTrajectory.map((item) => ({
+        y: String(item?.y ?? ""),
+        v: Number(item?.v ?? 0) || 0,
+      }));
+    }
+
+    return parsed;
   } catch (error) {
     console.error("Dashboard Intelligence Error:", error);
     return null;
@@ -591,7 +770,11 @@ Return a JSON array of exactly 4 skill objects with: skill (string), owned (bool
     if (skills.length === 0) throw new Error("Empty skill gap response");
     return skills;
   } catch (error) {
-    console.error("Career Skill Gap Error:", error);
+    if (isInsufficientBalanceError(error)) {
+      console.warn("Career Skill Gap LLM unavailable due to insufficient balance, using fallback skill gap.", error);
+    } else {
+      console.error("Career Skill Gap Error:", error);
+    }
     return buildSkillGapFallback(profile, careerTitle);
   }
 }

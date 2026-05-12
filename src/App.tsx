@@ -1132,7 +1132,7 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
                                   <TrendingUp size={9} className="text-indigo-500" /> Salary Trajectory
                                 </p>
                                 <div className="h-28">
-                                  <ResponsiveContainer width="100%" height="100%">
+                                  <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                                     <AreaChart data={salaryTrendData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
                                       <defs>
                                         <linearGradient id={`sg-${idx}`} x1="0" y1="0" x2="0" y2="1">
@@ -1143,7 +1143,7 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
                                       <XAxis dataKey="y" fontSize={7} axisLine={false} tickLine={false} tick={{ fill: '#94a3b8' }} />
                                       <YAxis fontSize={7} axisLine={false} tickLine={false} tick={{ fill: '#94a3b8' }} tickFormatter={v => `$${v / 1000}k`} />
                                       <Tooltip contentStyle={{ fontSize: '9px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} formatter={(v: any) => [`$${(v / 1000).toFixed(0)}k avg`, '']} />
-                                      <Area type="monotone" dataKey="v" stroke="#6366f1" strokeWidth={2} fill={`url(#sg-${idx})`} dot={false} />
+                                      <Area type="monotone" dataKey="v" stroke="#6366f1" strokeWidth={2} fill={`url(#sg-${idx})`} dot={false} activeDot={false} />
                                     </AreaChart>
                                   </ResponsiveContainer>
                                 </div>
@@ -1268,9 +1268,9 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
                     </div>
                     {/* Sparkline */}
                     <div className="w-20 h-9 shrink-0">
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                         <LineChart data={sector.spark}>
-                          <Line type="monotone" dataKey="v" stroke={sector.color} strokeWidth={1.5} dot={false} />
+                          <Line type="monotone" dataKey="v" stroke={sector.color} strokeWidth={1.5} dot={false} activeDot={false} />
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
@@ -2658,7 +2658,7 @@ const AIAdvisor = ({ profile, embedded }: { profile: UserProfile; embedded?: boo
                                 <TrendingUp size={12} /> Market Growth Projection
                               </p>
                               <div className="h-40 w-full">
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                                   <AreaChart data={careerData.data}>
                                     <defs>
                                       <linearGradient id="careerGrowth" x1="0" y1="0" x2="0" y2="1">
@@ -2670,7 +2670,7 @@ const AIAdvisor = ({ profile, embedded }: { profile: UserProfile; embedded?: boo
                                     <XAxis dataKey="year" fontSize={8} axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
                                     <YAxis fontSize={8} axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
                                     <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', fontSize: '10px' }} />
-                                    <Area type="monotone" dataKey="val" stroke="#818cf8" strokeWidth={2} fillOpacity={1} fill="url(#careerGrowth)" />
+                                    <Area type="monotone" dataKey="val" stroke="#818cf8" strokeWidth={2} fillOpacity={1} fill="url(#careerGrowth)" activeDot={false} />
                                   </AreaChart>
                                 </ResponsiveContainer>
                               </div>
@@ -3370,7 +3370,7 @@ Return a concise finance-first recommendation with:
               </div>
 
               <div className="flex-1 min-h-[350px] relative">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                   <AreaChart data={fiveYearProjectionData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
                     <defs>
                       <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
@@ -3421,6 +3421,7 @@ Return a concise finance-first recommendation with:
                       fillOpacity={1}
                       fill="url(#colorBalance)"
                       animationDuration={2000}
+                      activeDot={false}
                     />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -3456,7 +3457,7 @@ Return a concise finance-first recommendation with:
                 {expenseData.length > 0 ? (
                   <>
                     <div className="flex-1 min-h-[250px]">
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                         <PieChart>
                           <Pie
                             data={expenseData}

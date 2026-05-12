@@ -246,6 +246,28 @@ export async function getCachedInstitutions(
   }
 }
 
+export async function getCachedInstitutionsByQuery(
+  query: string
+): Promise<any[] | null> {
+  try {
+    const institutions = await db.manyOrNone(
+      `SELECT * FROM institutions
+       WHERE name ILIKE $1
+          OR city ILIKE $1
+          OR country ILIKE $1
+          OR location ILIKE $1
+          OR programs::text ILIKE $1
+       ORDER BY updated_at DESC
+       LIMIT 20`,
+      [`%${query}%`]
+    );
+    return institutions.length > 0 ? institutions : null;
+  } catch (error) {
+    console.error("Error fetching cached institutions by query:", error);
+    return null;
+  }
+}
+
 export async function saveCachedInstitutions(institutions: any[]): Promise<boolean> {
   try {
     for (const institution of institutions) {

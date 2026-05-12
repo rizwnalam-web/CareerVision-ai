@@ -95,6 +95,7 @@ interface DeepSeekRequestOptions {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  systemInstruction?: string;
 }
 
 export interface DeepSeekResult {
@@ -155,23 +156,28 @@ function normalizeOptions(options: DeepSeekRequestOptions = {}): Required<DeepSe
     model: options.model || DEFAULT_MODEL,
     temperature: options.temperature ?? 0.4,
     maxTokens: options.maxTokens ?? (isOffPeakWindow ? 1024 : 512),
+    systemInstruction: options.systemInstruction || "",
   };
 }
 
 function buildRequestBody(prompt: string, options: Required<DeepSeekRequestOptions>) {
+  const messages: Array<{ role: string; content: string }> = [];
+
+  if (options.systemInstruction && options.systemInstruction.trim()) {
+    messages.push({ role: "system", content: options.systemInstruction.trim() });
+  } else {
+    messages.push({
+      role: "system",
+      content:
+        "You are a cost-aware EasyCareer AI assistant. Answer clearly and concisely, and keep output sizes optimized when possible.",
+    });
+  }
+
+  messages.push({ role: "user", content: prompt });
+
   return {
     model: options.model,
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are a cost-aware EasyCareer AI assistant. Answer clearly and concisely, and keep output sizes optimized when possible.",
-      },
-      {
-        role: "user",
-        content: prompt,
-      },
-    ],
+    messages,
     temperature: options.temperature,
     max_tokens: options.maxTokens,
   };
