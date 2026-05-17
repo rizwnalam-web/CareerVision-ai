@@ -474,7 +474,10 @@ const DemoSection: React.FC<{ onStart: () => void }> = ({ onStart }) => {
                 onTimeUpdate={handleTimeUpdate}
                 onEnded={() => setIsPlaying(false)}
                 onLoadedMetadata={() => setHasVideo(true)}
-                onError={() => setHasVideo(false)}
+                onError={() => {
+                  console.warn('Video not found - showing mock UI. Add demo.mp4 to /public');
+                  setHasVideo(false);
+                }}
               />
 
               {/* Animated mock UI shown when no video file is present */}

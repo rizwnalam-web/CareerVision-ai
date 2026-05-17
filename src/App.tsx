@@ -528,6 +528,14 @@ const FinancialBreakdownWidget = ({ profile }: { profile: UserProfile }) => {
 
   const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6'];
 
+  if (data.length === 0) {
+    return (
+      <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center min-h-[300px]">
+        <p className="text-xs text-slate-400 text-center">Add monthly expenses to your financial profile to see breakdown</p>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col items-center">
       <div className="w-full flex justify-between items-center mb-6">
