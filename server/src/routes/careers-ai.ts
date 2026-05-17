@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import * as careerAiService from "../services/careerAiService.js";
-import type { UserProfile } from "../../../src/types/career";
+import type { UserProfile } from "../types/career";
 
 const router = Router();
 
@@ -348,3 +348,4 @@ router.post("/global-context-insights", async (req: Request, res: Response) => {
 });
 
 export default router;
+

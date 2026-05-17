@@ -23,7 +23,7 @@ import type {
   CareerHubIntelligence,
   DashboardIntelligence,
   CareerSkillGap,
-} from "../../../src/types/career";
+} from "../types/career";
 
 const CAREER_PROFILES: Record<string, {
   required_skills: string[];
