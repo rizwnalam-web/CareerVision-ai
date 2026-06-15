@@ -56,6 +56,8 @@ export interface StudyMaterial {
   tags?: string[];
   description?: string;
   lastUpdated?: string;
+  reviewCount?: number;
+  ratingSource?: string;
 }
 
 export interface FundingOpportunity {

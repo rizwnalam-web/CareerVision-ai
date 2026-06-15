@@ -3,11 +3,11 @@ import {
   Search, Filter, PlayCircle, BookOpen, Mic, GraduationCap, 
   Star, Globe, Clock, ChevronDown, Check, X,
   LayoutGrid, List, Sparkles, FilterX, ExternalLink,
-  Tag, Briefcase, Award, Loader2, Wand2, AlertCircle, Link2
+  Briefcase, Award, Loader2, Wand2, AlertCircle, Link2, Bookmark, CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
-import { StudyMaterial, CareerPath } from '../types/career';
+import { StudyMaterial } from '../types/career';
 import { STUDY_MATERIALS, CAREER_PATHS } from '../constants/mockData';
 import { aiSearchStudyMaterials } from '../services/geminiService';
 import { materialsService } from '../services/materialsService';
@@ -32,6 +32,16 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>(() => {
     const saved = localStorage.getItem('sparke_recent_materials');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [savedMaterialIds, setSavedMaterialIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('sparke_saved_materials');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [completedMaterialIds, setCompletedMaterialIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('sparke_completed_materials');
     return saved ? JSON.parse(saved) : [];
   });
   
@@ -63,10 +73,51 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
     localStorage.setItem('sparke_recent_materials', JSON.stringify(newIds));
   };
 
+  const savedCount = useMemo(() => new Set(savedMaterialIds).size, [savedMaterialIds]);
+  const completedCount = useMemo(() => new Set(completedMaterialIds).size, [completedMaterialIds]);
+
+  const toggleSavedMaterial = useCallback((id: string) => {
+    setSavedMaterialIds((previous) => {
+      const updated = previous.includes(id)
+        ? previous.filter((item) => item !== id)
+        : [...previous, id];
+      localStorage.setItem('sparke_saved_materials', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const toggleCompletedMaterial = useCallback((id: string) => {
+    setCompletedMaterialIds((previous) => {
+      const updated = previous.includes(id)
+        ? previous.filter((item) => item !== id)
+        : [...previous, id];
+      localStorage.setItem('sparke_completed_materials', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const recommendedMaterials = useMemo(() => {
+    const byCareer = activeCareer !== 'All'
+      ? materials.filter((m) => m.careerId === activeCareer)
+      : materials;
+    const byLevel = activeLevel !== 'All'
+      ? byCareer.filter((m) => m.skillLevel === activeLevel)
+      : byCareer;
+    return [...byLevel].sort((a, b) => b.rating - a.rating).slice(0, 4);
+  }, [materials, activeCareer, activeLevel]);
+
+  const effectiveSearchLabel = searchQuery.trim() ||
+    (activeCareer === 'All'
+      ? 'career readiness'
+      : CAREER_PATHS.find((c) => c.id === activeCareer)?.title || 'career growth');
+
   // Search external sources
   const handleExternalSearch = useCallback(async () => {
-    if (!searchQuery.trim()) return;
-    
+    const query = searchQuery.trim() ||
+      (activeCareer === 'All'
+        ? 'career growth resources'
+        : `${CAREER_PATHS.find((c) => c.id === activeCareer)?.title || 'career'} learning`);
+
     setIsSearchingExternal(true);
     try {
       const providers = Array.from(selectedProviders);
@@ -81,31 +132,31 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
         switch (provider) {
           case 'Boclips':
             return materialsService.searchBoclips({ 
-              query: searchQuery, 
+              query,
               skillLevel: (activeLevel === 'All' ? 'Beginner' : activeLevel) as any,
               limit: 8 
             });
           case 'YouTube':
             return materialsService.searchYouTube({ 
-              query: searchQuery, 
+              query,
               skillLevel: (activeLevel === 'All' ? 'Beginner' : activeLevel) as any,
               limit: 10 
             });
           case 'Coursera':
             return materialsService.searchCoursera({ 
-              query: searchQuery, 
+              query,
               skillLevel: (activeLevel === 'All' ? 'Beginner' : activeLevel) as any,
               limit: 5 
             });
           case 'Udemy':
             return materialsService.searchUdemy({ 
-              query: searchQuery, 
+              query,
               skillLevel: (activeLevel === 'All' ? 'Beginner' : activeLevel) as any,
               limit: 8 
             });
           case 'MIT OCW':
             return materialsService.searchMITOpenCourseWare({ 
-              query: searchQuery, 
+              query,
               skillLevel: (activeLevel === 'All' ? 'Intermediate' : activeLevel) as any,
               limit: 5 
             });
@@ -123,7 +174,7 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
     } finally {
       setIsSearchingExternal(false);
     }
-  }, [searchQuery, selectedProviders, activeLevel]);
+  }, [searchQuery, selectedProviders, activeLevel, activeCareer]);
 
   const toggleProvider = (provider: Provider) => {
     const newSet = new Set(selectedProviders);
@@ -157,14 +208,15 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
     ];
     
     // Deduplicate by ID and title similarity
-    const uniqueMap = new Map();
-    combinedBase.forEach(m => uniqueMap.set(m.id, m));
+    const uniqueMap = new Map<string, StudyMaterial>();
+    combinedBase.forEach((m) => uniqueMap.set(m.id, m));
     const combined = Array.from(uniqueMap.values());
 
     return combined.filter(m => {
-      const matchesSearch = m.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                           m.provider.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           m.tags?.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
+      const searchTerm = searchQuery.toLowerCase();
+      const matchesSearch = m.title.toLowerCase().includes(searchTerm) || 
+                           m.provider.toLowerCase().includes(searchTerm) ||
+                           (m.tags ?? []).some((t) => t.toLowerCase().includes(searchTerm));
       const matchesType = activeType === "All" || m.type === activeType;
       const matchesLevel = activeLevel === "All" || m.skillLevel === activeLevel;
       const matchesCareer = activeCareer === "All" || m.careerId === activeCareer;
@@ -179,12 +231,15 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
   }, [searchQuery, activeType, activeLevel, activeCareer, activeLanguage, activeProvider, minRating, externalResults, aiResults, hasAiSearched, materials]);
 
   const handleAiSearch = async () => {
-    if (!searchQuery.trim()) return;
-    
+    const query = searchQuery.trim() ||
+      (activeCareer === 'All'
+        ? 'career readiness learning'
+        : `${CAREER_PATHS.find((c) => c.id === activeCareer)?.title || 'career'} skill building`);
+
     setIsAiSearching(true);
     setHasAiSearched(true);
     try {
-      const results = await aiSearchStudyMaterials(searchQuery);
+      const results = await aiSearchStudyMaterials(query);
       setAiResults(results);
     } catch (error) {
       console.error("AI Search Error:", error);
@@ -217,8 +272,13 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
             <Sparkles className="text-amber-400" size={24} />
           </h2>
           <p className="text-sm font-bold text-slate-500 uppercase tracking-widest mt-1">
-            {isLoading ? '🔄 Loading curated resources...' : `${filteredMaterials.length} Curated Resources for ${activeCareer === 'All' ? 'Global Careers' : CAREER_PATHS.find(c => c.id === activeCareer)?.title}`}
+            {isLoading ? '🔄 Loading curated resources...' : `${filteredMaterials.length} Recommended Resources ${activeCareer === 'All' ? 'for global careers' : `for ${CAREER_PATHS.find(c => c.id === activeCareer)?.title}`}`}
           </p>
+          <div className="mt-4 flex flex-wrap gap-3 text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
+            <span className="inline-flex items-center gap-2 bg-slate-100 px-3 py-2 rounded-2xl">{savedCount} saved</span>
+            <span className="inline-flex items-center gap-2 bg-slate-100 px-3 py-2 rounded-2xl">{completedCount} completed</span>
+            <span className="inline-flex items-center gap-2 bg-slate-100 px-3 py-2 rounded-2xl">{recommendedMaterials.length} recommended next</span>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -288,8 +348,7 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
-                  if (externalResults.length > 0) handleAiSearch();
-                  else handleExternalSearch();
+                  handleExternalSearch();
                 }
               }}
               className="w-full bg-white border-2 border-slate-100 rounded-[2rem] py-4 pl-14 pr-6 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500/30 focus:ring-4 focus:ring-indigo-500/5 transition-all shadow-sm"
@@ -302,7 +361,7 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
           </div>
           <button 
             onClick={handleExternalSearch}
-            disabled={isSearchingExternal || !searchQuery.trim()}
+            disabled={isSearchingExternal}
             className={cn(
               "px-6 py-4 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] flex items-center gap-3 transition-all shadow-xl disabled:opacity-50 disabled:grayscale",
               isSearchingExternal ? "bg-slate-900 text-white" : "bg-blue-600 text-white shadow-blue-200 hover:-translate-y-1"
@@ -318,7 +377,7 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
           </button>
           <button 
             onClick={handleAiSearch}
-            disabled={isAiSearching || !searchQuery.trim()}
+            disabled={isAiSearching}
             className={cn(
               "px-6 py-4 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] flex items-center gap-3 transition-all shadow-xl disabled:opacity-50 disabled:grayscale",
               isAiSearching ? "bg-slate-900 text-white" : "bg-indigo-600 text-white shadow-indigo-200 hover:-translate-y-1"
@@ -348,7 +407,7 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
             </div>
             <div>
               <p className="text-[10px] font-black text-indigo-900 uppercase tracking-widest">Spark.E Intelligence Active</p>
-              <p className="text-xs font-bold text-indigo-600">Showing {aiResults.length} global recommendations matched to "{searchQuery}"</p>
+              <p className="text-xs font-bold text-indigo-600">Showing {aiResults.length} global recommendations matched to "{searchQuery || effectiveSearchLabel}"</p>
             </div>
           </div>
           <button 
@@ -373,7 +432,7 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
             </div>
             <div>
               <p className="text-[10px] font-black text-blue-900 uppercase tracking-widest">External Content Sources</p>
-              <p className="text-xs font-bold text-blue-600">Showing {externalResults.length} results from {Array.from(selectedProviders).filter(p => p !== 'All').join(', ') || 'all providers'} for "{searchQuery}"</p>
+              <p className="text-xs font-bold text-blue-600">Showing {externalResults.length} results from {Array.from(selectedProviders).filter(p => p !== 'All').join(', ') || 'all providers'} for "{searchQuery || effectiveSearchLabel}"</p>
             </div>
           </div>
           <button 
@@ -383,6 +442,35 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
             Clear Results
           </button>
         </motion.div>
+      )}
+
+      {/* Recommended Next Section */}
+      {!hasAiSearched && !searchQuery && recommendedMaterials.length > 0 && (
+        <div className="animate-in fade-in slide-in-from-left duration-500 delay-200">
+          <div className="flex items-center justify-between mb-4 px-2">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em] flex items-center gap-2">
+              <Sparkles size={12} className="text-amber-500" /> Recommended for you
+            </h3>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Based on your current focus</span>
+          </div>
+          <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-2 px-2">
+            {recommendedMaterials.map((mat) => (
+              <div key={`recommend-${mat.id}`} className="min-w-[220px] max-w-[260px]">
+                <MaterialCard 
+                  material={mat} 
+                  viewMode="grid" 
+                  index={0} 
+                  onInteract={() => addToRecent(mat.id)}
+                  savedIds={savedMaterialIds}
+                  completedIds={completedMaterialIds}
+                  onToggleSaved={toggleSavedMaterial}
+                  onToggleCompleted={toggleCompletedMaterial}
+                  isCompact
+                />
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Recently Viewed Section */}
@@ -405,7 +493,17 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
           <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-2 px-2">
             {recentMaterials.map((mat) => (
               <div key={`recent-${mat.id}`} className="min-w-[200px] max-w-[240px]">
-                <MaterialCard material={mat} viewMode="grid" index={0} onInteract={() => addToRecent(mat.id)} isCompact />
+                <MaterialCard 
+                  material={mat} 
+                  viewMode="grid" 
+                  index={0} 
+                  onInteract={() => addToRecent(mat.id)} 
+                  savedIds={savedMaterialIds}
+                  completedIds={completedMaterialIds}
+                  onToggleSaved={toggleSavedMaterial}
+                  onToggleCompleted={toggleCompletedMaterial}
+                  isCompact 
+                />
               </div>
             ))}
           </div>
@@ -556,6 +654,10 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
                 viewMode={viewMode} 
                 index={idx} 
                 onInteract={() => addToRecent(mat.id)}
+                savedIds={savedMaterialIds}
+                completedIds={completedMaterialIds}
+                onToggleSaved={toggleSavedMaterial}
+                onToggleCompleted={toggleCompletedMaterial}
               />
             ))}
           </div>
@@ -570,12 +672,20 @@ const MaterialCard = ({
   viewMode, 
   index, 
   onInteract,
+  savedIds = [],
+  completedIds = [],
+  onToggleSaved,
+  onToggleCompleted,
   isCompact = false 
 }: { 
   material: StudyMaterial, 
   viewMode: 'grid' | 'list', 
   index: number,
   onInteract?: () => void,
+  savedIds?: string[];
+  completedIds?: string[];
+  onToggleSaved?: (id: string) => void;
+  onToggleCompleted?: (id: string) => void;
   isCompact?: boolean
 }) => {
   const typeIcon = {
@@ -586,6 +696,13 @@ const MaterialCard = ({
   };
 
   const careerName = CAREER_PATHS.find(c => c.id === material.careerId)?.title || "General";
+  const saved = savedIds.includes(material.id);
+  const completed = completedIds.includes(material.id);
+  const reviewCount = material.reviewCount ?? Math.max(24, Math.round(material.rating * 120));
+  const ratingSource = material.ratingSource || material.provider;
+  const ratingCopy = `${material.rating.toFixed(1)} · ${reviewCount} reviews · ${ratingSource}`;
+  const cardTitle = material.title;
+  const badgeColor = material.skillLevel === 'Beginner' ? 'bg-emerald-50 text-emerald-600' : material.skillLevel === 'Intermediate' ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600';
 
   if (viewMode === 'list') {
     return (
@@ -604,6 +721,10 @@ const MaterialCard = ({
           <div className="flex items-center gap-2 mb-1">
              {typeIcon[material.type as keyof typeof typeIcon]}
              <span className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-400">{material.type} • {material.duration}</span>
+          </div>
+          <div className="flex items-center gap-2 text-[9px] text-slate-400 mb-3">
+             <Star size={10} fill="#F59E0B" className="text-amber-500" />
+             <span>{ratingCopy}</span>
           </div>
           <h4 className="text-lg font-black text-slate-900 truncate leading-snug group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{material.title}</h4>
           <p className="text-xs font-bold text-slate-500 mb-2">{material.provider}</p>
@@ -670,6 +791,32 @@ const MaterialCard = ({
               </div>
             )}
           </div>
+          <div className="flex gap-2 items-center">
+            {onToggleSaved && (
+              <button
+                onClick={() => onToggleSaved(material.id)}
+                className={cn(
+                  "flex items-center justify-center w-9 h-9 rounded-2xl transition-all",
+                  saved ? 'bg-indigo-600 text-white' : 'bg-white/90 text-slate-700 hover:bg-slate-100'
+                )}
+                title={saved ? 'Saved' : 'Save to library'}
+              >
+                <Bookmark size={16} />
+              </button>
+            )}
+            {onToggleCompleted && (
+              <button
+                onClick={() => onToggleCompleted(material.id)}
+                className={cn(
+                  "flex items-center justify-center w-9 h-9 rounded-2xl transition-all",
+                  completed ? 'bg-emerald-600 text-white' : 'bg-white/90 text-slate-700 hover:bg-slate-100'
+                )}
+                title={completed ? 'Completed' : 'Mark complete'}
+              >
+                <CheckCircle2 size={16} />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
@@ -686,11 +833,11 @@ const MaterialCard = ({
         <div className="flex items-center gap-2 mb-3">
           <div className={cn(
              "px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest",
-             material.skillLevel === 'Beginner' ? 'bg-emerald-50 text-emerald-600' : 
-             material.skillLevel === 'Intermediate' ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'
+             badgeColor
           )}>
             {material.skillLevel}
           </div>
+          <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-slate-400">{careerName}</span>
         </div>
 
         <h3 className={cn(
@@ -701,9 +848,18 @@ const MaterialCard = ({
         </h3>
         
         {!isCompact && material.description && (
-          <p className="text-xs font-medium text-slate-500 mb-6 line-clamp-2 leading-relaxed">
+          <p className="text-xs font-medium text-slate-500 mb-4 line-clamp-2 leading-relaxed" title={material.description}>
             {material.description}
           </p>
+        )}
+        {!isCompact && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {material.tags?.slice(0, 3).map((tag) => (
+              <span key={tag} className="text-[9px] text-slate-500 bg-slate-100 px-2 py-1 rounded-xl uppercase tracking-[0.18em] font-black">
+                {tag}
+              </span>
+            ))}
+          </div>
         )}
 
         <div className={cn("mt-auto flex items-center justify-between pt-3 border-t border-slate-100", isCompact && "pt-2")}>
@@ -712,15 +868,41 @@ const MaterialCard = ({
                 <Clock size={8} /> {material.duration}
               </span>
            </div>
-           <a 
-             href={material.url} 
-             target="_blank" 
-             rel="noopener noreferrer"
-             onClick={onInteract}
-             className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-800 transition-colors group/link"
-           >
-             {isCompact ? "Launch" : "Open"} <ExternalLink size={isCompact ? 10 : 12} className="group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5 transition-transform" />
-           </a>
+           <div className="flex items-center gap-2">
+             {onToggleSaved && (
+               <button
+                 onClick={() => onToggleSaved(material.id)}
+                 className={cn(
+                   "w-9 h-9 rounded-2xl flex items-center justify-center transition-all",
+                   saved ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-900 hover:text-white'
+                 )}
+                 title={saved ? 'Remove from saved resources' : 'Save for later'}
+               >
+                 <Bookmark size={16} />
+               </button>
+             )}
+             {onToggleCompleted && (
+               <button
+                 onClick={() => onToggleCompleted(material.id)}
+                 className={cn(
+                   "w-9 h-9 rounded-2xl flex items-center justify-center transition-all",
+                   completed ? 'bg-emerald-600 text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-900 hover:text-white'
+                 )}
+                 title={completed ? 'Mark as incomplete' : 'Mark complete'}
+               >
+                 <CheckCircle2 size={16} />
+               </button>
+             )}
+             <a 
+               href={material.url} 
+               target="_blank" 
+               rel="noopener noreferrer"
+               onClick={onInteract}
+               className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-800 transition-colors group/link"
+             >
+               {isCompact ? "Launch" : "Open"} <ExternalLink size={isCompact ? 10 : 12} className="group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5 transition-transform" />
+             </a>
+           </div>
         </div>
       </div>
     </motion.div>

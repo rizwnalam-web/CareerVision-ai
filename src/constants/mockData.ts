@@ -501,6 +501,38 @@ export const STUDY_MATERIALS: StudyMaterial[] = [
     skillLevel: "Intermediate",
     description: "Discussing bias mitigation and global regulations on autonomous agents."
   },
+  {
+    id: "ai-course-2",
+    careerId: "ai-engineer",
+    title: "Practical MLOps Workflows",
+    type: "course",
+    provider: "Coursera",
+    url: "https://www.coursera.org",
+    duration: "10 hours",
+    thumbnail: "https://images.unsplash.com/photo-1517430816045-df4b7de11d1d?auto=format&fit=crop&q=80&w=800",
+    region: "Global",
+    language: "English",
+    rating: 4.7,
+    skillLevel: "Intermediate",
+    description: "Deploy and monitor machine learning models at scale with best practices.",
+    tags: ["MLOps", "Deployment", "Python"]
+  },
+  {
+    id: "ai-art-2",
+    careerId: "ai-engineer",
+    title: "AI Safety and Alignment Reports",
+    type: "article",
+    provider: "Arxiv Insights",
+    url: "https://arxiv.org",
+    duration: "20 min read",
+    thumbnail: "https://images.unsplash.com/photo-1518779578993-ec3579fee39f?auto=format&fit=crop&q=80&w=800",
+    region: "Global",
+    language: "English",
+    rating: 4.6,
+    skillLevel: "Advanced",
+    description: "Surveying current safety research for responsible AI deployment.",
+    tags: ["AI Safety", "Research", "Governance"]
+  },
 
   // UX Design
   {
@@ -533,6 +565,22 @@ export const STUDY_MATERIALS: StudyMaterial[] = [
     rating: 4.5,
     skillLevel: "Intermediate",
     description: "Adjusting interfaces for the growing percentage of elderly digital users."
+  },
+  {
+    id: "ux-course-2",
+    careerId: "ux-designer",
+    title: "Accessibility Patterns for Global Products",
+    type: "course",
+    provider: "Udemy",
+    url: "https://www.udemy.com",
+    duration: "6 hours",
+    thumbnail: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&q=80&w=800",
+    region: "Global",
+    language: "English",
+    rating: 4.7,
+    skillLevel: "Beginner",
+    description: "Practical accessibility guidelines for inclusive product design.",
+    tags: ["Accessibility", "UX", "Inclusive Design"]
   },
 
   // Green Energy
