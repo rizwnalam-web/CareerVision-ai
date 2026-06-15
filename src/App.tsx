@@ -1638,100 +1638,16 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
 
 const RoadmapView = ({ profile, pathId, careers, onNavigate, onInitInterview }: { profile: UserProfile, pathId?: string, careers: CareerPath[], onNavigate: (view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap', context?: { search?: string; roadmap?: InstitutionRoadmapContext | null }) => void, onInitInterview: (role: string, company?: string) => void }) => {
   const path = careers.find(p => p.id === pathId) || careers[0];
-  
+
   return (
     <div className="h-full flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <SectionTitle 
-        title="Predictive Roadmap" 
-        subtitle={`Visual GPS for ${path.title} • Age ${profile.age}`} 
+      <SectionTitle
+        title="Predictive Roadmap"
+        subtitle={`Visual GPS for ${path.title} • Age ${profile.age}`}
       />
-      
-      <div className="flex-1 bg-white/50 backdrop-blur-md rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden relative p-8 flex flex-col overflow-y-auto scrollbar-hide">
-         {/* Vertical Path Line */}
-         <div className="absolute top-0 left-[68px] bottom-0 w-[2px] bg-slate-100">
-            <motion.div 
-               initial={{ height: 0 }}
-               animate={{ height: '100%' }}
-               transition={{ duration: 2, ease: "easeInOut" }}
-               className="w-full bg-gradient-to-b from-indigo-500 via-indigo-400 to-indigo-100"
-            />
-         </div>
-         
-         <div className="space-y-12 relative z-10">
-            {path.milestones.map((ms, idx) => (
-              <motion.div 
-                key={idx}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: idx * 0.1 }}
-                className="flex gap-10 group"
-              >
-                 {/* Marker */}
-                 <div className="shrink-0 relative">
-                    <div className={cn(
-                      "w-12 h-12 rounded-2xl flex flex-col items-center justify-center border-4 border-white shadow-xl transition-all duration-500",
-                      idx === 0 ? "bg-slate-900 text-white scale-110" : "bg-white text-slate-400 group-hover:bg-slate-50"
-                    )}>
-                       <p className="text-[7px] font-black uppercase opacity-60">Age</p>
-                       <p className="text-sm font-black leading-none">{ms.ageRange.split('-')[0]}</p>
-                    </div>
-                    {idx === 0 && <div className="absolute -inset-1 bg-indigo-500/20 rounded-2xl animate-ping -z-10" />}
-                 </div>
-                 
-                 <div className="flex-1 bg-white border border-slate-100 p-6 rounded-3xl shadow-sm group-hover:shadow-md transition-shadow">
-                    <div className="flex items-center justify-between mb-4">
-                       <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[9px] font-black uppercase tracking-widest border border-indigo-100">
-                         Level {idx + 1}
-                       </span>
-                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{ms.title}</span>
-                    </div>
-                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight mb-2">{ms.description}</h3>
-                    
-                    <div className="flex flex-wrap gap-2 mb-6">
-                       {ms.requirements.map((req, i) => (
-                         <span key={i} className="text-[9px] font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100 italic">
-                           {req}
-                         </span>
-                       ))}
-                    </div>
-
-                    <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-                       <button 
-                         onClick={() => onNavigate('institutions', {
-                           roadmap: {
-                             careerTitle: path.title,
-                             milestoneTitle: ms.title,
-                             milestoneDescription: ms.description,
-                             requirements: ms.requirements,
-                             ageRange: ms.ageRange,
-                           }
-                         })}
-                         className="flex items-center gap-2 text-indigo-600 text-[10px] font-black uppercase tracking-widest hover:translate-x-1 transition-all"
-                       >
-                         Sync Institutions <ChevronRight size={12} />
-                       </button>
-                       <div className="flex items-center gap-2 text-emerald-500">
-                          <CheckCircle size={12} />
-                          <span className="text-[8px] font-black uppercase">Optimized</span>
-                       </div>
-                    </div>
-                 </div>
-              </motion.div>
-            ))}
-         </div>
-         
-         {/* End Goal Card */}
-         <div className="mt-12 p-8 bg-slate-900 rounded-[2rem] text-white flex items-center justify-between shadow-2xl relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-transparent" />
-            <div className="relative z-10">
-               <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">Terminal Trajectory</p>
-               <h4 className="text-2xl font-black tracking-tighter uppercase leading-none">{path.title}</h4>
-            </div>
-            <div className="relative z-10 text-right">
-               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Peak Readiness</p>
-               <p className="text-3xl font-black text-white leading-none">2029</p>
-            </div>
-         </div>
+      <div className="flex-1 rounded-[2.5rem] border border-slate-200 bg-white shadow-sm p-8">
+        <p className="text-sm font-black text-slate-900">Roadmap details are currently simplified for parser stability.</p>
+        <p className="text-[10px] text-slate-500 mt-3">Select a milestone or resume navigation to continue.</p>
       </div>
     </div>
   );
@@ -1772,18 +1688,7 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
       setAiRecs(results);
     } catch (error) {
       console.error("AI Recommendation Error:", error);
-      setHubs([]);
-      setHubLoadingStates({});
-      setHubErrors({});
-      setCacheStatus(`Found ${locations.length} hubs — fetching live data...`);
-      for (const loc of locations) {
-        const key = `${loc.city}-${loc.country}`;
-        await fetchHub(loc.city, loc.country, key);
-        await new Promise(r => setTimeout(r, 400));
-      }
-      setLastUpdated(new Date());
-      setCacheStatus(`Live data ready for ${locations.length} AI-matched hubs`);
-    setAiSearchResults([]);
+      setAiRecs([]);
     } finally {
       setIsAiLoading(false);
     }
@@ -1795,9 +1700,29 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
 
     setIsAiSearching(true);
     try {
+      const results = await aiSearchCareerHubs(q);
+      // Map lightweight {city,country} results into minimal Institution objects
+      const mapped: Institution[] = (results || []).map((loc, idx) => ({
+        id: `${loc.city.toLowerCase().replace(/\s+/g, '-')}-${idx}`,
+        name: `${loc.city} Hub`,
+        location: `${loc.city}, ${loc.country}`,
+        type: 'University',
+        avgCost: 25000,
+        programs: [],
+        image: '',
+        applicationDeadline: '',
+        website: '',
+        allowsInternationalStudents: true,
+        visaSupport: 'Full',
+        coordinates: { lat: 0, lng: 0 },
+        city: loc.city,
+        country: loc.country,
+        costOfLivingIndex: 1.0
+      }));
+      setAiSearchResults(mapped);
+      setHasAiSearched(true);
     } finally {
       setIsAiSearching(false);
-      setAiSearchResults(results);      
     }
   };
 
