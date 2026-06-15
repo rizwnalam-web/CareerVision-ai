@@ -375,6 +375,17 @@ router.post("/auth/login", async (req, res) => {
   }
 });
 
+function normalizeResetToken(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value
+    .trim()
+    .replace(/^["'{}\[\]\s]+|["'{}\[\]\s]+$/g, "")
+    .toLowerCase();
+}
+
 // Request password reset token for an email-authenticated user
 router.post("/auth/password/forgot", async (req, res) => {
   try {
@@ -399,13 +410,12 @@ router.post("/auth/password/forgot", async (req, res) => {
       });
     }
 
-    const token = uuidv4();
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
+    const token = uuidv4().toLowerCase();
 
     await db.none(
       `INSERT INTO password_reset_tokens (user_id, token, expires_at, used)
-       VALUES ($1, $2, $3, false)`,
-      [user.id, token, expiresAt]
+       VALUES ($1, $2, NOW() + INTERVAL '1 hour', false)`,
+      [user.id, token]
     );
 
     const response: any = {
@@ -431,8 +441,9 @@ router.post("/auth/password/forgot", async (req, res) => {
 router.post("/auth/password/reset", async (req, res) => {
   try {
     const { token, password }: PasswordResetTokenRequest = req.body;
+    const trimmedToken = typeof token === "string" ? token.trim() : "";
 
-    if (!token || !password) {
+    if (!trimmedToken || !password) {
       return res.status(400).json({
         success: false,
         error: "Reset token and new password are required"
@@ -446,10 +457,11 @@ router.post("/auth/password/reset", async (req, res) => {
       });
     }
 
+    const normalizedToken = normalizeResetToken(trimmedToken);
     const resetRecord = await db.oneOrNone<any>(
       `SELECT id, user_id FROM password_reset_tokens
-       WHERE token = $1 AND used = false AND expires_at > NOW()`,
-      [token]
+       WHERE LOWER(token) = LOWER($1) AND used = false AND expires_at > NOW()`,
+      [normalizedToken]
     );
 
     if (!resetRecord) {

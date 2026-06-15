@@ -196,7 +196,12 @@ async function callLLM(prompt: string, systemInstruction: string, options: DeepS
   });
 
   if (result.source === "error") {
-    throw new Error(result.error || "LLM request failed");
+    const errorMessage = result.error || "LLM request failed";
+    const error = new Error(errorMessage);
+    if (isInsufficientBalanceError(error)) {
+      error.name = "InsufficientBalanceError";
+    }
+    throw error;
   }
 
   return result.text ?? "";
@@ -1133,7 +1138,11 @@ export async function getGlobalContextInsights(
     const parsed = JSON.parse(raw ?? "[]");
     return Array.isArray(parsed) ? parsed.slice(0, 6) : [];
   } catch (error) {
-    console.error("Global Context Insights Error:", error);
+    if (isInsufficientBalanceError(error)) {
+      console.warn("Global Context Insights fallback due to DeepSeek insufficient balance:", error);
+    } else {
+      console.error("Global Context Insights Error:", error);
+    }
     return [
       { flag: '🇩🇪', city: 'BERLIN', country: 'Germany', stat: 'AI +24%', category: 'AI', color: 'emerald' },
       { flag: '🇸🇬', city: 'SINGAPORE', country: 'Singapore', stat: 'TECH +31%', category: 'Tech', color: 'indigo' },

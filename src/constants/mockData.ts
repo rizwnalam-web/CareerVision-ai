@@ -12,8 +12,10 @@ export const CAREER_PATHS: CareerPath[] = [
     workType: "Remote",
     tags: ["AI Integration", "Remote Economy"],
     milestones: [
-      { ageRange: "10-14", title: "Logic Basics", description: "Scratch & Math", requirements: ["Scratch", "Basic Math"] },
-      { ageRange: "18-22", title: "CS Degree", description: "Bachelor's level", requirements: ["Python", "Neural Networks"] }
+      { ageRange: "10-12", title: "Logic Lab", description: "Scratch & foundational math", requirements: ["Scratch", "Basic Math"] },
+      { ageRange: "13-15", title: "Applied Coding", description: "Intro to Python and problem solving", requirements: ["Python", "Computational Thinking"] },
+      { ageRange: "16-17", title: "AI Prep", description: "Portfolio projects & advanced electives", requirements: ["Neural Networks", "Data Projects"] },
+      { ageRange: "18-22", title: "CS Degree", description: "Bachelor's level AI systems", requirements: ["Algorithms", "Machine Learning"] }
     ]
   },
   {

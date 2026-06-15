@@ -118,14 +118,15 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
     setError('');
     setMessage('');
 
-    if (!email) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
       setError('Email is required');
       return;
     }
 
     setIsLoading(true);
     try {
-      const response = await forgotPassword({ email });
+      const response = await forgotPassword({ email: trimmedEmail });
       setMessage(response.message || 'Password reset token generated.');
       if (response.token) {
         setResetToken(response.token);
@@ -143,7 +144,8 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
     setError('');
     setMessage('');
 
-    if (!resetToken) {
+    const trimmedToken = resetToken.trim();
+    if (!trimmedToken) {
       setError('Reset token is required');
       return;
     }
@@ -165,7 +167,8 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
 
     setIsLoading(true);
     try {
-      const response = await resetPassword({ token: resetToken, password: newPassword });
+      const trimmedToken = resetToken.trim();
+      const response = await resetPassword({ token: trimmedToken, password: newPassword });
       setMessage(response.message || 'Password has been reset successfully.');
       setAuthStage('emailLogin');
       setPassword('');

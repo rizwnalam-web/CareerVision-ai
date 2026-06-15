@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import net from "net";
 import { testConnection, closeConnection } from "./db/database.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
+import { runMigrations } from "./migrations/runMigrations.js";
 
 // Import routes
 import careersRouter from "./routes/careers.js";
@@ -100,7 +101,9 @@ async function startServer() {
       process.exit(0);
     }
 
-    // Test database connection
+    await runMigrations();
+
+    // Test database connection post-migrations
     const connected = await testConnection();
     if (!connected) {
       console.error("Cannot start server without database connection");

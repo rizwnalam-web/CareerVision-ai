@@ -4,6 +4,9 @@ import crypto from "crypto";
 const API_KEY = process.env.DEEPSEEK_API_KEY;
 const GATEWAY_URL = process.env.LLM_GATEWAY_URL || "https://api.deepseek.com/v1";
 const DEFAULT_MODEL = process.env.LLM_MODEL || "deepseek-chat";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_API_BASE = process.env.OPENAI_API_BASE || "https://api.openai.com/v1";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-3.5-turbo-16k";
 const CACHE_TTL_SECONDS = Number(process.env.LLM_CACHE_TTL_SECONDS || "86400");
 const MAX_CONCURRENCY = Number(process.env.LLM_MAX_CONCURRENCY || "3");
 const COST_PER_TOKEN_USD = Number(process.env.LLM_COST_PER_TOKEN_USD || "0.000002");
@@ -101,7 +104,7 @@ interface DeepSeekRequestOptions {
 export interface DeepSeekResult {
   prompt: string;
   text: string | null;
-  source: "cache" | "api" | "error";
+  source: "cache" | "api" | "fallback" | "error";
   error?: string;
   tokens?: number;
   costUsd?: number;
@@ -215,6 +218,49 @@ function extractUsage(response: any) {
   };
 }
 
+async function callOpenAI(prompt: string, options: Required<DeepSeekRequestOptions>) {
+  if (!OPENAI_API_KEY) {
+    throw new Error("Missing OPENAI_API_KEY environment variable for fallback provider");
+  }
+
+  const url = `${OPENAI_API_BASE.replace(/\/+$/u, "")}/chat/completions`;
+  const messages: Array<{ role: string; content: string }> = [];
+
+  if (options.systemInstruction && options.systemInstruction.trim()) {
+    messages.push({ role: "system", content: options.systemInstruction.trim() });
+  } else {
+    messages.push({
+      role: "system",
+      content:
+        "You are a cost-aware EasyCareer AI assistant. Answer clearly and concisely, and keep output sizes optimized when possible.",
+    });
+  }
+  messages.push({ role: "user", content: prompt });
+
+  const body = {
+    model: OPENAI_MODEL,
+    messages,
+    temperature: options.temperature,
+    max_tokens: options.maxTokens,
+  };
+
+  const response = await axios.post(url, body, {
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    timeout: 30000,
+  });
+
+  const text = extractTextFromResponse(response.data);
+  const usage = extractUsage(response.data);
+  return {
+    text,
+    tokens: usage.tokens,
+    costUsd: usage.costUsd,
+  };
+}
+
 function updateCostState(tokens: number, costUsd: number) {
   costState.totalRequests += 1;
   costState.totalTokens += tokens;
@@ -280,6 +326,36 @@ async function generateResponse(prompt: string, options: DeepSeekRequestOptions 
       : error instanceof Error
         ? error.message
         : "Unknown DeepSeek error";
+
+    const isBalanceError = /status\s*402|insufficient balance|402/i.test(message);
+    if (isBalanceError && OPENAI_API_KEY) {
+      try {
+        const fallbackResult = await callOpenAI(prompt, normalizedOptions);
+        const fallbackResponse: DeepSeekResult = {
+          prompt,
+          text: fallbackResult.text,
+          tokens: fallbackResult.tokens,
+          costUsd: fallbackResult.costUsd,
+          source: "fallback",
+        };
+        cache.set(cacheKey, fallbackResponse, CACHE_TTL_SECONDS);
+        return fallbackResponse;
+      } catch (fallbackError: unknown) {
+        const fallbackMessage = axios.isAxiosError(fallbackError)
+          ? `Fallback OpenAI request failed${fallbackError.response?.status ? ` with status ${fallbackError.response.status}` : ""}${fallbackError.response?.data ? `: ${typeof fallbackError.response.data === "string" ? fallbackError.response.data : JSON.stringify(fallbackError.response.data)}` : fallbackError.message ? `: ${fallbackError.message}` : ""}`
+          : fallbackError instanceof Error
+            ? fallbackError.message
+            : "Unknown OpenAI fallback error";
+        const errorResponse: DeepSeekResult = {
+          prompt,
+          text: null,
+          source: "error",
+          error: `${message} | ${fallbackMessage}`,
+        };
+        return errorResponse;
+      }
+    }
+
     const errorResponse: DeepSeekResult = {
       prompt,
       text: null,

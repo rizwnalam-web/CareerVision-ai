@@ -598,7 +598,7 @@ const FinancialBreakdownWidget = ({ profile }: { profile: UserProfile }) => {
 
 // NewsFlash is now imported from components/NewsFlash.tsx
 
-const GlobalContextBar = ({ profile }: { profile: UserProfile }) => {
+const GlobalContextBar = ({ profile, onInsightClick }: { profile: UserProfile; onInsightClick?: (insight: GlobalInsight) => void }) => {
   const COLOR_MAP: Record<GlobalInsight['color'], { pill: string; dot: string }> = {
     emerald: { pill: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25', dot: 'bg-emerald-400' },
     indigo:  { pill: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/25',   dot: 'bg-indigo-400' },
@@ -684,13 +684,15 @@ const GlobalContextBar = ({ profile }: { profile: UserProfile }) => {
               {visible.map((item) => {
                 const c = COLOR_MAP[item.color] ?? COLOR_MAP.indigo;
                 return (
-                  <motion.div
+                  <motion.button
                     key={`${item.city}-${item.stat}`}
+                    type="button"
+                    onClick={() => onInsightClick?.(item)}
                     initial={{ opacity: 0, x: 24 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -24 }}
                     transition={{ duration: 0.35, ease: 'easeInOut' }}
-                    className="flex items-center gap-1.5 shrink-0"
+                    className="flex items-center gap-1.5 shrink-0 rounded-full px-2 py-1 bg-slate-800/20 hover:bg-slate-900/30 transition-colors"
                   >
                     <span className="text-base leading-none select-none">{item.flag}</span>
                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider hidden md:block">
@@ -699,7 +701,7 @@ const GlobalContextBar = ({ profile }: { profile: UserProfile }) => {
                     <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider whitespace-nowrap ${c.pill}`}>
                       {item.stat}
                     </span>
-                  </motion.div>
+                  </motion.button>
                 );
               })}
             </AnimatePresence>
@@ -763,13 +765,6 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
     }
   };
 
-  // Derive readiness from AI or fall back to milestone-based estimate
-  const READINESS = dashboardIntel?.readiness.overall ??
-    Math.min(95, Math.max(20, Math.round((profile.completedMilestones?.length ?? 0) / Math.max(careers.reduce((a, c) => a + c.milestones.length, 0), 1) * 100)));
-  const RADIUS = 36;
-  const CIRC = 2 * Math.PI * RADIUS;
-  const dashOffset = CIRC - (READINESS / 100) * CIRC;
-
   const readinessBreakdown = dashboardIntel ? [
     { label: 'Skills', value: dashboardIntel.readiness.skills, color: '#6366f1' },
     { label: 'Education', value: dashboardIntel.readiness.education, color: '#10b981' },
@@ -780,22 +775,106 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
     { label: 'Experience', value: 0, color: '#f59e0b' },
   ];
 
+  // Derive readiness from AI or fall back to milestone-based estimate
+  const READINESS = dashboardIntel?.readiness.overall ??
+    Math.round(readinessBreakdown.reduce((sum, metric) => sum + metric.value, 0) / readinessBreakdown.length);
+  const RADIUS = 36;
+  const CIRC = 2 * Math.PI * RADIUS;
+  const dashOffset = CIRC - (READINESS / 100) * CIRC;
+
   const nextActions = dashboardIntel?.nextActions ?? [];
+  const openActionCount = nextActions.length;
+  const openActionValue = openActionCount > 0 ? `${openActionCount} pending` : 'Ready';
 
   const sectorData = dashboardIntel?.sectors ?? [];
   const [activeSector, setActiveSector] = useState<string>('');
-  const activeSectorObj = sectorData.find(s => s.name === (activeSector || sectorData[0]?.name)) ?? sectorData[0];
+  const [showAllPaths, setShowAllPaths] = useState(false);
+  const [showDashboardTour, setShowDashboardTour] = useState(true);
+  const activeSectorObj = sectorData.length > 0
+    ? sectorData.find(s => s.name === (activeSector || sectorData[0].name)) ?? sectorData[0]
+    : { name: 'TBD', trend: 'Complete your profile', score: 0, status: 'Stable', color: '#818cf8', spark: [], news: [] };
+  const hasSectorData = sectorData.length > 0;
+
+  useEffect(() => {
+    if (!activeSector && sectorData.length > 0) {
+      setActiveSector(sectorData[0].name);
+    }
+  }, [activeSector, sectorData]);
 
   const salaryTrendData = dashboardIntel?.salaryTrajectory ?? [];
+
+  type ExecSyncItem = {
+    label: string;
+    sublabel: string;
+    icon: React.ElementType;
+    view: 'institutions' | 'heatmap' | 'expenses' | 'jobs';
+    iconBg: string;
+    iconColor: string;
+    bg: string;
+    border: string;
+    statusColor: string;
+    checklist: string | null;
+    urgent: boolean;
+  };
 
   // Derive execSync sublabels from real profile data (no hardcoding)
   const targetLoc = profile.targetLocation || profile.country || 'Global';
   const docsCompleted = (profile.visaRequirements ?? []).filter(Boolean).length;
-  const execSync = [
-    { label: 'Visa Hub', sublabel: profile.targetVisaType ? `${profile.targetVisaType}` : 'Review Required', icon: Globe, view: 'institutions' as const, iconBg: 'bg-indigo-100', iconColor: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', statusColor: 'text-emerald-500', checklist: docsCompleted > 0 ? `${docsCompleted} docs` : null },
-    { label: 'Markets', sublabel: `${targetLoc}: Live`, icon: BarChart3, view: 'heatmap' as const, iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100', statusColor: 'text-emerald-500', checklist: null },
-    { label: 'Budget', sublabel: profile.financialProfile ? `$${(profile.financialProfile.monthlyExpenses.reduce((a, e) => a + e.amount, 0)).toLocaleString()}/mo` : 'Not set', icon: PiggyBank, view: 'expenses' as const, iconBg: 'bg-amber-100', iconColor: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', statusColor: 'text-amber-500', checklist: null },
-    { label: 'Network', sublabel: careers.length > 0 ? `${careers.length} paths active` : 'Explore Listings', icon: Briefcase, view: 'jobs' as const, iconBg: 'bg-purple-100', iconColor: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100', statusColor: 'text-purple-500', checklist: null },
+  const hasExpenses = (profile.financialProfile?.monthlyExpenses?.length ?? 0) > 0;
+  const monthlyExpenseTotal = profile.financialProfile?.monthlyExpenses?.reduce((a, e) => a + e.amount, 0) ?? 0;
+  const execSync: ExecSyncItem[] = [
+    {
+      label: 'Visa Hub',
+      sublabel: profile.targetVisaType ? `${profile.targetVisaType}` : 'Review Required',
+      icon: Globe,
+      view: 'institutions',
+      iconBg: 'bg-indigo-100',
+      iconColor: profile.targetVisaType ? 'text-indigo-600' : 'text-rose-500',
+      bg: 'bg-indigo-50',
+      border: 'border-indigo-100',
+      statusColor: profile.targetVisaType ? 'text-emerald-500' : 'text-rose-500',
+      checklist: docsCompleted > 0 ? `${docsCompleted} docs` : null,
+      urgent: !profile.targetVisaType || docsCompleted === 0,
+    },
+    {
+      label: 'Markets',
+      sublabel: `${targetLoc}: Live`,
+      icon: BarChart3,
+      view: 'heatmap',
+      iconBg: 'bg-emerald-100',
+      iconColor: 'text-emerald-600',
+      bg: 'bg-emerald-50',
+      border: 'border-emerald-100',
+      statusColor: 'text-emerald-500',
+      checklist: null,
+      urgent: !profile.targetLocation,
+    },
+    {
+      label: 'Budget',
+      sublabel: hasExpenses ? `$${monthlyExpenseTotal.toLocaleString()}/mo` : 'Not set',
+      icon: PiggyBank,
+      view: 'expenses',
+      iconBg: 'bg-amber-100',
+      iconColor: hasExpenses ? 'text-amber-600' : 'text-rose-500',
+      bg: 'bg-amber-50',
+      border: 'border-amber-100',
+      statusColor: hasExpenses ? 'text-emerald-500' : 'text-rose-500',
+      checklist: null,
+      urgent: !hasExpenses,
+    },
+    {
+      label: 'Network',
+      sublabel: careers.length > 0 ? `${careers.length} paths active` : 'Explore Listings',
+      icon: Briefcase,
+      view: 'jobs',
+      iconBg: 'bg-purple-100',
+      iconColor: 'text-purple-600',
+      bg: 'bg-purple-50',
+      border: 'border-purple-100',
+      statusColor: 'text-purple-500',
+      checklist: null,
+      urgent: careers.length === 0,
+    },
   ];
 
   // Fetch skill gap — used on expand and on manual retry
@@ -933,7 +1012,16 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
             </span>
           </div>
           {(profile.financialProfile?.monthlyExpenses || []).length === 0 ? (
-            <p className="text-[10px] text-slate-400 text-center py-4">No expense data yet</p>
+            <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Financial profile missing</p>
+              <p className="text-[11px] font-bold text-slate-700">Set up your budget to unlock smarter career guidance.</p>
+              <button
+                onClick={() => onNavigate('expenses')}
+                className="px-4 py-2 rounded-2xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 transition-all"
+              >
+                Build Financial Profile
+              </button>
+            </div>
           ) : (
             <div className="space-y-3">
               {(profile.financialProfile?.monthlyExpenses || []).slice(0, 4).map((e, i) => {
@@ -1009,8 +1097,8 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
                 {[
                   { label: 'Market', value: 'Hot 🔥', bg: 'bg-rose-500/15 border-rose-500/25', text: 'text-rose-300' },
                   { label: 'Profile Fit', value: `${READINESS}%`, bg: 'bg-indigo-500/15 border-indigo-500/25', text: 'text-indigo-300' },
-                  { label: 'Top Sector', value: activeSector, bg: 'bg-emerald-500/15 border-emerald-500/25', text: 'text-emerald-300' },
-                  { label: 'Open Actions', value: '3 pending', bg: 'bg-purple-500/15 border-purple-500/25', text: 'text-purple-300' },
+                  { label: 'Top Sector', value: activeSectorObj.name || 'TBD', bg: 'bg-emerald-500/15 border-emerald-500/25', text: 'text-emerald-300' },
+                  { label: 'Open Actions', value: openActionValue, bg: 'bg-purple-500/15 border-purple-500/25', text: 'text-purple-300' },
                 ].map(stat => (
                   <div key={stat.label} className={`flex flex-col px-3.5 py-2 rounded-xl border ${stat.bg}`}>
                     <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest leading-none">{stat.label}</span>
@@ -1019,15 +1107,23 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
                 ))}
               </div>
 
-              <button
-                onClick={() => onSelectPath(careers[0]?.id || '')}
-                disabled={isLoading || careers.length === 0}
-                className="bg-indigo-600 text-white px-7 py-2.5 rounded-2xl font-black uppercase tracking-widest hover:bg-indigo-500 transition-all flex items-center gap-3 text-[10px] shadow-xl shadow-indigo-500/20 disabled:opacity-50 group/btn"
-              >
-                {isLoading && <Loader2 size={12} className="animate-spin" />}
-                {isLoading ? 'Syncing...' : 'Optimize Future'}
-                <ChevronRight size={14} className="group-hover/btn:translate-x-1 transition-transform" />
-              </button>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <button
+                  onClick={() => onSelectPath(careers[0]?.id || '')}
+                  disabled={isLoading || careers.length === 0}
+                  className="bg-indigo-600 text-white px-7 py-2.5 rounded-2xl font-black uppercase tracking-widest hover:bg-indigo-500 transition-all flex items-center gap-3 text-[10px] shadow-xl shadow-indigo-500/20 disabled:opacity-50 group/btn"
+                >
+                  {isLoading && <Loader2 size={12} className="animate-spin" />}
+                  {isLoading ? 'Syncing...' : 'Optimize Future'}
+                  <ChevronRight size={14} className="group-hover/btn:translate-x-1 transition-transform" />
+                </button>
+                <button
+                  onClick={() => onNavigate('roadmap')}
+                  className="text-[10px] font-black uppercase tracking-widest text-slate-100 bg-white/10 border border-white/20 rounded-2xl px-5 py-2.5 hover:bg-white/20 transition-all"
+                >
+                  Change goal
+                </button>
+              </div>
             </div>
             <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-600/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-[60px]" />
           </div>
@@ -1088,7 +1184,7 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
                   <Search size={20} className="text-slate-300" />
                   <p className="text-[10px] font-black text-slate-400 uppercase">No paths match your search</p>
                 </div>
-              ) : filteredPaths.slice(0, 10).map((path, idx) => {
+              ) : (showAllPaths ? filteredPaths : filteredPaths.slice(0, 5)).map((path, idx) => {
                 const isExpanded = expandedPath === path.id;
                 const matchScore = Math.max(58, 95 - idx * 8);
                 const skillGap = skillGapCache[path.id] ?? [];
@@ -1258,8 +1354,11 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
                 [0,1,2,3].map(i => (
                   <div key={i} className="h-14 rounded-2xl bg-white/10 animate-pulse" />
                 ))
-              ) : sectorData.length === 0 ? (
-                <p className="text-[10px] text-white/30 text-center py-4">AI is loading sector data…</p>
+              ) : !hasSectorData ? (
+                <div className="text-[10px] text-white/70 text-center py-6">
+                  <p className="font-black uppercase tracking-widest mb-2">Sector insights locked</p>
+                  <p className="text-[9px] text-white/60">Complete your profile or pick a target career to unlock market health signals.</p>
+                </div>
               ) : sectorData.map(sector => (
                 <div
                   key={sector.name}
@@ -1305,14 +1404,23 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
             <motion.div key={activeSectorObj?.name ?? 'loading'} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2 }} className="space-y-2.5">
               {isDashboardIntelLoading ? (
                 [0,1].map(i => <div key={i} className="h-14 bg-slate-50 rounded-2xl animate-pulse" />)
-              ) : (activeSectorObj?.news ?? []).map((headline, i) => (
-                <div key={i} className="flex gap-2.5 items-start p-3 rounded-2xl bg-slate-50/80 border border-slate-50 hover:bg-indigo-50/60 hover:border-indigo-50 transition-all">
-                  <div className="w-6 h-6 bg-indigo-100 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
-                    <Zap size={9} className="text-indigo-600" />
-                  </div>
-                  <p className="text-[9px] font-bold text-slate-700 leading-snug">{headline}</p>
+              ) : (!activeSectorObj?.news || activeSectorObj.news.length === 0) ? (
+                <div className="text-[10px] text-slate-400 text-center py-6">
+                  <p className="font-black uppercase tracking-widest mb-2">Talent data unavailable</p>
+                  <p className="text-[9px]">Select a sector or complete your profile to surface market intelligence.</p>
                 </div>
-              ))}
+              ) : (
+                <>
+                  {activeSectorObj.news.map((headline, i) => (
+                    <div key={i} className="flex gap-2.5 items-start p-3 rounded-2xl bg-slate-50/80 border border-slate-50 hover:bg-indigo-50/60 hover:border-indigo-50 transition-all">
+                      <div className="w-6 h-6 bg-indigo-100 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
+                        <Zap size={9} className="text-indigo-600" />
+                      </div>
+                      <p className="text-[9px] font-bold text-slate-700 leading-snug">{headline}</p>
+                    </div>
+                  ))}
+                </>
+              )}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -1320,30 +1428,53 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
         {/* Execution Sync — data-driven status */}
         <div className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-sm">
           <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Execution Sync</h4>
-          <div className="grid grid-cols-2 gap-2.5">
-            {execSync.map(item => (
-              <button
-                key={item.label}
-                onClick={() => onNavigate(item.view)}
-                className={`p-3.5 rounded-[1.5rem] border ${item.border} ${item.bg} flex flex-col items-start gap-2 transition-all group active:scale-95 hover:shadow-md text-left`}
-              >
-                <div className="flex items-start justify-between w-full">
-                  <div className={`w-9 h-9 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                    <item.icon size={16} className={item.iconColor} />
-                  </div>
-                  {item.checklist && (
-                    <div className="flex items-center gap-0.5 bg-white/80 px-1.5 py-0.5 rounded-md border border-slate-100">
-                      <Check size={7} className="text-emerald-500" />
-                      <span className="text-[7px] font-black text-slate-500">{item.checklist}</span>
+          <div className="space-y-3">
+            {execSync.some(item => item.urgent) && (
+              <div>
+                <p className="text-[8px] font-black uppercase tracking-[0.25em] text-rose-500 mb-2">Needs attention</p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {execSync.filter(item => item.urgent).map(item => (
+                    <button
+                      key={item.label}
+                      onClick={() => onNavigate(item.view)}
+                      className={`p-3.5 rounded-[1.5rem] border ${item.border} ${item.bg} flex flex-col items-start gap-2 transition-all group active:scale-95 hover:shadow-md text-left`}
+                    >
+                      <div className="flex items-start justify-between w-full">
+                        <div className={`w-9 h-9 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                          <item.icon size={16} className={item.iconColor} />
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest leading-none">{item.label}</p>
+                        <p className={`text-[7px] font-bold mt-0.5 leading-none ${item.statusColor}`}>{item.sublabel}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div>
+              <p className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-500 mb-2">Live insights</p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {execSync.filter(item => !item.urgent).map(item => (
+                  <button
+                    key={item.label}
+                    onClick={() => onNavigate(item.view)}
+                    className={`p-3.5 rounded-[1.5rem] border ${item.border} ${item.bg} flex flex-col items-start gap-2 transition-all group active:scale-95 hover:shadow-md text-left`}
+                  >
+                    <div className="flex items-start justify-between w-full">
+                      <div className={`w-9 h-9 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                        <item.icon size={16} className={item.iconColor} />
+                      </div>
                     </div>
-                  )}
-                </div>
-                <div>
-                  <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest leading-none">{item.label}</p>
-                  <p className={`text-[7px] font-bold mt-0.5 leading-none ${item.statusColor}`}>{item.sublabel}</p>
-                </div>
-              </button>
-            ))}
+                    <div>
+                      <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest leading-none">{item.label}</p>
+                      <p className={`text-[7px] font-bold mt-0.5 leading-none ${item.statusColor}`}>{item.sublabel}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -3788,6 +3919,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   const [institutionSearchQuery, setInstitutionSearchQuery] = useState("");
   const [institutionRoadmapContext, setInstitutionRoadmapContext] = useState<InstitutionRoadmapContext | null>(null);
   const [sparkEOpen, setSparkEOpen] = useState(false);
+  const [sparkEPosition, setSparkEPosition] = useState<'bottom-right' | 'bottom-left'>('bottom-right');
   const [isInterviewOpen, setIsInterviewOpen] = useState(false);
   const [interviewRole, setInterviewRole] = useState("");
   const [interviewCompany, setInterviewCompany] = useState("");
@@ -3999,6 +4131,22 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
     }
   }, [selectedPathId, profile.targetLocation, careers]);
 
+  const authProviderLabel = user?.providerData?.[0]?.providerId === 'google.com'
+    ? 'Google Secure'
+    : user?.providerData?.[0]?.providerId === 'password'
+      ? 'Email Secure'
+      : 'Secure Login';
+
+  const completedMilestones = profile.completedMilestones?.length ?? 0;
+  const totalMilestones = Math.max(careers.reduce((acc, curr) => acc + curr.milestones.length, 0), 1);
+  const profileCompletion = Math.min(100, Math.round((completedMilestones / totalMilestones) * 100) + (profile.targetLocation ? 10 : 0) + (profile.targetCareerId ? 10 : 0));
+
+  const handleInsightClick = (insight: GlobalInsight) => {
+    const query = `${insight.city} ${insight.category}`;
+    setInstitutionSearchQuery(query);
+    handleNavigate('institutions', { search: query });
+  };
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -4008,9 +4156,15 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
     }
   };
 
+  const handleDockSparkE = () => {
+    setSparkEPosition(pos => pos === 'bottom-right' ? 'bottom-left' : 'bottom-right');
+  };
+
+  const profileStatusLabel = profile.targetCareerId ? `${profile.targetCareerId} trajectory` : 'Career explorer';
+
   return (
     <div className="flex flex-col h-screen bg-[#F8FAFC] font-sans text-slate-900 overflow-hidden relative">
-      <GlobalContextBar profile={profile} />
+      <GlobalContextBar profile={profile} onInsightClick={handleInsightClick} />
       {/* Decorative Background Elements */}
       <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-b from-indigo-50/50 to-transparent pointer-events-none" />
       <div className="absolute top-[20%] right-[-10%] w-[500px] h-[500px] bg-indigo-100/30 rounded-full blur-[120px] pointer-events-none" />
@@ -4107,12 +4261,28 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
               )}
             </div>
             <div className="hidden sm:flex flex-col">
-              <span className="text-xs font-black text-slate-800 uppercase tracking-tight">{profile.name}</span>
-              <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none">Level 1 Trajectory</span>
+              <span className="text-xs font-black text-slate-800 uppercase tracking-tight truncate">{profile.name}</span>
+              <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none truncate">{profileStatusLabel}</span>
             </div>
           </div>
         </div>
       </header>
+
+      <div className="hidden lg:flex items-center justify-between gap-4 border-b border-slate-200/60 bg-indigo-50/80 px-10 py-3 text-[11px] text-slate-700 font-black uppercase tracking-[0.18em] z-20 shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <span className="text-slate-900">{profileCompletion}% profile complete</span>
+          <span className="text-slate-500">{profileStatusLabel} · {profile.targetLocation || 'Location pending'}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="bg-white border border-indigo-100 px-3 py-1 rounded-full text-[10px] text-indigo-600">{authProviderLabel}</span>
+          <button
+            onClick={() => handleNavigate(profile.targetCareerId ? 'roadmap' : 'dashboard')}
+            className="px-3 py-1 rounded-full bg-indigo-600 text-white text-[10px] font-black uppercase tracking-[0.18em] hover:bg-indigo-500 transition-colors"
+          >
+            Resume setup
+          </button>
+        </div>
+      </div>
 
       {/* ── MOBILE DRAWER ── */}
       <AnimatePresence>
@@ -4281,22 +4451,6 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
         <div className="h-safe-bottom bg-white/95" style={{ height: 'env(safe-area-inset-bottom)' }} />
       </nav>
       
-      {/* Footer Status Bar */}
-      <footer className="hidden lg:flex items-center justify-between border-t border-slate-200 bg-white px-10 py-3 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] shrink-0 relative z-10">
-        <div className="flex gap-8">
-          <span className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div> 
-            IPEDS Access: Online
-          </span>
-          <span>O*NET Sync: Terminal_Active</span>
-        </div>
-        <div className="flex gap-6 items-center">
-          <span className="text-indigo-500 hover:text-indigo-600 cursor-pointer transition-colors">v2.1.0-AI_Core</span>
-          <div className="h-4 w-[1px] bg-slate-200" />
-          <span>Multi-Tenant Secure Cloud</span>
-        </div>
-      </footer>
-
       <InterviewHotSeat 
         isOpen={isInterviewOpen}
         onClose={() => setIsInterviewOpen(false)}
@@ -4307,7 +4461,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       />
 
       {/* Spark.E Floating Bubble */}
-      <div className="fixed bottom-20 lg:bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+      <div className={`fixed bottom-20 lg:bottom-6 ${sparkEPosition === 'bottom-right' ? 'right-6 items-end' : 'left-6 items-start'} z-50 flex flex-col gap-3`}> 
         {/* Tooltip label */}
         <AnimatePresence>
           {!sparkEOpen && (

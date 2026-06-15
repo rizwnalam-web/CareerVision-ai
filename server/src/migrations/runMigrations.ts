@@ -28,11 +28,10 @@ const migrations = [
   },
 ];
 
-async function runMigrations() {
+export async function runMigrations() {
   const connected = await testConnection();
   if (!connected) {
-    console.error("Cannot proceed without database connection");
-    process.exit(1);
+    throw new Error("Cannot proceed without database connection");
   }
 
   // Create migrations table if not exists
@@ -52,26 +51,22 @@ async function runMigrations() {
 
     if (!exists) {
       console.log(`\n🔄 Running migration: ${migration.name}`);
-      try {
-        await migration.module.up();
-        await db.none("INSERT INTO migrations (name) VALUES ($1)", [
-          migration.name,
-        ]);
-        console.log(`✓ Completed: ${migration.name}`);
-      } catch (error) {
-        console.error(`✗ Failed: ${migration.name}`, error);
-        process.exit(1);
-      }
+      await migration.module.up();
+      await db.none("INSERT INTO migrations (name) VALUES ($1)", [
+        migration.name,
+      ]);
+      console.log(`✓ Completed: ${migration.name}`);
     } else {
       console.log(`⏭️  Skipped (already run): ${migration.name}`);
     }
   }
 
   console.log("\n✓ All migrations completed successfully!");
-  await closeConnection();
 }
 
-runMigrations().catch((error) => {
-  console.error("Fatal error:", error);
-  process.exit(1);
-});
+if (import.meta.url === process.argv[1] || import.meta.url === new URL(process.argv[1], import.meta.url).href) {
+  runMigrations().catch((error) => {
+    console.error("Fatal error:", error);
+    process.exit(1);
+  });
+}
