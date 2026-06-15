@@ -101,6 +101,7 @@ export interface UserProfile {
   visaSponsorshipNeeded?: boolean;
   targetVisaType?: string; // e.g., "F-1 Student Visa", "H-1B Work Visa", "Green Card"
   citizenCountry?: string; // Home country for visa matching
+  preferredCurrency?: string; // Optional user currency preference, e.g. "USD" or "CHF"
   currentRole?: string;
   targetCareer?: string;
   timeline?: string;

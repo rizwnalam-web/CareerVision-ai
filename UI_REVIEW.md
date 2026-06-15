@@ -1,20 +1,17 @@
-Academy Library
-Current State: A content library ("3 curated resources for global careers") with grid/list view toggle, a "Filters" button, source filter pills (All, Local, Boclips, YouTube, Coursera, Udemy, MIT), a search bar, and "External Search" / "AI Search" buttons (both appear disabled/muted). Three content cards are shown: a Stanford Online video ("Introduction to Artificial...", rated 4.8, Beginner), a DeepMind Blog article ("The Architecture of...", rated 5, Advanced), and an MIT News audio piece ("The Ethics of AI in 2026", rated 4.9, Intermediate).
-5.1 Observations
-•	Header states "3 curated resources" — for a platform claiming to analyze "4.2M career nodes" and offer comprehensive learning pathways, a 3-item library feels extremely sparse and likely reads as broken/empty to a new user.
-•	Both "EXTERNAL SEARCH" and "AI SEARCH" primary action buttons appear greyed out/disabled, removing the two most prominent ways to discover more than the 3 default items — this is a significant functional gap on a "library" page.
-•	Source filter pills include major platforms (Coursera, Udemy, MIT, YouTube, Boclips) but only "ALL" is selected/active; it's unclear if clicking other pills does anything given the search buttons appear disabled.
-•	Content cards show star ratings (4.8, 5, 4.9) without indicating the rating source, number of reviews, or scale (out of 5? out of 10?) — a perfect "5" rating with no review count looks suspicious/unverified.
-•	Difficulty badges (Beginner, Advanced, Intermediate) are present and useful, but there's no visible connection to the user's current skill level or roadmap stage — e.g., no "Recommended for you" or "matches your current level" indicator.
-•	The DeepMind Blog card's image area is a plain gradient placeholder with no actual visual content, while the other two cards have real photographic imagery — visual inconsistency.
-•	Card titles are truncated/cut off ("Introduction to Artificial...", "The Architecture of...") without tooltips, hurting scannability.
-•	No bookmarking/save, progress tracking, or "mark as completed" affordance on any card, despite the Control dashboard's Skills metric presumably needing to be fed by completed learning content.
-5.2 Recommendations
-•	[CRITICAL]  Populate the library with a meaningfully larger initial catalog (tens to hundreds of items) or, if relying on live external search, fix and enable the "External Search" and "AI Search" buttons so the 3-item default doesn't feel like the entire product.
-•	[CRITICAL]  Add review-count and rating-source metadata to star ratings (e.g., "4.8 (2,340 reviews) — Coursera") to build credibility — unsourced "5/5" ratings undermine trust.
-•	[HIGH]  Connect Academy content to the user's roadmap and skill profile: surface a "Recommended next" rail based on the current roadmap milestone, and add "Mark complete" / progress tracking that updates the Control dashboard's Skills percentage.
-•	[HIGH]  Fix truncated titles — use responsive card sizing or tooltips/expand-on-hover so users can read full resource names.
-•	[HIGH]  Replace the placeholder gradient image on the DeepMind Blog card with either a real thumbnail, a branded DeepMind/Google DeepMind logo treatment, or a consistent illustrated placeholder style used across all text-based articles.
-•	[ENHANCEMENT]  Add personal library features: save/bookmark for later, recently viewed, and a simple progress dashboard (e.g., "4 of 12 recommended resources completed").
-•	[ENHANCEMENT]  Add content-type icons consistently and allow filtering by type (video/article/audio) alongside source filtering, and consider sorting by relevance, rating, or recency.
-•	[ENHANCEMENT]  Surface estimated time-to-complete on each card (e.g., "12 min video", "6 min read") to help users plan learning sessions.
+Recurring Patterns Observed
+•	Disabled or non-functional AI search/discovery controls appear in at least four modules: Academy ("External Search" / "AI Search"), Global Hub Navigator ("AI Global Search"), Job Board ("AI Discover" / "AI Source from Saved"), and implicitly the Career Hub Heatmap ("AI Hub Search"). This strongly suggests a shared AI-search service or API key/integration that is not yet connected in this build.
+•	Live-data widgets failing or stuck loading appear in at least three places: Sector Health Index and Talent Intelligence on Control, and the entire Career Hub Heatmap. A shared market-data feed appears to be the common point of failure.
+•	The right-rail "Intelligence Feed" video and quote are identical across Control, Roadmap, Global, and Academy — this widget is not yet contextual/dynamic.
+•	Onboarding appears incomplete: a user profile with 0% Skills/Education/Experience cascades into degraded experiences everywhere — empty trajectories beyond the first item, no personalization on the Job Board or Heatmap, and an empty Financial profile.
+•	The financial-profile nudge ("Add monthly expenses to your financial profile to see breakdown") appears in the right rail of multiple unrelated modules (Roadmap, Global, Academy, Job Board, Heatmap), which may be intentional cross-promotion but currently feels like a repeated unaddressed prompt rather than a targeted nudge.
+9.2 Top 5 Platform-Wide Priorities
+1. Fix onboarding-to-profile pipeline.
+Ensure the initial assessment/profile wizard actually populates Skills, Education, Experience, target role, location preferences, and currency — this single fix unblocks personalization across every other module.
+2. Restore or stub live-data integrations gracefully.
+Sector Health Index, Talent Intelligence, and the entire Heatmap module should never show indefinite loading or universal failure — implement honest empty/error states with retry, and cached fallbacks where possible.
+3. Resolve the AI search/discovery feature gap.
+Either ship a working AI-search experience across Academy, Global Hub, Job Board, and Heatmap, or temporarily hide/relabel these entry points as "Coming soon" to avoid the impression of a broken core feature.
+4. Remove developer/debug surfaces from production.
+The bottom status bar (IPEDS/O*NET sync status, build version, "multi-tenant secure cloud") should be removed from the end-user experience or relocated to an admin view.
+5. Make the Intelligence Feed and financial nudges contextual.
+Replace the static, repeated right-rail video/quote and financial-profile prompt with content relevant to the specific module and the user's actual profile state.

@@ -92,13 +92,13 @@ export const NewsFlash = ({ country }: { country: string }) => {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -24 }}
                     transition={{ duration: 0.35, ease: 'easeInOut' }}
-                    className="flex items-center gap-1.5 shrink-0"
+                    className="flex items-center gap-1.5 shrink-0 max-w-[220px]"
                   >
                     <span className="text-base leading-none select-none">{item.flag}</span>
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider hidden md:block">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider hidden md:block truncate" title={item.city}>
                       {item.city}:
                     </span>
-                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider whitespace-nowrap ${c.pill}`}>
+                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider whitespace-nowrap truncate ${c.pill}`} title={item.stat}>
                       {item.stat}
                     </span>
                   </motion.div>

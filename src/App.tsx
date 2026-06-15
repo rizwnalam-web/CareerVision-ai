@@ -59,7 +59,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapContainer, TileLayer, Marker, Popup, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -244,15 +244,24 @@ const IntelligenceFeedCard = ({ careerId }: { careerId: string }) => {
 
 // --- Pages ---
 
-const HeatmapView = () => {
+const HeatmapView = ({ profile }: { profile: UserProfile }) => {
   const DEFAULT_HUBS = [
-    { city: "Silicon Valley", country: "USA" },
-    { city: "London", country: "UK" },
-    { city: "Singapore", country: "Singapore" },
-    { city: "Berlin", country: "Germany" },
-    { city: "Bangalore", country: "India" },
-    { city: "Dubai", country: "UAE" },
+    { city: "Silicon Valley", country: "USA", coords: { lat: 37.3875, lng: -122.0575 } },
+    { city: "London", country: "UK", coords: { lat: 51.5074, lng: -0.1278 } },
+    { city: "Singapore", country: "Singapore", coords: { lat: 1.3521, lng: 103.8198 } },
+    { city: "Berlin", country: "Germany", coords: { lat: 52.5200, lng: 13.4050 } },
+    { city: "Bangalore", country: "India", coords: { lat: 12.9716, lng: 77.5946 } },
+    { city: "Dubai", country: "UAE", coords: { lat: 25.2048, lng: 55.2708 } },
   ];
+
+  const LOCATION_OVERRIDES: Record<string, { city: string; country: string; coords: { lat: number; lng: number } }> = {
+    germany: { city: "Berlin", country: "Germany", coords: { lat: 52.5200, lng: 13.4050 } },
+    uk: { city: "London", country: "UK", coords: { lat: 51.5074, lng: -0.1278 } },
+    usa: { city: "Silicon Valley", country: "USA", coords: { lat: 37.3875, lng: -122.0575 } },
+    india: { city: "Bangalore", country: "India", coords: { lat: 12.9716, lng: 77.5946 } },
+    singapore: { city: "Singapore", country: "Singapore", coords: { lat: 1.3521, lng: 103.8198 } },
+    uae: { city: "Dubai", country: "UAE", coords: { lat: 25.2048, lng: 55.2708 } },
+  };
 
   const [hubs, setHubs] = useState<any[]>([]);
   const [hubLoadingStates, setHubLoadingStates] = useState<Record<string, boolean>>({});
@@ -261,6 +270,21 @@ const HeatmapView = () => {
   const [isAiSearching, setIsAiSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [cacheStatus, setCacheStatus] = useState<string>("");
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [viewMode, setViewMode] = useState<'map' | 'cards'>('map');
+
+  const resolveHubCoords = (city: string, country: string) => {
+    const overrideKey = `${city},${country}`.toLowerCase();
+    const known = DEFAULT_HUBS.find(h => h.city.toLowerCase() === city.toLowerCase() && h.country.toLowerCase() === country.toLowerCase());
+    if (known) return known.coords;
+    const generic = LOCATION_OVERRIDES[country.toLowerCase()] || LOCATION_OVERRIDES[city.toLowerCase()];
+    return generic?.coords ?? null;
+  };
+
+  const personalHub = profile.targetLocation ? LOCATION_OVERRIDES[profile.targetLocation.toLowerCase()] : undefined;
+  const initialHubs = personalHub
+    ? [personalHub, ...DEFAULT_HUBS.filter(h => h.city !== personalHub.city || h.country !== personalHub.country)]
+    : DEFAULT_HUBS;
 
   const fetchHub = async (city: string, country: string, key: string) => {
     setHubLoadingStates(prev => ({ ...prev, [key]: true }));
@@ -271,7 +295,7 @@ const HeatmapView = () => {
         setHubs(prev => {
           const exists = prev.find(h => `${h.city}-${h.country}` === key);
           if (exists) return prev.map(h => `${h.city}-${h.country}` === key ? data : h);
-          return [...prev, data];
+          return [...prev, { ...data, city, country }];
         });
       } else {
         setHubErrors(prev => ({ ...prev, [key]: true }));
@@ -283,24 +307,26 @@ const HeatmapView = () => {
     }
   };
 
-  // Load default hubs sequentially to avoid rate limits
-  useEffect(() => {
-    const loadDefaults = async () => {
-      setHubs([]);
-      setCacheStatus("Fetching live market intelligence...");
-      for (const loc of DEFAULT_HUBS) {
-        const key = `${loc.city}-${loc.country}`;
-        await fetchHub(loc.city, loc.country, key);
-        // Small delay between requests to avoid hitting rate limits
-        await new Promise(r => setTimeout(r, 400));
-      }
-      setCacheStatus("Live data synchronized — 2026 market intelligence active");
-    };
-    loadDefaults();
-  }, []);
+  const loadHubs = async (sourceHubs = initialHubs) => {
+    setHubs([]);
+    setHubLoadingStates({});
+    setHubErrors({});
+    setCacheStatus(`Fetching live market intelligence for ${profile.targetLocation || profile.country || 'global'} markets...`);
+    for (const loc of sourceHubs) {
+      const key = `${loc.city}-${loc.country}`;
+      await fetchHub(loc.city, loc.country, key);
+      await new Promise(r => setTimeout(r, 400));
+    }
+    setLastUpdated(new Date());
+    setCacheStatus(`Live market intelligence updated from ${sourceHubs.length} hubs`);
+  };
 
-  const handleAiSearch = async () => {
-    const q = searchQuery.trim();
+  useEffect(() => {
+    loadHubs();
+  }, [profile.targetLocation]);
+
+  const handleAiSearch = async (overrideQuery?: string) => {
+    const q = (overrideQuery ?? searchQuery).trim();
     if (!q) return;
     setIsAiSearching(true);
     setHasSearched(true);
@@ -316,68 +342,171 @@ const HeatmapView = () => {
       setHubLoadingStates({});
       setHubErrors({});
       setCacheStatus(`Found ${locations.length} hubs — fetching live data...`);
-      setIsAiSearching(false);
       for (const loc of locations) {
         const key = `${loc.city}-${loc.country}`;
         await fetchHub(loc.city, loc.country, key);
         await new Promise(r => setTimeout(r, 400));
       }
+      setLastUpdated(new Date());
       setCacheStatus(`Live data ready for ${locations.length} AI-matched hubs`);
     } catch {
       setCacheStatus("AI hub search failed. Please try again.");
+    } finally {
       setIsAiSearching(false);
     }
   };
 
-  const handleReset = () => {
-    setSearchQuery("");
+  const EXAMPLE_QUERIES = [
+    'best AI hubs Europe',
+    'finance cities Asia',
+    'affordable tech hubs',
+  ];
+
+  const handleRefresh = () => {
     setHasSearched(false);
-    setHubs([]);
-    setHubLoadingStates({});
-    setHubErrors({});
-    setCacheStatus("Fetching live market intelligence...");
-    const loadDefaults = async () => {
-      for (const loc of DEFAULT_HUBS) {
-        const key = `${loc.city}-${loc.country}`;
-        await fetchHub(loc.city, loc.country, key);
-        await new Promise(r => setTimeout(r, 400));
-      }
-      setCacheStatus("Live data synchronized — 2026 market intelligence active");
-    };
-    loadDefaults();
+    setSearchQuery("");
+    loadHubs();
   };
 
   const isAnyLoading = Object.values(hubLoadingStates).some(Boolean);
   const loadedCount = hubs.length;
+  const allErrored = !isAnyLoading && loadedCount === 0 && Object.keys(hubErrors).length > 0;
+
+  const markerHubs = hubs
+    .map(hub => {
+      const coords = resolveHubCoords(hub.city, hub.country);
+      return coords ? { ...hub, coords } : null;
+    })
+    .filter(Boolean) as Array<any>;
+
+  const mapCenter: [number, number] = markerHubs.length
+    ? [markerHubs.reduce((sum, h) => sum + h.coords.lat, 0) / markerHubs.length, markerHubs.reduce((sum, h) => sum + h.coords.lng, 0) / markerHubs.length]
+    : [20, 0];
 
   return (
     <div className="space-y-8">
       <SectionTitle
         title="Career Hub Heatmap"
-        subtitle="Active Geospatial Density: High — Explore global job markets and hiring trends"
+        subtitle={`Market pulse for ${profile.targetLocation || profile.country || 'global'} career hubs`}
       />
 
       {/* Status bar */}
-      {cacheStatus && (
-        <motion.div
-          key={cacheStatus}
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className={`border rounded-xl px-4 py-3 flex items-center gap-2 ${isAnyLoading || isAiSearching ? 'bg-indigo-50 border-indigo-200' : 'bg-emerald-50 border-emerald-200'}`}
-        >
+      <motion.div
+        key={cacheStatus || 'heatmap-status'}
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`border rounded-xl px-4 py-3 flex flex-col sm:flex-row gap-3 sm:gap-2 items-start sm:items-center ${isAnyLoading || isAiSearching ? 'bg-indigo-50 border-indigo-200' : 'bg-emerald-50 border-emerald-200'}`}
+      >
+        <div className="flex items-center gap-2">
           {isAnyLoading || isAiSearching
             ? <Loader2 size={16} className="text-indigo-600 animate-spin shrink-0" />
             : <Zap size={16} className="text-emerald-600 shrink-0" />}
           <span className={`text-xs font-bold ${isAnyLoading || isAiSearching ? 'text-indigo-700' : 'text-emerald-700'}`}>
-            {cacheStatus}
+            {cacheStatus || 'Initializing market hub data...'}
           </span>
-          {isAnyLoading && loadedCount > 0 && (
-            <span className="ml-auto text-[10px] font-black text-indigo-500 uppercase tracking-widest">
-              {loadedCount} loaded
+        </div>
+
+        <div className="flex flex-wrap gap-2 items-center ml-auto">
+          {loadedCount > 0 && !isAnyLoading && lastUpdated && (
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+              Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
-        </motion.div>
+          {loadedCount > 0 && (
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+              {loadedCount} hubs loaded
+            </span>
+          )}
+          <button
+            onClick={handleRefresh}
+            disabled={isAnyLoading}
+            className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all hover:border-slate-300 bg-white text-slate-600 disabled:opacity-50"
+          >
+            Refresh all
+          </button>
+        </div>
+      </motion.div>
+
+      <div className="grid gap-6">
+        {/* Per-hub comparison metrics strip */}
+        {markerHubs.length > 0 && (
+          <div className="flex gap-3 overflow-x-auto py-2 px-1">
+            {markerHubs.map((hub, i) => (
+              <div key={`cmp-${hub.city}-${i}`} className="min-w-[220px] bg-white border border-slate-100 rounded-2xl p-3 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-sm font-black text-slate-800">{hub.city}</p>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-widest">{hub.country}</p>
+                  </div>
+                  <div className="text-xs font-black text-indigo-600">{hub.intensity ?? 'N/A'}%</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="text-slate-500">Cost Index</div>
+                  <div className="font-black text-slate-800">{Number(hub.costOfLiving || 1).toFixed(1)}x</div>
+                  <div className="text-slate-500">Avg Salary</div>
+                  <div className="font-black text-slate-800">${Math.round((hub.averageSalaryRange?.max || 0)/1000)}k</div>
+                  <div className="text-slate-500">Openings</div>
+                  <div className="font-black text-slate-800">{(hub.topCareers || []).reduce((s: number, c: any) => s + (c.openings || 0), 0)}</div>
+                  <div className="text-slate-500">Visa</div>
+                  <div className="font-black text-slate-800">{hub.visaOpenness || 'N/A'}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="bg-white border border-slate-200 rounded-[2rem] overflow-hidden shadow-sm">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 px-5 py-4 border-b border-slate-100">
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.28em]">Map View</p>
+              <h3 className="text-lg font-black text-slate-900 tracking-tight">Spatial Heatmap of Active Hubs</h3>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] text-slate-500">Markers show loaded hubs; larger circles indicate higher hiring intensity.</p>
+            </div>
+          </div>
+          {viewMode === 'map' && (
+            <div className="h-[360px]">
+              <MapContainer center={mapCenter} zoom={2} scrollWheelZoom={false} className="h-full w-full">
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+              />
+              {markerHubs.map((hub, idx) => (
+                <React.Fragment key={`${hub.city}-${hub.country}-${idx}`}>
+                  <Marker position={[hub.coords.lat, hub.coords.lng]}>
+                    <Popup>
+                      <div className="max-w-[200px]">
+                        <p className="text-sm font-black text-slate-900">{hub.city}, {hub.country}</p>
+                        <p className="text-[11px] text-slate-500">Intensity: {hub.intensity ?? 'N/A'}%</p>
+                        <p className="text-[10px] text-slate-500">Health: {hub.marketHealthScore ?? 'N/A'}%</p>
+                      </div>
+                    </Popup>
+                  </Marker>
+                  <Circle
+                    center={[hub.coords.lat, hub.coords.lng]}
+                    radius={Math.max(12000, (hub.intensity ?? 50) * 1200)}
+                    pathOptions={{ color: 'rgba(79,70,229,0.45)', fillColor: 'rgba(79,70,229,0.18)', weight: 1 }}
+                  />
+                </React.Fragment>
+              ))}
+          </MapContainer>
+        </div>
       )}
+
+        {allErrored && (
+          <div className="bg-rose-50 border border-rose-200 rounded-3xl p-6 text-center">
+            <p className="text-sm font-black text-rose-700">Live data temporarily unavailable</p>
+            <p className="mt-2 text-[10px] text-rose-500">We could not fetch fresh hub intelligence right now. Your map is still visible, but results are loading from cached infrastructure when available.</p>
+            <button
+              onClick={handleRefresh}
+              className="mt-4 px-5 py-3 bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-rose-700 transition-all"
+            >
+              Retry all
+            </button>
+          </div>
+        )}
+        </div>
+      </div>
 
       {/* AI Search Bar */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex gap-3 items-center">
@@ -393,8 +522,8 @@ const HeatmapView = () => {
           placeholder='e.g. "best AI hubs Europe", "finance cities Asia", "affordable tech hubs"...'
           className="flex-1 text-sm font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-indigo-400 transition-all"
         />
-        <button
-          onClick={handleAiSearch}
+        <button         
+          onClick={() => handleAiSearch()}
           disabled={isAiSearching || isAnyLoading || !searchQuery.trim()}
           className="px-4 py-2.5 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2 shrink-0"
         >
@@ -403,7 +532,7 @@ const HeatmapView = () => {
         </button>
         {hasSearched && (
           <button
-            onClick={handleReset}
+            onClick={handleRefresh}
             className="p-2.5 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 transition-all active:scale-95 shrink-0"
             title="Reset to default hubs"
           >
@@ -412,8 +541,22 @@ const HeatmapView = () => {
         )}
       </div>
 
-      {/* Hub Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Example queries */}
+      <div className="flex gap-2 mt-2">
+        {EXAMPLE_QUERIES.map((q, i) => (
+          <button
+            key={i}
+            onClick={() => handleAiSearch(q)}
+            className="px-3 py-1 rounded-full bg-slate-50 border border-slate-100 text-[11px] font-bold text-slate-600 hover:bg-indigo-50"
+          >
+            {q}
+          </button>
+        ))}
+      </div>
+
+      {/* Hub Grid (card view) */}
+      {viewMode === 'cards' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Loaded hubs */}
         {hubs.map((hub, idx) => (
           <motion.div
@@ -471,7 +614,8 @@ const HeatmapView = () => {
               </div>
             );
           })}
-      </div>
+        </div>
+      )}
 
       {/* Live Global Insights - shown once at least one hub is loaded */}
       {loadedCount > 0 && !isAnyLoading && (
@@ -495,13 +639,16 @@ const HeatmapView = () => {
               { label: "Avg Health Score", value: `${Math.round(hubs.reduce((s, h) => s + (h.marketHealthScore || 0), 0) / loadedCount)}%`, icon: TrendingUp, color: "text-emerald-600" },
               { label: "Avg Remote Work", value: `${Math.round(hubs.reduce((s, h) => s + (h.remoteWorkPercentage || 0), 0) / loadedCount)}%`, icon: Globe, color: "text-indigo-600" },
               { label: "Hubs Tracked", value: `${loadedCount}`, icon: MapPin, color: "text-purple-600" },
-            ].map((stat, i) => (
-              <div key={i} className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 border border-indigo-100 text-center">
-                <stat.icon size={20} className={`mx-auto mb-2 ${stat.color}`} />
-                <p className={`text-xl font-black ${stat.color}`}>{stat.value}</p>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{stat.label}</p>
-              </div>
-            ))}
+            ].map((stat, i) => {
+              const Icon = stat.icon;
+              return (
+                <div key={i} className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 border border-indigo-100 text-center">
+                  <Icon size={20} className={`mx-auto mb-2 ${stat.color}`} />
+                  <p className={`text-xl font-black ${stat.color}`}>{stat.value}</p>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{stat.label}</p>
+                </div>
+              );
+            })}
           </div>
           <div className="space-y-3">
             {hubs.slice(0, 3).filter(h => h.hiringTrends).map((hub, i) => (
@@ -1433,7 +1580,35 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
               <div>
                 <p className="text-[8px] font-black uppercase tracking-[0.25em] text-rose-500 mb-2">Needs attention</p>
                 <div className="grid grid-cols-2 gap-2.5">
-                  {execSync.filter(item => item.urgent).map(item => (
+                  {execSync.filter(item => item.urgent).map(item => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.label}
+                        onClick={() => onNavigate(item.view)}
+                        className={`p-3.5 rounded-[1.5rem] border ${item.border} ${item.bg} flex flex-col items-start gap-2 transition-all group active:scale-95 hover:shadow-md text-left`}
+                      >
+                        <div className="flex items-start justify-between w-full">
+                          <div className={`w-9 h-9 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                            <Icon size={16} className={item.iconColor} />
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest leading-none">{item.label}</p>
+                          <p className={`text-[7px] font-bold mt-0.5 leading-none ${item.statusColor}`}>{item.sublabel}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            <div>
+              <p className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-500 mb-2">Live insights</p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {execSync.filter(item => !item.urgent).map(item => {
+                  const Icon = item.icon;
+                  return (
                     <button
                       key={item.label}
                       onClick={() => onNavigate(item.view)}
@@ -1441,7 +1616,7 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
                     >
                       <div className="flex items-start justify-between w-full">
                         <div className={`w-9 h-9 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                          <item.icon size={16} className={item.iconColor} />
+                          <Icon size={16} className={item.iconColor} />
                         </div>
                       </div>
                       <div>
@@ -1449,30 +1624,8 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
                         <p className={`text-[7px] font-bold mt-0.5 leading-none ${item.statusColor}`}>{item.sublabel}</p>
                       </div>
                     </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div>
-              <p className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-500 mb-2">Live insights</p>
-              <div className="grid grid-cols-2 gap-2.5">
-                {execSync.filter(item => !item.urgent).map(item => (
-                  <button
-                    key={item.label}
-                    onClick={() => onNavigate(item.view)}
-                    className={`p-3.5 rounded-[1.5rem] border ${item.border} ${item.bg} flex flex-col items-start gap-2 transition-all group active:scale-95 hover:shadow-md text-left`}
-                  >
-                    <div className="flex items-start justify-between w-full">
-                      <div className={`w-9 h-9 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                        <item.icon size={16} className={item.iconColor} />
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest leading-none">{item.label}</p>
-                      <p className={`text-[7px] font-bold mt-0.5 leading-none ${item.statusColor}`}>{item.sublabel}</p>
-                    </div>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1619,7 +1772,18 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
       setAiRecs(results);
     } catch (error) {
       console.error("AI Recommendation Error:", error);
-      setAiRecs([]);
+      setHubs([]);
+      setHubLoadingStates({});
+      setHubErrors({});
+      setCacheStatus(`Found ${locations.length} hubs — fetching live data...`);
+      for (const loc of locations) {
+        const key = `${loc.city}-${loc.country}`;
+        await fetchHub(loc.city, loc.country, key);
+        await new Promise(r => setTimeout(r, 400));
+      }
+      setLastUpdated(new Date());
+      setCacheStatus(`Live data ready for ${locations.length} AI-matched hubs`);
+    setAiSearchResults([]);
     } finally {
       setIsAiLoading(false);
     }
@@ -1628,17 +1792,12 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
   const handleAiSearch = async () => {
     const q = aiSearchQuery.trim();
     if (!q) return;
+
     setIsAiSearching(true);
-    setHasAiSearched(false);
-    setAiSearchResults([]);
     try {
-      const results = await aiSearchInstitutions(q, profile);
-      setAiSearchResults(results);
-      setHasAiSearched(true);
-    } catch (error) {
-      console.error("AI Institution Search Error:", error);
     } finally {
       setIsAiSearching(false);
+      setAiSearchResults(results);      
     }
   };
 
@@ -1999,8 +2158,8 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
                           <X size={11} />
                         </button>
                       )}
-                      <button
-                        onClick={handleAiSearch}
+                      <button                        
+                        onClick={() => handleAiSearch()}
                         disabled={isAiSearching || !aiSearchQuery.trim()}
                         className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50"
                         title="Search globally with AI"
@@ -3339,6 +3498,21 @@ const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfi
   };
   const financialProfile = profile.financialProfile || financialDefaults;
 
+  // Currency handling
+  const currencyOptions = ['USD', 'CHF', 'EUR', 'GBP'];
+  const currency = (profile.preferredCurrency as string) || 'USD';
+  const symbolMap: Record<string, string> = { USD: '$', CHF: 'CHF', EUR: '€', GBP: '£' };
+  const formatMoney = (value: number | string | undefined, cur = currency) => {
+    const num = Number(value || 0);
+    try {
+      return new Intl.NumberFormat(undefined, { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(num);
+    } catch (e) {
+      // Fallback to simple symbol formatting
+      const sym = symbolMap[cur] || cur;
+      return `${sym} ${num.toLocaleString()}`;
+    }
+  };
+
   const updateFinancialProfile = (updater: (current: NonNullable<UserProfile['financialProfile']>) => NonNullable<UserProfile['financialProfile']>) => {
     setProfile(prev => {
       const current = prev.financialProfile || financialDefaults;
@@ -3467,6 +3641,19 @@ Return a concise finance-first recommendation with:
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <SectionTitle title="Financial Intelligence" subtitle="System Integrated Capital Planning" />
+        <div className="flex items-center gap-3">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">Currency</label>
+          <select
+            value={currency}
+            onChange={(e) => setProfile(prev => ({ ...prev, preferredCurrency: e.target.value }))}
+            className="text-sm rounded-lg border border-slate-200 bg-white px-3 py-1"
+            aria-label="Preferred currency"
+          >
+            {currencyOptions.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
         <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
            {['planner', 'projections', 'calculator', 'funding'].map((t) => (
              <button
@@ -3494,10 +3681,11 @@ Return a concise finance-first recommendation with:
                <div className="space-y-2">
                  <label className="text-[10px] font-bold text-slate-400 uppercase">Annual Income</label>
                  <div className="flex items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                   <span className="text-slate-400 font-mono italic">$</span>
+                   <span className="text-slate-400 font-mono italic">{symbolMap[currency] ?? currency}</span>
                    <input 
                      type="number" 
-                     className="bg-transparent outline-none w-full font-bold text-slate-800 text-sm"
+                     className="bg-transparent outline-none w-full font-bold text-slate-800 text-sm placeholder-gray-300"
+                     placeholder="0"
                      value={financialProfile.annualIncome}
                      onChange={(e) => setProfile(prev => ({ 
                        ...prev, 
@@ -3512,7 +3700,8 @@ Return a concise finance-first recommendation with:
                    <PiggyBank size={14} className="text-indigo-600" />
                    <input 
                      type="number" 
-                     className="bg-transparent outline-none w-full font-bold text-indigo-900 text-sm"
+                     className="bg-transparent outline-none w-full font-bold text-indigo-900 text-sm placeholder-gray-300"
+                     placeholder="0"
                      value={financialProfile.currentSavings}
                      onChange={(e) => setProfile(prev => ({ 
                        ...prev, 
@@ -3521,18 +3710,12 @@ Return a concise finance-first recommendation with:
                    />
                  </div>
                </div>
-               <div className="grid grid-cols-2 gap-3">
+               <div className="grid grid-cols-1 gap-3">
                  <button
-                   onClick={addStarterBudget}
-                   className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-indigo-700 transition-all hover:bg-indigo-100"
+                   onClick={() => { addStarterBudget(); }}
+                   className="rounded-xl border border-indigo-200 bg-indigo-600 px-3 py-2 text-[11px] font-black uppercase tracking-widest text-white transition-all hover:bg-indigo-500"
                  >
-                   Load Starter Budget
-                 </button>
-                 <button
-                   onClick={addExpenseItem}
-                   className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-600 transition-all hover:border-indigo-200 hover:text-indigo-600"
-                 >
-                   Add Expense Line
+                   Get Started — Load Starter Budget
                  </button>
                </div>
             </div>
@@ -3543,19 +3726,26 @@ Return a concise finance-first recommendation with:
                 <ShieldCheck size={14} /> AI Recommendation
              </div>
              <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-950/40 p-4 min-h-[96px]">
-               {isAiRecommendationLoading ? (
+              {isAiRecommendationLoading ? (
                  <div className="flex h-full items-center gap-3 text-slate-300">
                    <Loader2 size={14} className="animate-spin text-indigo-400" />
                    <span className="text-[11px] font-bold">Generating finance recommendation...</span>
                  </div>
-               ) : (
+              ) : (
                  <div className="prose prose-invert prose-p:my-0 prose-strong:text-white max-w-none text-slate-300 text-[11px] leading-relaxed">
-                   <ReactMarkdown>{aiRecommendation}</ReactMarkdown>
+                   {aiRecommendation ? (
+                     <ReactMarkdown>{aiRecommendation}</ReactMarkdown>
+                   ) : (
+                     <div>
+                       <p className="font-black text-white">Starter recommendation</p>
+                       <p className="text-slate-300">Most users targeting AI Engineer roles in {profile.targetLocation || profile.country || 'your region'} budget ~{formatMoney(60000)} for living costs — load a sample budget to compare.</p>
+                     </div>
+                   )}
                  </div>
                )}
              </div>
              <button onClick={generateFinancialRecommendation} disabled={isAiRecommendationLoading} className="w-full py-2 bg-indigo-600 rounded-xl font-black uppercase tracking-widest text-[9px] hover:bg-indigo-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
-                {isAiRecommendationLoading ? 'Syncing AI Recommendation' : 'Execute AI Portfolio Sync'}
+               {isAiRecommendationLoading ? 'Generating...' : 'Generate AI Recommendation'}
              </button>
           </div>
         </div>
@@ -3656,17 +3846,20 @@ Return a concise finance-first recommendation with:
                    { label: 'Annual Savings', value: `$${(monthlySavings * 12).toLocaleString()}`, icon: PiggyBank, color: 'text-indigo-600' },
                    { label: 'Compounding Rate', value: '7.4% Avg', icon: TrendingUp, color: 'text-emerald-600' },
                    { label: 'Financial Freedom', value: 'Yr 14 Est.', icon: Target, color: 'text-amber-600' }
-                 ].map((stat, i) => (
-                   <div key={i} className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100/50">
+                  ].map((stat, i) => {
+                   const Icon = stat.icon;
+                   return (
+                    <div key={i} className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100/50">
                       <div className={cn("p-2 bg-white rounded-xl shadow-sm", stat.color)}>
-                         <stat.icon size={16} />
+                        <Icon size={16} />
                       </div>
                       <div>
-                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{stat.label}</p>
-                         <p className="text-sm font-black text-slate-900 tracking-tight">{stat.value}</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{stat.label}</p>
+                        <p className="text-sm font-black text-slate-900 tracking-tight">{stat.value}</p>
                       </div>
-                   </div>
-                 ))}
+                    </div>
+                   );
+                  })}
               </div>
             </div>
           )}
@@ -3675,8 +3868,8 @@ Return a concise finance-first recommendation with:
           {activeTab === 'planner' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
               <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col">
-                <h4 className="text-sm font-bold text-slate-800 mb-6 flex justify-between items-center">
-                  Expense Distribution <span className="text-xs text-slate-400 font-mono tracking-tighter">${totalMonthlyExpenses}/mo</span>
+                  <h4 className="text-sm font-bold text-slate-800 mb-6 flex justify-between items-center">
+                  Expense Distribution <span className="text-xs text-slate-400 font-mono tracking-tighter">{formatMoney(totalMonthlyExpenses)}/mo</span>
                 </h4>
                 {expenseData.length > 0 ? (
                   <>
@@ -4307,7 +4500,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                         activeView === item.view ? 'text-indigo-600 bg-indigo-50' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                       )}
                     >
-                      <item.icon size={12} /> {item.label}
+                      {(() => { const Icon = item.icon; return <Icon size={12} />; })()} {item.label}
                     </button>
                   ))}
                 </motion.div>
@@ -4423,7 +4616,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                         : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
                     )}
                   >
-                    <item.icon size={15} />
+                    {(() => { const Icon = item.icon; return <Icon size={15} />; })()} 
                     {item.label}
                     {activeView === item.view && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-500" />}
                   </button>
@@ -4469,7 +4662,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                    {activeView === 'roadmap' && <RoadmapView profile={profile} pathId={selectedPathId} careers={careers} onNavigate={handleNavigate} onInitInterview={initiateInterview} />}
                    {activeView === 'jobs' && <JobBoardView profile={profile} />}
                    {activeView === 'institutions' && <InstitutionsView profile={profile} selectedPathId={selectedPathId} careerTitle={careers.find(c => c.id === selectedPathId)?.title || selectedPathId} initialSearch={institutionSearchQuery} onInitInterview={initiateInterview} institutions={dynamicInstitutions.length > 0 ? dynamicInstitutions : INSTITUTIONS} isLoading={isInstitutionsLoading} visaGuidance={visaGuidance} isVisaLoading={isVisaLoading} roadmapContext={institutionRoadmapContext} />}
-                   {activeView === 'heatmap' && <HeatmapView />}
+                   {activeView === 'heatmap' && <HeatmapView profile={profile} />}
                    {activeView === 'materials' && <MaterialsView materials={dynamicMaterials.length > 0 ? dynamicMaterials : STUDY_MATERIALS} isLoading={isMaterialsLoading} />}
                    {activeView === 'parent' && <ParentalDashboard profile={profile} onBack={() => setActiveView('dashboard')} careers={careers} />}
                    {activeView === 'expenses' && <FinancialView profile={profile} setProfile={setProfile} />}
@@ -4526,7 +4719,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                     transition={{ type: 'spring', bounce: 0.3, duration: 0.5 }}
                   />
                 )}
-                <item.icon size={18} strokeWidth={(isActive || isMoreActive) ? 2.5 : 1.8} />
+                {(() => { const Icon = item.icon; return <Icon size={18} strokeWidth={(isActive || isMoreActive) ? 2.5 : 1.8} />; })()}
                 <span className="text-[9px] font-black uppercase tracking-widest">{item.label}</span>
               </button>
             );

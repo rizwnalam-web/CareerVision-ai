@@ -7,9 +7,163 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
+import Avatar from './Avatar';
 import { JobListing, UserProfile, MarketInsights } from '../types/career';
 import { JOB_LISTINGS, CAREER_PATHS } from '../constants/mockData';
 import { aiSearchJobs, getAiJobSuggestions, getAiProactiveJobRecommendations, getMarketInsights } from '../services/geminiService';
+
+type JobStatus = 'Saved' | 'Applied' | 'Interviewing' | 'Rejected';
+
+const JOB_STATUS_ORDER: JobStatus[] = ['Saved', 'Applied', 'Interviewing', 'Rejected'];
+
+const COUNTRY_ALIASES: Record<string, string[]> = {
+  usa: ['usa', 'us', 'united states', 'united states of america'],
+  uk: ['uk', 'united kingdom', 'great britain', 'england'],
+  usa_test: ['america', 'states'],
+};
+
+const CURRENCY_BY_COUNTRY: Record<string, string> = {
+  usa: 'USD',
+  'united states': 'USD',
+  uk: 'GBP',
+  'united kingdom': 'GBP',
+  switzerland: 'CHF',
+  germany: 'EUR',
+  france: 'EUR',
+  canada: 'CAD',
+  australia: 'AUD',
+  japan: 'JPY',
+  india: 'INR',
+};
+
+const EXCHANGE_RATES: Record<string, number> = {
+  USD: 1,
+  CHF: 1.09,
+  EUR: 1.08,
+  GBP: 1.27,
+  CAD: 0.74,
+  AUD: 0.66,
+  JPY: 0.0068,
+  INR: 0.012,
+};
+
+function normalizeCountryName(value: string) {
+  return value.trim().toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ');
+}
+
+function isSameCountry(userCountry: string, location: string): boolean {
+  const normalizedUser = normalizeCountryName(userCountry);
+  const normalizedLocation = normalizeCountryName(location);
+
+  const aliases = COUNTRY_ALIASES[normalizedUser] || [];
+  if (aliases.some(alias => normalizedLocation.includes(alias))) {
+    return true;
+  }
+
+  return normalizedLocation.includes(normalizedUser);
+}
+
+function inferVisaBadge(location: string, type: string, userCountry: string) {
+  const isRemote = /remote/i.test(type) || /remote/i.test(location) || /global/i.test(location);
+  if (isRemote) {
+    return { label: 'Remote — no visa required', color: 'emerald' };
+  }
+
+  if (userCountry && isSameCountry(userCountry, location)) {
+    return { label: 'Local role — likely no visa needed', color: 'blue' };
+  }
+
+  return { label: 'Visa sponsorship likely', color: 'amber' };
+}
+
+function inferCurrencyFromCountry(country: string) {
+  const normalized = normalizeCountryName(country);
+  return CURRENCY_BY_COUNTRY[normalized] || 'USD';
+}
+
+function convertCurrency(amount: number, from: string, to: string) {
+  if (from === to) return amount;
+  const fromRate = EXCHANGE_RATES[from] ?? 1;
+  const toRate = EXCHANGE_RATES[to] ?? 1;
+  return amount * (fromRate / toRate);
+}
+
+function formatCurrency(value: number, currency: string) {
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
+  } catch {
+    return `${currency} ${Math.round(value)}`;
+  }
+}
+
+function getSalaryDisplay(job: JobListing, preferredCurrency: string) {
+  const primaryMin = formatCurrency(job.salary.min, job.salary.currency);
+  const primaryMax = formatCurrency(job.salary.max, job.salary.currency);
+  if (preferredCurrency === job.salary.currency) {
+    return { primary: `${primaryMin}–${primaryMax}` };
+  }
+
+  const convertedMin = convertCurrency(job.salary.min, job.salary.currency, preferredCurrency);
+  const convertedMax = convertCurrency(job.salary.max, job.salary.currency, preferredCurrency);
+  return {
+    primary: `${primaryMin}–${primaryMax}`,
+    secondary: `(~${formatCurrency(convertedMin, preferredCurrency)}–${formatCurrency(convertedMax, preferredCurrency)})`,
+  };
+}
+
+function inferMarketHeading(locationQuery: string, profile: UserProfile) {
+  const trimmed = locationQuery.trim();
+  if (!trimmed) return profile.targetLocation || profile.country || 'Global';
+  if (/remote|global/i.test(trimmed)) return 'Remote / Global';
+  const parts = trimmed.split(',').map(p => p.trim()).filter(Boolean);
+  return parts.length > 1 ? parts[parts.length - 1] : trimmed;
+}
+
+function inferMarketRegion(locationQuery: string, profile: UserProfile) {
+  const trimmed = locationQuery.trim();
+  if (!trimmed) return profile.targetLocation || profile.country || 'Global';
+  if (/remote|global/i.test(trimmed)) return profile.targetLocation || profile.country || 'Global';
+  const parts = trimmed.split(',').map(p => p.trim()).filter(Boolean);
+  return parts.length > 1 ? parts[parts.length - 1] : profile.targetLocation || profile.country || 'Global';
+}
+
+function calculateMatchScore(job: JobListing, profile: UserProfile, searchQuery: string, locationQuery: string, activeCareer: string) {
+  let score = 30;
+  const careerMatch = job.careerId === profile.targetCareerId;
+  if (careerMatch) score += 35;
+
+  const search = searchQuery.toLowerCase();
+  if (search && (job.title.toLowerCase().includes(search) || job.company.toLowerCase().includes(search))) {
+    score += 20;
+  }
+
+  const location = locationQuery.toLowerCase();
+  if (location && (job.location.toLowerCase().includes(location) || /remote|global/i.test(location))) {
+    score += 20;
+  } else if (/remote/i.test(job.type)) {
+    score += 10;
+  }
+
+  if (activeCareer !== 'All' && job.careerId === CAREER_PATHS.find(c => c.title === activeCareer)?.id) {
+    score += 10;
+  }
+
+  return Math.min(100, score);
+}
+
+function formatRelativeDate(dateString: string) {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return dateString;
+
+  const diffMs = Date.now() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays <= 0) return 'Posted today';
+  if (diffDays === 1) return 'Posted yesterday';
+  if (diffDays < 30) return `Posted ${diffDays} days ago`;
+
+  const diffMonths = Math.floor(diffDays / 30);
+  return `Posted ${diffMonths} month${diffMonths === 1 ? '' : 's'} ago`;
+}
 
 export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -36,21 +190,33 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
   // Proactive State
   const [proactiveRecs, setProactiveRecs] = useState<JobListing[]>([]);
   const [isProactiveLoading, setIsProactiveLoading] = useState(false);
+  const [jobStatusMap, setJobStatusMap] = useState<Record<string, JobStatus>>(() => {
+    const existing = localStorage.getItem('jobStatusMap');
+    return existing ? (JSON.parse(existing) as Record<string, JobStatus>) : {};
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(4);
 
   // Market Insights State
   const [marketInsights, setMarketInsights] = useState<MarketInsights | null>(null);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
+  const preferredCurrency = profile.preferredCurrency || inferCurrencyFromCountry(profile.country);
 
   useEffect(() => {
     localStorage.setItem('savedJobs', JSON.stringify(savedJobIds));
   }, [savedJobIds]);
 
   useEffect(() => {
+    localStorage.setItem('jobStatusMap', JSON.stringify(jobStatusMap));
+  }, [jobStatusMap]);
+
+  useEffect(() => {
     const fetchInsights = async () => {
       const careerId = profile.targetCareerId || CAREER_PATHS[0].id;
+      const marketRegion = inferMarketRegion(locationQuery, profile);
       setIsLoadingInsights(true);
       try {
-        const insights = await getMarketInsights(careerId, profile.country);
+        const insights = await getMarketInsights(careerId, marketRegion);
         setMarketInsights(insights);
       } catch (error) {
         console.error("Failed to fetch market insights:", error);
@@ -59,23 +225,62 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
       }
     };
     fetchInsights();
-  }, [profile.targetCareerId, profile.country]);
+  }, [locationQuery, profile.targetCareerId, profile.targetLocation, profile.country]);
 
   const toggleSaveJob = (id: string) => {
-    setSavedJobIds(prev => 
-      prev.includes(id) ? prev.filter(jobId => jobId !== id) : [...prev, id]
-    );
+    setSavedJobIds(prev => {
+      const saved = prev.includes(id);
+      const updated = saved ? prev.filter(jobId => jobId !== id) : [...prev, id];
+
+      setJobStatusMap((statusMap) => {
+        if (saved) {
+          const nextMap = { ...statusMap };
+          if (nextMap[id] === 'Saved') {
+            delete nextMap[id];
+          }
+          return nextMap;
+        }
+
+        return {
+          ...statusMap,
+          [id]: statusMap[id] || 'Saved',
+        };
+      });
+
+      return updated;
+    });
+  };
+
+  const updateJobStatus = (id: string, status: JobStatus) => {
+    setJobStatusMap((prev) => ({
+      ...prev,
+      [id]: status,
+    }));
+
+    if (status === 'Saved') {
+      setSavedJobIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    }
   };
 
   const loadProactiveRecs = async () => {
-    if (savedJobIds.length === 0) return;
     setIsProactiveLoading(true);
     try {
       const savedJobs = JOB_LISTINGS.filter(j => savedJobIds.includes(j.id));
+      if (savedJobs.length === 0) {
+        const fallback = JOB_LISTINGS.filter(j => j.careerId === profile.targetCareerId).slice(0, 4);
+        setProactiveRecs(fallback);
+        setCurrentPage(1);
+        return;
+      }
+
       const results = await getAiProactiveJobRecommendations(profile, savedJobs);
       setProactiveRecs(results);
+      setCurrentPage(1);
     } catch (error) {
       console.error("Proactive Recs Error:", error);
+      const fallback = JOB_LISTINGS.filter(j => j.careerId === profile.targetCareerId).slice(0, 4);
+      setProactiveRecs(fallback);
+      setCurrentPage(1);
     } finally {
       setIsProactiveLoading(false);
     }
@@ -108,6 +313,16 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
     });
   }, [searchQuery, locationQuery, activeCareer, activeType, aiResults, hasAiSearched, suggestions, proactiveRecs, showSavedOnly, savedJobIds]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredJobs.length / pageSize));
+  const paginatedJobs = filteredJobs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const visibleJobsCount = paginatedJobs.length;
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
   const loadAiSuggestions = async () => {
     setIsSuggesting(true);
     setShowSuggestions(true);
@@ -116,21 +331,28 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
       setSuggestions(results);
     } catch (error) {
       console.error("Suggestions Error:", error);
+      const fallback = JOB_LISTINGS.filter(j => j.careerId === profile.targetCareerId).slice(0, 4);
+      setSuggestions(fallback);
     } finally {
       setIsSuggesting(false);
     }
   };
 
   const handleAiSearch = async () => {
-    if (!searchQuery.trim() && !locationQuery.trim()) return;
-    
+    const q = searchQuery.trim() || "Top jobs";
+    const loc = locationQuery.trim() || "Global";
+
     setIsAiSearching(true);
     setHasAiSearched(true);
     try {
-      const results = await aiSearchJobs(searchQuery, locationQuery || "Global");
+      const results = await aiSearchJobs(q, loc);
       setAiResults(results);
+      setCurrentPage(1);
     } catch (error) {
       console.error("AI Job Search Error:", error);
+      const fallback = JOB_LISTINGS.filter(j => j.careerId === profile.targetCareerId).slice(0, 4);
+      setAiResults(fallback);
+      setCurrentPage(1);
     } finally {
       setIsAiSearching(false);
     }
@@ -153,9 +375,12 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
               Live
             </div>
           </div>
-          <p className="text-slate-500 font-bold text-sm uppercase tracking-widest flex items-center gap-2">
+            <p className="text-slate-500 font-bold text-sm uppercase tracking-widest flex items-center gap-2">
             <TrendingUp size={14} className="text-emerald-500" />
             {filteredJobs.length} Market Matches Analyzed
+            {filteredJobs.length > visibleJobsCount && (
+              <span className="text-[10px] text-slate-400 normal-case">({filteredJobs.length} total, page {currentPage}/{totalPages})</span>
+            )}
           </p>
         </div>
         
@@ -183,7 +408,7 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
 
           <button 
             onClick={loadProactiveRecs}
-            disabled={isProactiveLoading || savedJobIds.length === 0}
+            disabled={isProactiveLoading}
             className={cn(
               "flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-2",
               proactiveRecs.length > 0
@@ -192,14 +417,14 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
             )}
           >
             {isProactiveLoading ? <Loader2 size={14} className="animate-spin" /> : <TrendingUp size={14} />}
-            {isProactiveLoading ? "Sourcing..." : proactiveRecs.length > 0 ? "AI Recommendations Ready" : "AI Source From Saved"}
+            {isProactiveLoading ? "Sourcing..." : proactiveRecs.length > 0 ? "AI Recommendations Ready" : "Source Jobs From Saved"}
           </button>
 
           <button 
             onClick={loadAiSuggestions}
-          disabled={isSuggesting}
-          className="group relative flex items-center gap-3 bg-white border-2 border-indigo-100 px-6 py-4 rounded-[2rem] hover:border-indigo-500 transition-all shadow-sm hover:shadow-indigo-500/10 active:scale-95 disabled:opacity-50"
-        >
+            disabled={isSuggesting}
+            className="group relative flex items-center gap-3 bg-white border-2 border-indigo-100 px-6 py-4 rounded-[2rem] hover:border-indigo-500 transition-all shadow-sm hover:shadow-indigo-500/10 active:scale-95 disabled:opacity-50"
+          >
           <div className="w-10 h-10 rounded-2xl bg-indigo-500 flex items-center justify-center text-white shadow-lg group-hover:rotate-12 transition-transform">
             {isSuggesting ? <Loader2 size={18} className="animate-spin" /> : <BrainCircuit size={18} />}
           </div>
@@ -239,7 +464,7 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
                 </button>
               </div>
 
-              {isSuggesting ? (
+                  {isSuggesting ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {[1, 2].map(i => (
                     <div key={i} className="h-24 bg-white/50 animate-pulse rounded-2xl" />
@@ -255,9 +480,7 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
                       className="bg-white p-4 rounded-2xl border border-indigo-100 shadow-sm flex items-center justify-between gap-4 group hover:border-indigo-500 transition-colors"
                     >
                       <div className="flex items-center gap-3 overflow-hidden">
-                        <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center shrink-0">
-                          {job.logo ? <img src={job.logo} className="w-full h-full object-cover" /> : <Building2 size={18} className="text-slate-300" />}
-                        </div>
+                        <Avatar name={job.company} src={job.logo} size={40} className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center shrink-0" />
                         <div className="overflow-hidden">
                            <h4 className="text-xs font-black text-slate-950 truncate uppercase tracking-tight">{job.title}</h4>
                            <p className="text-[10px] font-bold text-slate-400 truncate">{job.company}</p>
@@ -320,7 +543,7 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
 
           <button 
             onClick={handleAiSearch}
-            disabled={isAiSearching || (!searchQuery.trim() && !locationQuery.trim())}
+            disabled={isAiSearching}
             className={cn(
               "px-6 py-4 rounded-[1.5rem] font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 transition-all shadow-xl disabled:opacity-50 disabled:grayscale",
               isAiSearching ? "bg-indigo-900 text-white" : "bg-indigo-600 text-white shadow-indigo-200 hover:-translate-y-1"
@@ -396,9 +619,7 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
                 className="bg-white/5 border border-white/10 p-5 rounded-[2rem] hover:bg-white/10 transition-all group"
               >
                 <div className="flex items-center gap-4 mb-4">
-                   <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center overflow-hidden shrink-0">
-                      <img src={job.logo} className="w-full h-full object-cover" />
-                   </div>
+                   <Avatar name={job.company} src={job.logo} size={48} className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center overflow-hidden shrink-0" />
                    <div className="overflow-hidden">
                       <h4 className="font-black text-sm uppercase truncate">{job.title}</h4>
                       <p className="text-[10px] font-bold text-emerald-400 uppercase truncate">{job.company}</p>
@@ -435,7 +656,7 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
               </div>
               <div>
                 <h3 className="text-xl font-black uppercase tracking-tighter">Market Pulse</h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{profile.country} Intelligence</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{inferMarketHeading(locationQuery, profile)} Intelligence</p>
               </div>
             </div>
 
@@ -544,13 +765,18 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
         <div className="xl:col-span-8 flex flex-col gap-6">
           {/* Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-y-auto pr-2 pb-12 scrollbar-hide">
-            {filteredJobs.map((job, i) => (
+            {paginatedJobs.map((job, i) => (
               <JobCard 
                 key={job.id} 
                 job={job} 
                 index={i} 
+                status={jobStatusMap[job.id] ?? 'Saved'}
                 isSaved={savedJobIds.includes(job.id)}
                 onToggleSave={() => toggleSaveJob(job.id)}
+                onChangeStatus={(status) => updateJobStatus(job.id, status)}
+                userCountry={profile.country}
+                preferredCurrency={preferredCurrency}
+                matchScore={calculateMatchScore(job, profile, searchQuery, locationQuery, activeCareer)}
               />
             ))}
             {filteredJobs.length === 0 && (
@@ -565,14 +791,45 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
               </div>
             )}
           </div>
+          {filteredJobs.length > 0 && (
+            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-white border border-slate-200 rounded-3xl shadow-sm">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.24em]">
+                Showing {visibleJobsCount} of {filteredJobs.length} matches
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  className={cn(
+                    "rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all",
+                    currentPage <= 1 ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-indigo-600 text-white hover:bg-indigo-700"
+                  )}
+                >
+                  Prev
+                </button>
+                <button
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  className={cn(
+                    "rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all",
+                    currentPage >= totalPages ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-indigo-600 text-white hover:bg-indigo-700"
+                  )}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-const JobCard = ({ job, index, isSaved, onToggleSave }: { job: JobListing, index: number, isSaved: boolean, onToggleSave: () => void }) => {
+const JobCard = ({ job, index, status, isSaved, onToggleSave, onChangeStatus, userCountry, preferredCurrency, matchScore }: { job: JobListing, index: number, status: JobStatus, isSaved: boolean, onToggleSave: () => void, onChangeStatus: (status: JobStatus) => void, userCountry: string, preferredCurrency: string, matchScore: number }) => {
   const career = CAREER_PATHS.find(c => c.id === job.careerId);
+  const visaBadge = inferVisaBadge(job.location, job.type, userCountry);
+  const salaryDisplay = getSalaryDisplay(job, preferredCurrency);
   
   return (
     <motion.div
@@ -582,14 +839,8 @@ const JobCard = ({ job, index, isSaved, onToggleSave }: { job: JobListing, index
       className="group bg-white border-2 border-transparent hover:border-indigo-100 rounded-[2.5rem] p-8 transition-all hover:shadow-2xl hover:shadow-indigo-500/10 flex flex-col gap-6 relative"
     >
       <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-100 overflow-hidden shadow-sm group-hover:bg-white transition-colors">
-            {job.logo ? (
-              <img src={job.logo} alt={job.company} className="w-full h-full object-cover" />
-            ) : (
-              <Building2 size={24} className="text-slate-300" />
-            )}
-          </div>
+          <div className="flex items-center gap-3">
+          <Avatar name={job.company} src={job.logo} size={56} className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-100 overflow-hidden shadow-sm group-hover:bg-white transition-colors" />
           <div>
             <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter leading-tight group-hover:text-indigo-600 transition-colors">
               {job.title}
@@ -597,6 +848,7 @@ const JobCard = ({ job, index, isSaved, onToggleSave }: { job: JobListing, index
             <p className="text-slate-500 font-bold text-xs uppercase tracking-widest flex items-center gap-2 mt-1">
               {job.company} <CheckCircle2 size={12} className="text-emerald-500" />
             </p>
+            <p className="text-[10px] text-slate-400 mt-1" title={job.postedAt}>{formatRelativeDate(job.postedAt)}</p>
           </div>
         </div>
         <div className="bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest">
@@ -605,13 +857,21 @@ const JobCard = ({ job, index, isSaved, onToggleSave }: { job: JobListing, index
       </div>
 
       <div className="grid grid-cols-2 gap-4 py-6 border-y border-slate-50">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400">
-            <MapPin size={18} />
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400">
+              <MapPin size={18} />
+            </div>
+            <div>
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Location</p>
+              <p className="text-xs font-black text-slate-900">{job.location}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Location</p>
-            <p className="text-xs font-black text-slate-900">{job.location}</p>
+          <div className={cn(
+            "inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em]",
+            visaBadge.color === 'emerald' ? 'bg-emerald-50 text-emerald-700' : visaBadge.color === 'blue' ? 'bg-sky-50 text-sky-700' : 'bg-amber-50 text-amber-700'
+          )}>
+            <span>{visaBadge.label}</span>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -621,45 +881,62 @@ const JobCard = ({ job, index, isSaved, onToggleSave }: { job: JobListing, index
           <div>
             <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Salary Estimate</p>
             <p className="text-xs font-black text-slate-900">
-              {job.salary.currency} {job.salary.min.toLocaleString()} - {job.salary.max.toLocaleString()}
+              {salaryDisplay.primary}
             </p>
+            {salaryDisplay.secondary && (
+              <p className="text-[9px] text-slate-500 mt-1">{salaryDisplay.secondary}</p>
+            )}
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-         {career && (
-           <div className="bg-slate-900 text-white px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
-              <Sparkles size={12} /> {career.title}
-           </div>
-         )}
-         <div className="bg-slate-50 text-slate-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
-            <Clock size={12} /> {job.postedAt}
-         </div>
-      </div>
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-2 text-[10px] font-black uppercase tracking-[0.24em] text-slate-600" aria-label={`Match score ${Math.round(matchScore)} percent`}>
+            <Sparkles size={12} className="text-slate-500" /> {Math.round(matchScore)}% Match
+          </div>
+          {JOB_STATUS_ORDER.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onChangeStatus(option)}
+              className={cn(
+                "text-[10px] font-black uppercase tracking-[0.24em] rounded-full px-3 py-2 transition-all",
+                status === option
+                  ? option === 'Rejected'
+                    ? 'bg-rose-500 text-white'
+                    : option === 'Interviewing'
+                      ? 'bg-amber-500 text-white'
+                      : option === 'Applied'
+                        ? 'bg-sky-600 text-white'
+                        : 'bg-indigo-600 text-white'
+                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              )}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
 
-      <p className="text-xs font-medium text-slate-500 line-clamp-2 leading-relaxed">
-        {job.description}
-      </p>
-
-      <div className="pt-2 flex items-center justify-between">
-        <button 
-          onClick={onToggleSave}
-          className={cn(
-            "p-2 rounded-xl transition-all active:scale-90",
-            isSaved ? "text-rose-600 bg-rose-50 hover:bg-rose-100" : "text-slate-400 hover:text-rose-500 hover:bg-slate-50"
-          )}
-        >
-           <Bookmark size={20} className={isSaved ? "fill-rose-600" : ""} />
-        </button>
-        <a 
-          href={job.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-lg shadow-indigo-600/20"
-        >
-          View Details <ArrowUpRight size={14} />
-        </a>
+        <div className="pt-2 flex items-center justify-between">
+          <button 
+            onClick={onToggleSave}
+            className={cn(
+              "p-2 rounded-xl transition-all active:scale-90",
+              isSaved ? "text-rose-600 bg-rose-50 hover:bg-rose-100" : "text-slate-400 hover:text-rose-500 hover:bg-slate-50"
+            )}
+          >
+             <Bookmark size={20} className={isSaved ? "fill-rose-600" : ""} />
+          </button>
+          <a 
+            href={job.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-lg shadow-indigo-600/20"
+          >
+            View Details <ArrowUpRight size={14} />
+          </a>
+        </div>
       </div>
     </motion.div>
   );
