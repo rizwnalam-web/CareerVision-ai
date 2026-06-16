@@ -5,6 +5,7 @@ import net from "net";
 import { testConnection, closeConnection } from "./db/database.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { runMigrations } from "./migrations/runMigrations.js";
+import { probeProviders } from "./services/deepseekService.js";
 
 // Import routes
 import careersRouter from "./routes/careers.js";
@@ -109,6 +110,9 @@ async function startServer() {
       console.error("Cannot start server without database connection");
       process.exit(1);
     }
+
+    // Probe LLM providers — lock in the first available one
+    probeProviders().catch(err => console.warn("[LLM] Startup probe failed:", err));
 
     const server = app.listen(PORT, "0.0.0.0", () => {
       console.log(`\n✓ CareerVision API Server running on http://localhost:${PORT}`);

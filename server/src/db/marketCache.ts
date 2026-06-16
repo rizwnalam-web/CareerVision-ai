@@ -196,7 +196,7 @@ export async function saveCachedTopCareers(careers: any[]): Promise<boolean> {
     for (const career of careers) {
       await db.none(
         `INSERT INTO career_paths (id, title, description, growth, category, sub_category, work_type, tags, is_top_global, cached_at, expires_at)
-         VALUES (COALESCE($1, uuid_generate_v4()), $2, $3, $4, $5, $6, $7, $8, true, NOW(), NOW() + INTERVAL '7 days')
+         VALUES (uuid_generate_v4(), $1, $2, $3, $4, $5, $6, $7, true, NOW(), NOW() + INTERVAL '7 days')
          ON CONFLICT (title) DO UPDATE SET
            description = EXCLUDED.description,
            growth = EXCLUDED.growth,
@@ -208,13 +208,16 @@ export async function saveCachedTopCareers(careers: any[]): Promise<boolean> {
            cached_at = NOW(),
            expires_at = NOW() + INTERVAL '7 days'`,
         [
-          career.id || null,
           career.title,
           career.description,
           career.growth || "high",
           career.category || "General",
           career.subCategory || career.sub_category || "",
-          career.workType || career.work_type || "Remote",
+          (() => {
+            const wt = career.workType || career.work_type || "Remote";
+            const valid = ["Remote", "On-site", "Hybrid", "Mobile"];
+            return valid.includes(wt) ? wt : "Remote";
+          })(),
           Array.isArray(career.tags) ? JSON.stringify(career.tags) : career.tags || "[]",
         ]
       );
@@ -271,12 +274,21 @@ export async function getCachedInstitutionsByQuery(
 export async function saveCachedInstitutions(institutions: any[]): Promise<boolean> {
   try {
     for (const institution of institutions) {
+      // Validate and sanitize application_deadline — must be a parseable date or null
+      let appDeadline: string | null = null;
+      const rawDeadline = institution.applicationDeadline || institution.application_deadline;
+      if (rawDeadline) {
+        // Strip ordinal suffixes (1st, 2nd, 3rd, 4th, etc.) and try parsing with current year appended
+        const cleaned = String(rawDeadline).replace(/(\d+)(st|nd|rd|th)/gi, '$1');
+        const withYear = /\d{4}/.test(cleaned) ? cleaned : `${cleaned} ${new Date().getFullYear()}`;
+        const d = new Date(withYear);
+        if (!isNaN(d.getTime())) appDeadline = d.toISOString().split('T')[0];
+      }
       await db.none(
         `INSERT INTO institutions (id, name, location, city, country, type, avg_cost, programs, ranking, image, application_deadline, website, allows_international_students, visa_support, latitude, longitude, cost_of_living_index)
-         VALUES (COALESCE($1, uuid_generate_v4()), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+         VALUES (uuid_generate_v4(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
          ON CONFLICT DO NOTHING`,
         [
-          institution.id || null,
           institution.name,
           institution.location || `${institution.city || ""}, ${institution.country || ""}`,
           institution.city || "",
@@ -286,7 +298,7 @@ export async function saveCachedInstitutions(institutions: any[]): Promise<boole
           Array.isArray(institution.programs) ? JSON.stringify(institution.programs) : institution.programs || "[]",
           institution.ranking || null,
           institution.image || institution.logo || "",
-          institution.applicationDeadline || institution.application_deadline || null,
+          appDeadline,
           institution.website || "",
           institution.allowsInternationalStudents ?? institution.allows_international_students ?? true,
           institution.visaSupport || institution.visa_support || "Full",
@@ -307,6 +319,9 @@ export async function getCachedStudyMaterialsByCareer(
   careerId: string
 ): Promise<any[] | null> {
   try {
+    // careerId may be a numeric string from AI; skip cache lookup if it's not a valid UUID
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(careerId);
+    if (!isUuid) return null;
     const materials = await db.manyOrNone(
       `SELECT * FROM study_materials
        WHERE career_id = $1
@@ -329,10 +344,9 @@ export async function saveCachedStudyMaterials(
     for (const material of materials) {
       await db.none(
         `INSERT INTO study_materials (id, title, type, provider, url, career_id, duration, thumbnail, region, language, rating, skill_level, tags, description)
-         VALUES (COALESCE($1, uuid_generate_v4()), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         VALUES (uuid_generate_v4(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
          ON CONFLICT DO NOTHING`,
         [
-          material.id || null,
           material.title,
           material.type || "article",
           material.provider || "",

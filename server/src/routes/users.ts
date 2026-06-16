@@ -213,7 +213,7 @@ router.delete("/:id", async (req, res) => {
 // Register new user with email and password
 router.post("/auth/register", async (req, res) => {
   try {
-    const { email, name, password, age, country, interests, budget, education }: RegistrationRequest = req.body;
+    const { email, name, password, age, country, interests, budget, education, targetLocation, gpa, targetVisaType }: RegistrationRequest & { targetLocation?: string; gpa?: number; targetVisaType?: string } = req.body;
 
     console.log("Registration request:", { email, name, passwordProvided: !!password });
 
@@ -255,8 +255,8 @@ router.post("/auth/register", async (req, res) => {
     try {
       await db.none(
         `INSERT INTO users 
-         (id, email, name, password_hash, age, country, interests, budget, education, registration_method)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+         (id, email, name, password_hash, age, country, target_location, interests, budget, education, gpa, registration_method)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
         [
           id,
           email,
@@ -264,9 +264,11 @@ router.post("/auth/register", async (req, res) => {
           passwordHash,
           age || null,
           country || null,
+          targetLocation || null,
           interests ? JSON.stringify(interests) : null,
           budget || null,
           education || null,
+          gpa || null,
           "email"
         ]
       );
@@ -289,9 +291,11 @@ router.post("/auth/register", async (req, res) => {
       name,
       age,
       country,
+      targetLocation,
       interests: interests ? JSON.stringify(interests) : undefined,
       budget,
       education,
+      gpa,
       registrationMethod: "email",
       createdAt: new Date(),
       updatedAt: new Date()

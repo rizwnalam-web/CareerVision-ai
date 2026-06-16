@@ -22,9 +22,18 @@ export const AuthProvider = ({ children }: { children: (props: { user: AuthUser 
   const [loading, setLoading] = useState(true);
 
   React.useEffect(() => {
+    // Track the last known UID so we can detect fresh logins vs page refreshes
+    let lastKnownUid: string | null = sessionStorage.getItem('cv_firebase_uid');
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setLoading(true);
       if (firebaseUser) {
+        // If UID changed (fresh login, not a refresh), reset to dashboard
+        if (lastKnownUid !== firebaseUser.uid) {
+          sessionStorage.removeItem('cv_activeView');
+          sessionStorage.setItem('cv_firebase_uid', firebaseUser.uid);
+          lastKnownUid = firebaseUser.uid;
+        }
         const userDocRef = doc(db, 'users', firebaseUser.uid);
         try {
           const userDoc = await getDoc(userDocRef);
@@ -37,7 +46,7 @@ export const AuthProvider = ({ children }: { children: (props: { user: AuthUser 
             profile = {
               uid: firebaseUser.uid,
               email: firebaseUser.email,
-              name: firebaseUser.displayName || 'Anonymous Explorer',
+              name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
               interests: [],
@@ -54,6 +63,8 @@ export const AuthProvider = ({ children }: { children: (props: { user: AuthUser 
         }
       } else {
         setUser(null);
+        sessionStorage.removeItem('cv_firebase_uid');
+        lastKnownUid = null;
       }
       setLoading(false);
     });

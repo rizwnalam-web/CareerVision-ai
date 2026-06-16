@@ -25,6 +25,14 @@ import type {
   CareerSkillGap,
 } from "../types/career";
 
+/** Strip markdown code fences (```json ... ``` or ``` ... ```) from LLM responses */
+function extractJSON(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) return fenced[1].trim();
+  return raw.trim();
+}
+
 const CAREER_PROFILES: Record<string, {
   required_skills: string[];
   certifications: string[];
@@ -189,11 +197,15 @@ function isInsufficientBalanceError(error: unknown): boolean {
   return /status\s*402|insufficient balance|402/i.test(message);
 }
 
+// Simple concurrency limiter: allow at most 1 concurrent LLM call to avoid provider rate limits
+let _llmQueueHead = Promise.resolve();
 async function callLLM(prompt: string, systemInstruction: string, options: DeepSeekRequest = {}) {
-  const result = await generateDeepSeekResponse(prompt, {
-    ...options,
-    systemInstruction,
-  });
+  // Chain onto the current queue so requests run sequentially
+  const result = await (_llmQueueHead = _llmQueueHead.then(async () => {
+    return generateDeepSeekResponse(prompt, { ...options, systemInstruction });
+  }).catch(async () => {
+    return generateDeepSeekResponse(prompt, { ...options, systemInstruction });
+  }));
 
   if (result.source === "error") {
     const errorMessage = result.error || "LLM request failed";
@@ -237,7 +249,7 @@ export async function aiSearchStudyMaterials(query: string): Promise<StudyMateri
 
   try {
     const text = await callLLM(prompt, systemInstruction, { temperature: 0.7 });
-    const results = JSON.parse(text ?? "");
+    const results = parseAIJson<any[]>(text);
     return Array.isArray(results) ? results : [];
   } catch (error) {
     console.error("AI Search Failed:", error);
@@ -277,7 +289,7 @@ export async function aiSearchJobs(query: string, location: string): Promise<Job
 
   try {
     const text = await callLLM(prompt, systemInstruction, { temperature: 0.7 });
-    const results = JSON.parse(text ?? "");
+    const results = parseAIJson<JobListing[]>(text);
     return Array.isArray(results) ? results : [];
   } catch (error) {
     console.error("AI Job Search Failed:", error);
@@ -510,7 +522,7 @@ ${JSON.stringify(profile, null, 2)}`;
 
   try {
     const text = await callLLM(prompt, systemInstruction, { temperature: 0.4, maxTokens: 1200 });
-    const results = JSON.parse(text ?? "");
+    const results = parseAIJson<JobListing[]>(text);
     return Array.isArray(results) ? results : [];
   } catch (error) {
     console.error("AI Job Suggestions Failed:", error);
@@ -560,7 +572,7 @@ ${JSON.stringify(profile, null, 2)}`;
 
   try {
     const text = await callLLM(prompt, systemInstruction, { temperature: 0.4, maxTokens: 1200 });
-    const results = JSON.parse(text ?? "");
+    const results = parseAIJson<JobListing[]>(text);
     return Array.isArray(results) ? results : [];
   } catch (error) {
     console.error("AI Proactive Job Recommendations Failed:", error);
@@ -575,8 +587,7 @@ Country: ${country}`;
 
   try {
     const text = await callLLM(prompt, systemInstruction, { temperature: 0.2, maxTokens: 1200 });
-    const result = JSON.parse(text ?? "null");
-    return result;
+    return parseAIJson<MarketInsights>(text) ?? null;
   } catch (error) {
     console.error("Market Insights Failed:", error);
     return null;
@@ -605,7 +616,7 @@ Rules:
 
   try {
     const text = await callLLM(prompt, systemInstruction, { temperature: 0.2, maxTokens: 3000 });
-    const careers: CareerPath[] = JSON.parse(text ?? "");
+    const careers: CareerPath[] = parseAIJson<CareerPath[]>(text) ?? [];
 
     if (!Array.isArray(careers) || careers.length === 0) return [];
 
@@ -636,7 +647,7 @@ Return a JSON array of exactly 10 career objects with all required fields.`;
 
   try {
     const text = await callLLM(prompt, systemInstruction, { temperature: 0.2, maxTokens: 3000 });
-    const parsed = JSON.parse(text ?? "");
+    const parsed = parseAIJson<CareerPath[]>(text);
     return Array.isArray(parsed) ? parsed : [];
   } catch (error: any) {
     console.error("[CareerSearch] AI search failed:", error);
@@ -655,43 +666,19 @@ export async function getDynamicInstitutions(
   }
 
   const systemInstruction = `You are an expert global education consultant.
-Return ONLY valid JSON. No markdown, no explanation, no extra text.
-Recommend top 20 REAL institutions matching the student's profile and career goals.
-Use actual, existing institutions with real websites, realistic programs, and valid locations.
-Institution schema:
-{
-  "id": "string",
-  "name": "string",
-  "location": "string",
-  "city": "string",
-  "country": "string",
-  "type": "University" | "Vocational" | "Polytechnic" | "Medical School" | "Business School",
-  "programs": ["string"],
-  "avgCost": number,
-  "ranking": number,
-  "image": "string",
-  "applicationDeadline": "string",
-  "website": "string",
-  "allowsInternationalStudents": boolean,
-  "visaSupport": "Full" | "Partial" | "None",
-  "coordinates": { "lat": number, "lng": number },
-  "costOfLivingIndex": number
-}`;
+Return ONLY valid JSON array. No markdown, no explanation, no extra text.
+Recommend 8 REAL institutions matching the student's profile and career goals.
+Use actual, existing institutions with real websites and valid locations.
+Schema per object: {"id":"string","name":"string","location":"string","city":"string","country":"string","type":"University","programs":["string"],"avgCost":number,"ranking":number,"image":"","applicationDeadline":"string","website":"string","allowsInternationalStudents":true,"visaSupport":"Full","coordinates":{"lat":number,"lng":number},"costOfLivingIndex":1.0}`;
 
-  const prompt = `Find top 20 institutions for:
-Career: ${careerId}
-Target Location: ${targetLocation}
-Budget: $${profile.budget}/year
-Home Country: ${profile.country}
-Education Level: ${profile.education}
-GPA: ${profile.academicPerformance?.gpa || 3.5}
-
-Return only a JSON array of institutions matching the schema above.`;
+  const prompt = `Return a JSON array of exactly 8 real universities for:
+Career: ${careerId}, Location: ${targetLocation}, Budget: $${profile.budget}/year, Country: ${profile.country}
+Include universities from at least 4 different countries. Output ONLY the JSON array, nothing else.`;
 
   try {
-    const text = await callLLM(prompt, systemInstruction, { temperature: 0.7, maxTokens: 3000 });
+    const text = await callLLM(prompt, systemInstruction, { temperature: 0.5, maxTokens: 2000 });
     const institutions = parseAIJson<Institution[]>(text);
-    const result = Array.isArray(institutions) ? institutions.slice(0, 20) : [];
+    const result = Array.isArray(institutions) ? institutions.slice(0, 8) : [];
 
     if (result.length > 0) {
       await saveCachedInstitutions(result).catch((err) =>
@@ -716,20 +703,16 @@ export async function getDynamicStudyMaterials(
     return cached as StudyMaterial[];
   }
 
-  const systemInstruction = `You are a learning curator. Find real, high-quality study materials from platforms like Coursera, edX, MIT OpenCourseWare, YouTube, Udemy.
-  Return valid JSON array of StudyMaterial objects.`;
+  const systemInstruction = `You are a learning curator. Return ONLY a valid JSON array. No markdown, no explanation.
+Find real study materials from Coursera, edX, MIT OpenCourseWare, YouTube, Udemy.
+Schema per object: {"id":"string","title":"string","type":"video","provider":"string","url":"string","careerId":"string","duration":"string","thumbnail":"","region":"Global","language":"English","rating":4.5,"skillLevel":"Beginner","description":"string","tags":[]}`;
 
-  const prompt = `Find top 12 study materials for:
-Career: ${careerId}
-Skill Level: ${skillLevel}
-Region: ${region}
-
-Return JSON array with: id, title, type (video|course|article|interactive), provider, url, duration, rating, language, description, tags`;
+  const prompt = `Return a JSON array of 8 real study materials for: Career=${careerId}, Level=${skillLevel}, Region=${region}. Output ONLY the JSON array.`;
 
   try {
-    const text = await callLLM(prompt, systemInstruction, { temperature: 0.7 });
-    const materials = JSON.parse(text ?? "");
-    const result = Array.isArray(materials) ? materials.slice(0, 12) : [];
+    const text = await callLLM(prompt, systemInstruction, { temperature: 0.5, maxTokens: 2000 });
+    const materials = parseAIJson<any[]>(text);
+    const result = Array.isArray(materials) ? materials.slice(0, 8) : [];
 
     if (result.length > 0) {
       await saveCachedStudyMaterials(result, careerId).catch((err) =>
@@ -760,7 +743,11 @@ export async function getCareerHubIntelligence(city: string, country: string): P
       temperature: 0.1,
       maxTokens: 1024,
     });
-    const hubData = JSON.parse(text ?? "");
+    const hubData = parseAIJson<any>(text);
+    if (!hubData) {
+      console.error("Career Hub Intelligence: failed to parse LLM response");
+      return null;
+    }
     const result = { ...hubData, city, country };
 
     await saveCachedCareerHub(result).catch((err) =>
@@ -784,7 +771,7 @@ Only use real cities with well-known job markets.`;
 
   try {
     const text = await callLLM(prompt, systemInstruction, { temperature: 0.2, maxTokens: 256 });
-    const results = JSON.parse(text ?? "");
+    const results = parseAIJson<{ city: string; country: string }[]>(text);
     return Array.isArray(results) ? results : [];
   } catch (error) {
     console.error("AI Career Hub Search Error:", error);
@@ -911,7 +898,7 @@ Return a JSON array of exactly 4 skill objects with: skill (string), owned (bool
       temperature: 0.1,
       maxTokens: 400,
     });
-    const parsed = JSON.parse(text ?? "");
+    const parsed = parseAIJson<any>(text) ?? [];
 
     let result: any[] = Array.isArray(parsed) ? parsed : Object.values(parsed).find(Array.isArray) || [];
 
@@ -1002,7 +989,7 @@ export async function getCareerAdviceBatch(
       temperature: 0.7,
       maxTokens: 10000,
     });
-    const parsed = JSON.parse(text ?? "[]");
+    const parsed = parseAIJson<string[]>(text);
     if (!Array.isArray(parsed)) {
       throw new Error("Batch response was not a JSON array");
     }
@@ -1048,7 +1035,7 @@ export async function getRecommendedCourses(sector: string): Promise<any[]> {
 
   try {
     const text = await callLLM(prompt, systemInstruction, { temperature: 0.3, maxTokens: 1200 });
-    return JSON.parse(text ?? "[]");
+    return parseAIJson<any[]>(text) ?? [];
   } catch (error) {
     console.error("Recommended Courses Error:", error);
     return [];
@@ -1082,7 +1069,7 @@ export async function getLatestCareerNews(preferredCountry?: string): Promise<{ 
 
   try {
     const text = await callLLM(prompt, systemInstruction, { temperature: 0.2, maxTokens: 600 });
-    return JSON.parse(text ?? "[]");
+    return parseAIJson<any[]>(text) ?? [];
   } catch (error) {
     console.error("Latest Career News Error:", error);
     return [
@@ -1105,7 +1092,9 @@ export async function getVisaGuidance(
 
   try {
     const raw = await callLLM(prompt, systemInstruction, { temperature: 0.2, maxTokens: 1200 });
-    return JSON.parse(raw ?? "{}");
+    const parsed = parseAIJson<any>(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Non-JSON visa response');
+    return parsed;
   } catch (error) {
     console.error("Visa Guidance Error:", error);
     return {
@@ -1135,7 +1124,7 @@ export async function getGlobalContextInsights(
 
   try {
     const raw = await callLLM(prompt, systemInstruction, { temperature: 0.3, maxTokens: 800 });
-    const parsed = JSON.parse(raw ?? "[]");
+    const parsed = JSON.parse(extractJSON(raw) || "[]");
     return Array.isArray(parsed) ? parsed.slice(0, 6) : [];
   } catch (error) {
     if (isInsufficientBalanceError(error)) {

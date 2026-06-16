@@ -4,9 +4,12 @@ export interface RegistrationRequest {
   password: string;
   age?: number;
   country?: string;
+  targetLocation?: string;
   interests?: string[];
   budget?: number;
   education?: string;
+  gpa?: number;
+  targetVisaType?: string;
 }
 
 export interface LoginRequest {

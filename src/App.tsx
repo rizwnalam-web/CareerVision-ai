@@ -56,7 +56,9 @@ import {
   BrainCircuit,
   Lightbulb,
   AlertCircle,
-  ChevronDown
+  ChevronDown,
+  DollarSign,
+  Users
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle } from 'react-leaflet';
@@ -91,7 +93,7 @@ import {
   Tooltip as RechartsTooltip
 } from 'recharts';
 import { cn } from './lib/utils';
-import { CAREER_PATHS, INSTITUTIONS, STUDY_MATERIALS, FUNDING_OPPORTUNITIES } from './constants/mockData';
+// mock data removed — all data is loaded from the AI/backend
 import { CareerPath, UserProfile, Institution, FundingOpportunity, DashboardIntelligence, CareerSkillGap } from './types/career';
 import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobalCareers, aiSearchCareerPaths, generateCoverLetter, getLatestCareerNews, getAiInstitutionRecommendations, getDynamicInstitutions, getDynamicStudyMaterials, getVisaGuidance, getCareerHubIntelligence, aiSearchInstitutions, aiSearchCareerHubs, getDashboardIntelligence, getCareerSkillGap, getGlobalContextInsights, GlobalInsight } from './services/geminiService';
 import ReactMarkdown from 'react-markdown';
@@ -141,6 +143,8 @@ const NavItem = ({ label, active, onClick, icon: Icon }: { label: string, active
 import { NewsFlash } from './components/NewsFlash';
 import { JobBoardView } from './components/JobBoardView';
 import { InstitutionComparator } from './components/InstitutionComparator';
+import { UserProfileModal } from './components/UserProfileModal';
+import { fetchLLMHealth, reprobeLLM, type LLMHealthStatus } from './services/llmHealthService';
 
 const SectionTitle = ({ title, subtitle }: { title: string, subtitle?: string }) => (
   <div className="mb-8">
@@ -675,7 +679,7 @@ const FinancialBreakdownWidget = ({ profile }: { profile: UserProfile }) => {
 
   const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6'];
 
-  if (data.length === 0) {
+  if (data.length === 0 || total === 0) {
     return (
       <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center min-h-[300px]">
         <p className="text-xs text-slate-400 text-center">Add monthly expenses to your financial profile to see breakdown</p>
@@ -706,6 +710,7 @@ const FinancialBreakdownWidget = ({ profile }: { profile: UserProfile }) => {
                  cornerRadius={4}
                  dataKey="value"
                  stroke="none"
+                 isAnimationActive={false}
                >
                  {data.map((entry, index) => (
                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -923,8 +928,12 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
   ];
 
   // Derive readiness from AI or fall back to milestone-based estimate
-  const READINESS = dashboardIntel?.readiness.overall ??
-    Math.round(readinessBreakdown.reduce((sum, metric) => sum + metric.value, 0) / readinessBreakdown.length);
+  const READINESS = Math.max(0, Math.min(100,
+    dashboardIntel?.readiness.overall ??
+    (readinessBreakdown.length > 0
+      ? Math.round(readinessBreakdown.reduce((sum, metric) => sum + metric.value, 0) / readinessBreakdown.length)
+      : 0)
+  ));
   const RADIUS = 36;
   const CIRC = 2 * Math.PI * RADIUS;
   const dashOffset = CIRC - (READINESS / 100) * CIRC;
@@ -1210,7 +1219,8 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
                   />
                 ))}
                 {([[110,55],[240,110],[390,70],[520,130],[290,175],[440,185],[170,175],[560,80]] as [number,number][]).map(([cx,cy], i) => (
-                  <motion.circle key={i} cx={cx} cy={cy} r={i === 1 ? 7 : 4} fill="#6366f1"
+                  <motion.circle key={i} cx={cx} cy={cy} fill="#6366f1"
+                    initial={{ r: i === 1 ? 7 : 4, opacity: 0.4 }}
                     animate={{ r: i === 1 ? [6,9,6] : [3,5,3], opacity: [0.4,1,0.4] }}
                     transition={{ duration: 2 + i * 0.35, repeat: Infinity, delay: i * 0.18 }}
                   />
@@ -1357,7 +1367,7 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
                           </div>
                         </div>
                         <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-50">
-                          <div className="flex items-center gap-1"><TrendingUp size={10} className="text-indigo-400" /><span className="text-[9px] font-black text-slate-400">{path.milestones.length} stages</span></div>
+                          <div className="flex items-center gap-1"><TrendingUp size={10} className="text-indigo-400" /><span className="text-[9px] font-black text-slate-400">{path.milestones?.length ?? 0} stages</span></div>
                           <div className="flex items-center gap-1"><CircleDollarSign size={10} className="text-emerald-500" /><span className="text-[9px] font-black text-slate-400">$65k–$180k</span></div>
                           <div className="flex items-center gap-1"><Globe size={10} className="text-indigo-400" /><span className="text-[9px] font-black text-slate-400">Global</span></div>
                           <ChevronRight size={12} className={`ml-auto transition-all ${isExpanded ? 'rotate-90 text-indigo-500' : 'text-slate-300 group-hover/row:text-indigo-400'}`} />
@@ -1383,6 +1393,7 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
                                   <TrendingUp size={9} className="text-indigo-500" /> Salary Trajectory
                                 </p>
                                 <div className="h-28">
+                                  {salaryTrendData.length >= 2 ? (
                                   <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                                     <AreaChart data={salaryTrendData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
                                       <defs>
@@ -1397,6 +1408,11 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
                                       <Area type="monotone" dataKey="v" stroke="#6366f1" strokeWidth={2} fill={`url(#sg-${idx})`} dot={false} activeDot={false} />
                                     </AreaChart>
                                   </ResponsiveContainer>
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                      <div className="text-[9px] text-slate-300 font-black uppercase tracking-widest animate-pulse">Loading trajectory…</div>
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-2 mt-2">
                                   {salaryTrendData.length > 0 ? (
@@ -1522,11 +1538,17 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
                     </div>
                     {/* Sparkline */}
                     <div className="w-20 h-9 shrink-0">
-                      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-                        <LineChart data={sector.spark}>
-                          <Line type="monotone" dataKey="v" stroke={sector.color} strokeWidth={1.5} dot={false} activeDot={false} />
-                        </LineChart>
-                      </ResponsiveContainer>
+                      {sector.spark && sector.spark.length >= 2 ? (
+                        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                          <LineChart data={sector.spark}>
+                            <Line type="monotone" dataKey="v" stroke={sector.color} strokeWidth={1.5} dot={false} activeDot={false} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <div className="w-full h-0.5 rounded-full opacity-30" style={{ backgroundColor: sector.color }} />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1639,22 +1661,347 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
 const RoadmapView = ({ profile, pathId, careers, onNavigate, onInitInterview }: { profile: UserProfile, pathId?: string, careers: CareerPath[], onNavigate: (view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap', context?: { search?: string; roadmap?: InstitutionRoadmapContext | null }) => void, onInitInterview: (role: string, company?: string) => void }) => {
   const path = careers.find(p => p.id === pathId) || careers[0];
 
+  const [skillGap, setSkillGap] = useState<CareerSkillGap[]>([]);
+  const [isSkillGapLoading, setIsSkillGapLoading] = useState(false);
+  const [completedMilestones, setCompletedMilestones] = useState<Set<string>>(
+    new Set(profile.completedMilestones || [])
+  );
+  const [activeTab, setActiveTab] = useState<'milestones' | 'skills' | 'actions'>('milestones');
+
+  useEffect(() => {
+    if (!path) return;
+    setIsSkillGapLoading(true);
+    getCareerSkillGap(profile, path.title)
+      .then(setSkillGap)
+      .catch(() => setSkillGap([]))
+      .finally(() => setIsSkillGapLoading(false));
+  }, [path?.id]);
+
+  if (!path) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-4 animate-in fade-in duration-500">
+        <Loader2 size={32} className="text-indigo-400 animate-spin" />
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Loading career roadmap…</p>
+      </div>
+    );
+  }
+
+  const toggleMilestone = (key: string) => {
+    setCompletedMilestones(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const totalMilestones = path.milestones?.length ?? 0;
+  const completedCount = path.milestones?.filter((_, i) => completedMilestones.has(`${path.id}-${i}`)).length ?? 0;
+  const progressPct = totalMilestones > 0 ? Math.round((completedCount / totalMilestones) * 100) : 0;
+
+  const GROWTH_COLOR = path.growth === 'high' ? 'text-emerald-600 bg-emerald-50 border-emerald-200' :
+    path.growth === 'medium' ? 'text-amber-600 bg-amber-50 border-amber-200' :
+    'text-blue-600 bg-blue-50 border-blue-200';
+
+  const ownedSkills = skillGap.filter(s => s.owned);
+  const gapSkills = skillGap.filter(s => !s.owned);
+
   return (
-    <div className="h-full flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <SectionTitle
         title="Predictive Roadmap"
         subtitle={`Visual GPS for ${path.title} • Age ${profile.age}`}
       />
-      <div className="flex-1 rounded-[2.5rem] border border-slate-200 bg-white shadow-sm p-8">
-        <p className="text-sm font-black text-slate-900">Roadmap details are currently simplified for parser stability.</p>
-        <p className="text-[10px] text-slate-500 mt-3">Select a milestone or resume navigation to continue.</p>
+
+      {/* Header card */}
+      <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[2.5rem] p-6 text-white shadow-2xl shadow-indigo-200 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-4 right-4 w-40 h-40 rounded-full bg-white blur-3xl" />
+          <div className="absolute bottom-0 left-8 w-24 h-24 rounded-full bg-white blur-2xl" />
+        </div>
+        <div className="relative z-10 flex flex-col sm:flex-row gap-6 items-start sm:items-center justify-between">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full border ${GROWTH_COLOR}`}>
+                {path.growth} growth
+              </span>
+              <span className="text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-white/10 border border-white/20 text-white">
+                {path.workType}
+              </span>
+              <span className="text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-white/10 border border-white/20 text-white">
+                {path.category}
+              </span>
+            </div>
+            <h2 className="text-2xl font-black leading-tight mb-1">{path.title}</h2>
+            <p className="text-[11px] text-indigo-200 leading-relaxed max-w-xl">{path.description}</p>
+            <div className="flex flex-wrap gap-1.5 mt-3">
+              {(Array.isArray(path.tags) ? path.tags : (typeof path.tags === 'string' ? (() => { try { return JSON.parse(path.tags as string); } catch { return []; } })() : [])).slice(0, 5).map((tag: string) => (
+                <span key={tag} className="text-[8px] font-bold px-2 py-0.5 bg-white/10 border border-white/15 rounded-full text-white/80">{tag}</span>
+              ))}
+            </div>
+          </div>
+          {/* Progress ring */}
+          <div className="shrink-0 flex flex-col items-center gap-2">
+            <div className="relative w-20 h-20">
+              <svg width={80} height={80} className="-rotate-90">
+                <circle cx={40} cy={40} r={32} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth={6} />
+                <circle
+                  cx={40} cy={40} r={32} fill="none"
+                  stroke="white" strokeWidth={6} strokeLinecap="round"
+                  strokeDasharray={2 * Math.PI * 32}
+                  strokeDashoffset={2 * Math.PI * 32 * (1 - progressPct / 100)}
+                  style={{ transition: 'stroke-dashoffset 1s ease' }}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-lg font-black text-white leading-none">{progressPct}%</span>
+                <span className="text-[7px] text-white/60 font-bold uppercase">done</span>
+              </div>
+            </div>
+            <p className="text-[8px] text-white/60 font-bold uppercase tracking-widest text-center">{completedCount}/{totalMilestones} steps</p>
+          </div>
+        </div>
+        {/* Quick actions */}
+        <div className="relative z-10 flex flex-wrap gap-2 mt-5 pt-5 border-t border-white/10">
+          <button
+            onClick={() => onInitInterview(path.title)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-indigo-700 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-50 transition-all"
+          >
+            <Mic size={10} /> Mock Interview
+          </button>
+          <button
+            onClick={() => onNavigate('institutions')}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 border border-white/20 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/20 transition-all"
+          >
+            <School size={10} /> Find Programs
+          </button>
+          <button
+            onClick={() => onNavigate('materials', { search: path.title })}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 border border-white/20 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/20 transition-all"
+          >
+            <BookOpen size={10} /> Study Resources
+          </button>
+        </div>
       </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
+        {(['milestones', 'skills', 'actions'] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+              activeTab === tab ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab: Milestones */}
+      {activeTab === 'milestones' && (
+        <div className="space-y-4">
+          {totalMilestones === 0 ? (
+            <div className="bg-white rounded-[2rem] border border-slate-100 p-10 flex flex-col items-center gap-3 text-center">
+              <Loader2 size={24} className="text-indigo-300 animate-spin" />
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Generating milestones…</p>
+            </div>
+          ) : (
+            (path.milestones ?? []).map((milestone, idx) => {
+              const key = `${path.id}-${idx}`;
+              const isDone = completedMilestones.has(key);
+              const isLast = idx === (path.milestones?.length ?? 1) - 1;
+              return (
+                <div key={key} className="relative flex gap-4">
+                  {/* Timeline line */}
+                  {!isLast && (
+                    <div className="absolute left-5 top-10 bottom-0 w-0.5 bg-gradient-to-b from-indigo-200 to-transparent" />
+                  )}
+                  {/* Step dot */}
+                  <button
+                    onClick={() => toggleMilestone(key)}
+                    className={`shrink-0 w-10 h-10 rounded-full border-2 flex items-center justify-center z-10 transition-all ${
+                      isDone
+                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200'
+                        : 'bg-white border-slate-200 text-slate-300 hover:border-indigo-300 hover:text-indigo-400'
+                    }`}
+                    title={isDone ? 'Mark as incomplete' : 'Mark as complete'}
+                  >
+                    {isDone ? <CheckCircle size={16} /> : <span className="text-[10px] font-black">{idx + 1}</span>}
+                  </button>
+                  {/* Card */}
+                  <div className={`flex-1 bg-white rounded-[1.5rem] border p-5 shadow-sm transition-all ${
+                    isDone ? 'border-indigo-100 bg-indigo-50/30' : 'border-slate-100 hover:border-indigo-100'
+                  }`}>
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div>
+                        <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest">{milestone.ageRange}</span>
+                        <h3 className={`text-sm font-black mt-0.5 ${isDone ? 'line-through text-slate-400' : 'text-slate-900'}`}>
+                          {milestone.title}
+                        </h3>
+                      </div>
+                      {isDone && (
+                        <span className="shrink-0 text-[7px] font-black uppercase tracking-widest px-2 py-0.5 bg-indigo-600 text-white rounded-full">
+                          Complete
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed mb-3">{milestone.description}</p>
+                    {milestone.requirements?.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {milestone.requirements.map((req, rIdx) => (
+                          <span key={rIdx} className="text-[8px] font-bold px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-500">
+                            {req}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* Tab: Skills */}
+      {activeTab === 'skills' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Owned skills */}
+          <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6">
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <CheckCircle size={12} className="text-emerald-500" /> You already have ({ownedSkills.length})
+            </h4>
+            {isSkillGapLoading ? (
+              [0,1,2,3].map(i => <div key={i} className="h-8 bg-slate-100 rounded-xl animate-pulse mb-2" />)
+            ) : ownedSkills.length === 0 ? (
+              <p className="text-[11px] text-slate-400 text-center py-6">No matched skills yet</p>
+            ) : (
+              <div className="space-y-2">
+                {ownedSkills.map(s => (
+                  <div key={s.skill} className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50 border border-emerald-100">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      <span className="text-[10px] font-bold text-emerald-800">{s.skill}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-16 h-1 bg-emerald-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${s.demand}%` }} />
+                      </div>
+                      <span className="text-[8px] font-black text-emerald-600">{s.demand}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Gap skills */}
+          <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6">
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Target size={12} className="text-rose-500" /> Skills to develop ({gapSkills.length})
+            </h4>
+            {isSkillGapLoading ? (
+              [0,1,2,3].map(i => <div key={i} className="h-8 bg-slate-100 rounded-xl animate-pulse mb-2" />)
+            ) : gapSkills.length === 0 && !isSkillGapLoading ? (
+              <p className="text-[11px] text-slate-400 text-center py-6">Loading skill analysis…</p>
+            ) : (
+              <div className="space-y-2">
+                {gapSkills.map(s => (
+                  <div key={s.skill} className="flex items-center justify-between p-2.5 rounded-xl bg-rose-50 border border-rose-100">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                      <span className="text-[10px] font-bold text-rose-800">{s.skill}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-16 h-1 bg-rose-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-rose-400 rounded-full" style={{ width: `${s.demand}%` }} />
+                      </div>
+                      <span className="text-[8px] font-black text-rose-600">{s.demand}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Actions */}
+      {activeTab === 'actions' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[
+            {
+              icon: Mic,
+              title: 'Mock Interview',
+              description: `Practice ${path.title} interview questions with AI feedback`,
+              color: 'indigo',
+              action: () => onInitInterview(path.title),
+            },
+            {
+              icon: School,
+              title: 'Find Programs',
+              description: `Browse universities and courses for ${path.title}`,
+              color: 'violet',
+              action: () => onNavigate('institutions'),
+            },
+            {
+              icon: BookOpen,
+              title: 'Study Materials',
+              description: 'Access curated courses, videos and articles',
+              color: 'blue',
+              action: () => onNavigate('materials'),
+            },
+            {
+              icon: Globe,
+              title: 'Career Hubs',
+              description: 'Explore global cities hiring for this role',
+              color: 'emerald',
+              action: () => onNavigate('heatmap'),
+            },
+            {
+              icon: DollarSign,
+              title: 'Financial Planner',
+              description: 'Budget your education and living costs',
+              color: 'amber',
+              action: () => onNavigate('expenses'),
+            },
+            {
+              icon: Users,
+              title: 'Parental Guide',
+              description: 'Share this roadmap with your parents',
+              color: 'rose',
+              action: () => onNavigate('parent'),
+            },
+          ].map(item => {
+            const Icon = item.icon;
+            const colorMap: Record<string, string> = {
+              indigo: 'bg-indigo-50 border-indigo-100 hover:border-indigo-300 text-indigo-600',
+              violet: 'bg-violet-50 border-violet-100 hover:border-violet-300 text-violet-600',
+              blue: 'bg-blue-50 border-blue-100 hover:border-blue-300 text-blue-600',
+              emerald: 'bg-emerald-50 border-emerald-100 hover:border-emerald-300 text-emerald-600',
+              amber: 'bg-amber-50 border-amber-100 hover:border-amber-300 text-amber-600',
+              rose: 'bg-rose-50 border-rose-100 hover:border-rose-300 text-rose-600',
+            };
+            return (
+              <button
+                key={item.title}
+                onClick={item.action}
+                className={`text-left p-5 rounded-[1.5rem] border transition-all hover:shadow-md group ${colorMap[item.color]}`}
+              >
+                <Icon size={20} className="mb-3 transition-transform group-hover:scale-110" />
+                <p className="text-[11px] font-black text-slate-900 mb-1">{item.title}</p>
+                <p className="text-[10px] text-slate-500 leading-relaxed">{item.description}</p>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
 
 
-const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch = "", onInitInterview, institutions = INSTITUTIONS, isLoading = false, visaGuidance, isVisaLoading = false, roadmapContext = null }: { profile: UserProfile, selectedPathId: string, careerTitle?: string, initialSearch?: string, onInitInterview: (role: string, company?: string) => void, institutions?: Institution[], isLoading?: boolean, visaGuidance?: any, isVisaLoading?: boolean, roadmapContext?: InstitutionRoadmapContext | null }) => {
+const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch = "", onInitInterview, institutions = [], isLoading = false, visaGuidance, isVisaLoading = false, roadmapContext = null }: { profile: UserProfile, selectedPathId: string, careerTitle?: string, initialSearch?: string, onInitInterview: (role: string, company?: string) => void, institutions?: Institution[], isLoading?: boolean, visaGuidance?: any, isVisaLoading?: boolean, roadmapContext?: InstitutionRoadmapContext | null }) => {
   const [search, setSearch] = useState(initialSearch);
   const [intlOnly, setIntlOnly] = useState(false);
   const [maxCost, setMaxCost] = useState(100000);
@@ -1747,9 +2094,24 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
   };
 
   // Mock user location for radius filtering simulation
-  const userCountry = "USA"; 
+  const userCountry = profile.country || "";
 
-  const hubCountryFilters = ["USA", "UK", "Switzerland", "Germany", "Canada", "Singapore"];
+  // Country quick-switch — profile's target country first, then popular alternatives
+  const popularCountries = ["United States", "United Kingdom", "Germany", "Canada", "Australia", "Singapore", "Japan", "France", "Netherlands", "UAE"];
+  const targetFirst = profile.targetLocation || "";
+  const homeCountry = profile.country || "";
+  const [activeCountryFilter, setActiveCountryFilter] = React.useState<string>(targetFirst || "");
+
+  // Sync to profile target location changes
+  React.useEffect(() => {
+    if (profile.targetLocation) setActiveCountryFilter(profile.targetLocation);
+  }, [profile.targetLocation]);
+
+  const hubCountryFilters = Array.from(new Set([
+    ...(targetFirst ? [targetFirst] : []),
+    ...(homeCountry && homeCountry !== targetFirst ? [homeCountry] : []),
+    ...popularCountries.filter(c => c !== targetFirst && c !== homeCountry)
+  ])).slice(0, 8);
 
   const programs = ["All Programs", ...Array.from(new Set(institutions.flatMap(inst => inst.programs)))].map(p => ({
     name: p,
@@ -1770,18 +2132,17 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
     const matchesCost = inst.avgCost <= maxCost;
     const matchesProgram = selectedProgram === "All Programs" || inst.programs.includes(selectedProgram);
     const matchesVisa = visaFilter === "All" || inst.visaSupport === visaFilter;
+    const matchesCountry = !activeCountryFilter || inst.country.toLowerCase().includes(activeCountryFilter.toLowerCase());
     
-    // Radius Filter Logic (only apply when not in AI search mode)
+    // Radius Filter Logic (only apply when not in AI search mode and no country filter active)
     let matchesRadius = true;
-    if (!hasAiSearched) {
-      if (radius === "Local") {
-        matchesRadius = inst.city === "Cambridge" || inst.city === "Stanford"; // Simulated local hub
-      } else if (radius === "National") {
+    if (!hasAiSearched && !activeCountryFilter) {
+      if (radius === "National") {
         matchesRadius = inst.country === userCountry;
       }
     }
 
-    return matchesSearch && matchesIntl && matchesCost && matchesProgram && matchesRadius && matchesVisa;
+    return matchesSearch && matchesIntl && matchesCost && matchesProgram && matchesRadius && matchesVisa && matchesCountry;
   });
 
   const visibleInstitutions = filtered;
@@ -1906,6 +2267,12 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
       )}
       
       <div className="rounded-[3rem] overflow-hidden border border-slate-200 shadow-2xl relative bg-slate-50 h-[620px]">
+        {isLoading && (
+          <div className="absolute inset-0 z-[2000] flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm gap-4">
+            <Loader2 size={36} className="text-indigo-500 animate-spin" />
+            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Discovering institutions worldwide…</p>
+          </div>
+        )}
         <MapContainer 
           center={[20, 0]} 
           zoom={2} 
@@ -2102,16 +2469,26 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
 
                 {!hasAiSearched && (
                   <>
-                    <div className="flex flex-wrap gap-1">
-                      {hubCountryFilters.map(country => (
-                        <button 
-                          key={country} 
-                          onClick={() => setSearch(country)}
-                          className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-[8px] font-black text-slate-400 uppercase tracking-widest hover:border-indigo-500 transition-colors"
+                    <div className="space-y-1.5">
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Country</p>
+                      <div className="flex flex-wrap gap-1">
+                        <button
+                          onClick={() => { setActiveCountryFilter(""); setSearch(""); }}
+                          className={`px-2 py-1 border rounded-lg text-[8px] font-black uppercase tracking-widest transition-colors ${activeCountryFilter === "" ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-slate-200 text-slate-400 hover:border-indigo-400"}`}
                         >
-                          {country}
+                          All
                         </button>
-                      ))}
+                        {hubCountryFilters.map(country => (
+                          <button 
+                            key={country} 
+                            onClick={() => { setActiveCountryFilter(country); setSearch(""); }}
+                            className={`px-2 py-1 border rounded-lg text-[8px] font-black uppercase tracking-widest transition-colors ${activeCountryFilter === country ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-slate-200 text-slate-400 hover:border-indigo-400"}`}
+                            title={country === targetFirst ? "Your target country" : country === homeCountry ? "Your home country" : ""}
+                          >
+                            {country === targetFirst ? `⭐ ${country}` : country}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 mt-2">
                       <select
@@ -3109,7 +3486,7 @@ const AIAdvisor = ({ profile, embedded }: { profile: UserProfile; embedded?: boo
 
 const ParentalDashboard = ({ profile, onBack, careers }: { profile: UserProfile, onBack: () => void, careers: CareerPath[] }) => {
   const currentPath = careers.find(p => p.id === profile.targetCareerId) || careers[0];
-  const progressPercent = Math.min(((profile.completedMilestones.length / currentPath.milestones.length) * 100), 100);
+  const progressPercent = Math.min((((profile.completedMilestones?.length ?? 0) / Math.max(currentPath?.milestones?.length ?? 1, 1)) * 100), 100);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -3192,7 +3569,7 @@ const ParentalDashboard = ({ profile, onBack, careers }: { profile: UserProfile,
           <div className="bg-slate-900 rounded-3xl p-6 text-white overflow-hidden relative">
              <h4 className="text-sm font-bold mb-4">Top Careers for {profile.name}</h4>
              <div className="space-y-3">
-                {CAREER_PATHS.map(p => (
+                {careers.map(p => (
                    <div key={p.id} className="flex items-center justify-between text-xs bg-white/5 p-2 rounded-lg border border-white/5">
                       <span className="font-medium text-slate-300">{p.title.split(' ')[0]} Specialist</span>
                       <span className="text-emerald-400 font-black">94% Fit</span>
@@ -3796,7 +4173,7 @@ Return a concise finance-first recommendation with:
                   <h4 className="text-sm font-bold text-slate-800 mb-6 flex justify-between items-center">
                   Expense Distribution <span className="text-xs text-slate-400 font-mono tracking-tighter">{formatMoney(totalMonthlyExpenses)}/mo</span>
                 </h4>
-                {expenseData.length > 0 ? (
+                {expenseData.length > 0 && totalMonthlyExpenses > 0 ? (
                   <>
                     <div className="flex-1 min-h-[250px]">
                       <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
@@ -3809,6 +4186,7 @@ Return a concise finance-first recommendation with:
                             outerRadius={80}
                             paddingAngle={5}
                             dataKey="value"
+                            isAnimationActive={false}
                           >
                             {expenseData.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -4058,14 +4436,36 @@ Return a concise finance-first recommendation with:
 export default function App() {
   const [globalView, setGlobalView] = useState<'landing' | 'app'>('landing');
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [localUser, setLocalUser] = useState<any>(null);
+
+  // Restore email/password session from localStorage on page load
+  const [localUser, setLocalUserState] = useState<any>(() => {
+    try {
+      const stored = localStorage.getItem('cv_local_user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const setLocalUser = (userData: any) => {
+    if (userData) {
+      localStorage.setItem('cv_local_user', JSON.stringify(userData));
+      // Always start at dashboard on fresh login
+      sessionStorage.removeItem('cv_activeView');
+    } else {
+      localStorage.removeItem('cv_local_user');
+    }
+    setLocalUserState(userData);
+  };
 
   return (
     <AuthProvider>
       {({ user, loading }) => {
         const activeUser = user || localUser;
 
-        if (loading && globalView === 'app' && !localUser) {
+        // Always show a loading screen while Firebase resolves its persisted session.
+        // This prevents a flash to the landing page for already-authenticated users.
+        if (loading) {
           return (
             <div className="h-screen w-full bg-slate-950 flex flex-col items-center justify-center space-y-4">
               <div className="w-16 h-16 bg-indigo-600 rounded-3xl animate-pulse flex items-center justify-center">
@@ -4074,6 +4474,11 @@ export default function App() {
               <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] animate-pulse">Syncing Trajectory...</p>
             </div>
           );
+        }
+
+        // If Firebase restored a session (page refresh), skip landing/login entirely.
+        if (activeUser) {
+          return <AuthenticatedApp user={activeUser} onExit={() => { setLocalUser(null); setGlobalView('landing'); }} />;
         }
 
         if (globalView === 'landing') {
@@ -4090,6 +4495,7 @@ export default function App() {
                 }}
                 onSuccess={() => {
                   setAuthMode('login');
+                  sessionStorage.removeItem('cv_activeView');
                   setGlobalView('app');
                 }}
               />
@@ -4115,7 +4521,16 @@ export default function App() {
 }
 
 function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
-  const [activeView, setActiveView] = useState<'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs'>('dashboard');
+  type AppView = 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs';
+  const VALID_VIEWS: AppView[] = ['dashboard', 'roadmap', 'institutions', 'materials', 'expenses', 'advisor', 'parent', 'heatmap', 'jobs'];
+  const persistedView = sessionStorage.getItem('cv_activeView') as AppView | null;
+  const [activeView, setActiveViewState] = useState<AppView>(
+    persistedView && VALID_VIEWS.includes(persistedView) ? persistedView : 'dashboard'
+  );
+  const setActiveView = (view: AppView) => {
+    sessionStorage.setItem('cv_activeView', view);
+    setActiveViewState(view);
+  };
   const [showMoreNav, setShowMoreNav] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [selectedPathId, setSelectedPathId] = useState<string>("ai-engineer");
@@ -4123,6 +4538,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   const [institutionRoadmapContext, setInstitutionRoadmapContext] = useState<InstitutionRoadmapContext | null>(null);
   const [sparkEOpen, setSparkEOpen] = useState(false);
   const [sparkEPosition, setSparkEPosition] = useState<'bottom-right' | 'bottom-left'>('bottom-right');
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [isInterviewOpen, setIsInterviewOpen] = useState(false);
   const [interviewRole, setInterviewRole] = useState("");
   const [interviewCompany, setInterviewCompany] = useState("");
@@ -4135,18 +4551,18 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   });
 
   const [profile, setProfile] = useState<UserProfile>(user.profile || {
-    name: user.displayName || "Explorer",
-    age: 16,
-    education: "High School Junior",
-    interests: ["Coding", "Robotics", "Space"],
-    budget: 50000,
-    country: "USA",
-    targetLocation: "Germany",
-    targetCareerId: "ai-engineer",
-    completedMilestones: ["ai-engineer-0"],
-    academicPerformance: {
-      gpa: 3.9,
-      achievements: ["Winner of Regional Robotics Hackathon"]
+    name: user.profile?.name || user.displayName || user.name || user.email?.split('@')[0] || "Explorer",
+    age: user.profile?.age || user.age || 16,
+    education: user.profile?.education || "High School",
+    interests: user.profile?.interests || ["Technology", "Science"],
+    budget: user.profile?.budget || 30000,
+    country: user.profile?.country || user.country || "",
+    targetLocation: user.profile?.targetLocation || user.targetLocation || "",
+    targetCareerId: user.profile?.targetCareerId || "",
+    completedMilestones: user.profile?.completedMilestones || [],
+    academicPerformance: user.profile?.academicPerformance || {
+      gpa: user.profile?.gpa || 3.0,
+      achievements: []
     }
   });
 
@@ -4191,8 +4607,8 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
     }
     setActiveView(view);
   };
-  const [careers, setCareers] = useState<CareerPath[]>(CAREER_PATHS);
-  const [isCareersLoading, setIsCareersLoading] = useState(false);
+  const [careers, setCareers] = useState<CareerPath[]>([]);
+  const [isCareersLoading, setIsCareersLoading] = useState(true); // true: start loading immediately
   const [isAiCareerLoading, setIsAiCareerLoading] = useState(false);
   const [aiCareerSearchMessage, setAiCareerSearchMessage] = useState<string>("");
   
@@ -4276,8 +4692,11 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   }, [profile.targetCareerId, selectedPathId]);
 
   // Fetch institutions dynamically when navigating to institutions view
+  const [institutionsFetchedForPath, setInstitutionsFetchedForPath] = React.useState<string | null>(null);
   useEffect(() => {
-    if (activeView === 'institutions' && selectedPathId) {
+    const fetchKey = `${selectedPathId}__${profile.targetLocation || 'Global'}`;
+    if (activeView === 'institutions' && selectedPathId && fetchKey !== institutionsFetchedForPath) {
+      setInstitutionsFetchedForPath(fetchKey);
       const fetchInstitutions = async () => {
         setIsInstitutionsLoading(true);
         const selectedCareer = careers.find(c => c.id === selectedPathId);
@@ -4291,13 +4710,13 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
         if (dynamicInsts && dynamicInsts.length > 0) {
           setDynamicInstitutions(dynamicInsts);
         } else {
-          setDynamicInstitutions(INSTITUTIONS.slice(0, 20));
+          setDynamicInstitutions([]);
         }
         setIsInstitutionsLoading(false);
       };
       fetchInstitutions();
     }
-  }, [activeView, selectedPathId, profile.targetLocation, careers, institutionRoadmapContext]);
+  }, [activeView, selectedPathId, profile.targetLocation, institutionRoadmapContext]);
 
   // Fetch study materials dynamically when navigating to materials view
   useEffect(() => {
@@ -4311,8 +4730,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
         if (materials && materials.length > 0) {
           setDynamicMaterials(materials);
         } else {
-          // Fallback to mock materials filtered by career
-          setDynamicMaterials(STUDY_MATERIALS.filter(m => m.careerId === selectedPathId).slice(0, 12));
+          setDynamicMaterials([]);
         }
         setIsMaterialsLoading(false);
       };
@@ -4320,9 +4738,9 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
     }
   }, [activeView, selectedPathId, profile]);
 
-  // Fetch visa guidance when profile or selected path changes
+  // Fetch visa guidance only when on institutions view
   useEffect(() => {
-    if (selectedPathId && profile.targetLocation) {
+    if (activeView === 'institutions' && selectedPathId && profile.targetLocation) {
       const fetchVisaInfo = async () => {
         setIsVisaLoading(true);
         const selectedCareer = careers.find(c => c.id === selectedPathId);
@@ -4332,7 +4750,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       };
       fetchVisaInfo();
     }
-  }, [selectedPathId, profile.targetLocation, careers]);
+  }, [activeView, selectedPathId, profile.targetLocation]);
 
   const authProviderLabel = user?.providerData?.[0]?.providerId === 'google.com'
     ? 'Google Secure'
@@ -4340,8 +4758,23 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       ? 'Email Secure'
       : 'Secure Login';
 
+  // ── LLM health probe ────────────────────────────────────────────────────
+  const [llmHealth, setLlmHealth] = useState<LLMHealthStatus | null>(null);
+  const [isReprobingLLM, setIsReprobingLLM] = useState(false);
+
+  useEffect(() => {
+    fetchLLMHealth().then(setLlmHealth);
+  }, []);
+
+  const handleReprobeLLM = async () => {
+    setIsReprobingLLM(true);
+    const result = await reprobeLLM();
+    setLlmHealth(result);
+    setIsReprobingLLM(false);
+  };
+
   const completedMilestones = profile.completedMilestones?.length ?? 0;
-  const totalMilestones = Math.max(careers.reduce((acc, curr) => acc + curr.milestones.length, 0), 1);
+  const totalMilestones = Math.max(careers.reduce((acc, curr) => acc + (curr.milestones?.length ?? 0), 0), 1);
   const profileCompletion = Math.min(100, Math.round((completedMilestones / totalMilestones) * 100) + (profile.targetLocation ? 10 : 0) + (profile.targetCareerId ? 10 : 0));
 
   const handleInsightClick = (insight: GlobalInsight) => {
@@ -4455,7 +4888,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
               <LogOut size={8} /> Disconnect
             </button>
           </div>
-          <div className="flex items-center gap-3 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm pr-4 group cursor-pointer hover:border-indigo-200 transition-colors">
+          <div className="flex items-center gap-3 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm pr-4 group cursor-pointer hover:border-indigo-200 transition-colors" onClick={() => setShowProfileModal(true)}>
             <div className="h-8 w-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center group-hover:bg-indigo-600 transition-colors overflow-hidden">
               {user.photoURL ? (
                 <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
@@ -4478,6 +4911,29 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
         </div>
         <div className="flex items-center gap-3">
           <span className="bg-white border border-indigo-100 px-3 py-1 rounded-full text-[10px] text-indigo-600">{authProviderLabel}</span>
+          {/* LLM Model Badge */}
+          {llmHealth && (
+            <button
+              onClick={handleReprobeLLM}
+              disabled={isReprobingLLM}
+              title={llmHealth.available ? `Active AI: ${llmHealth.activeProvider?.model}\nClick to re-probe providers` : 'No AI provider available — click to retry'}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all',
+                llmHealth.available
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                  : 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100'
+              )}
+            >
+              {isReprobingLLM
+                ? <Loader2 size={9} className="animate-spin" />
+                : <BrainCircuit size={9} />}
+              {isReprobingLLM
+                ? 'Probing…'
+                : llmHealth.available
+                  ? llmHealth.activeProvider?.label
+                  : 'AI Unavailable'}
+            </button>
+          )}
           <button
             onClick={() => handleNavigate(profile.targetCareerId ? 'roadmap' : 'dashboard')}
             className="px-3 py-1 rounded-full bg-indigo-600 text-white text-[10px] font-black uppercase tracking-[0.18em] hover:bg-indigo-500 transition-colors"
@@ -4586,9 +5042,9 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                 <section className={activeView === 'institutions' ? 'col-span-12 xl:col-span-9 space-y-8' : 'col-span-12 xl:col-span-9 space-y-8 h-full'}>
                    {activeView === 'roadmap' && <RoadmapView profile={profile} pathId={selectedPathId} careers={careers} onNavigate={handleNavigate} onInitInterview={initiateInterview} />}
                    {activeView === 'jobs' && <JobBoardView profile={profile} />}
-                   {activeView === 'institutions' && <InstitutionsView profile={profile} selectedPathId={selectedPathId} careerTitle={careers.find(c => c.id === selectedPathId)?.title || selectedPathId} initialSearch={institutionSearchQuery} onInitInterview={initiateInterview} institutions={dynamicInstitutions.length > 0 ? dynamicInstitutions : INSTITUTIONS} isLoading={isInstitutionsLoading} visaGuidance={visaGuidance} isVisaLoading={isVisaLoading} roadmapContext={institutionRoadmapContext} />}
+                   {activeView === 'institutions' && <InstitutionsView profile={profile} selectedPathId={selectedPathId} careerTitle={careers.find(c => c.id === selectedPathId)?.title || selectedPathId} initialSearch={institutionSearchQuery} onInitInterview={initiateInterview} institutions={dynamicInstitutions} isLoading={isInstitutionsLoading} visaGuidance={visaGuidance} isVisaLoading={isVisaLoading} roadmapContext={institutionRoadmapContext} />}
                    {activeView === 'heatmap' && <HeatmapView profile={profile} />}
-                   {activeView === 'materials' && <MaterialsView materials={dynamicMaterials.length > 0 ? dynamicMaterials : STUDY_MATERIALS} isLoading={isMaterialsLoading} />}
+                   {activeView === 'materials' && <MaterialsView materials={dynamicMaterials} isLoading={isMaterialsLoading} />}
                    {activeView === 'parent' && <ParentalDashboard profile={profile} onBack={() => setActiveView('dashboard')} careers={careers} />}
                    {activeView === 'expenses' && <FinancialView profile={profile} setProfile={setProfile} />}
                 </section>
@@ -4661,6 +5117,14 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
         company={interviewCompany}
         location={interviewLocation}
         onStatsUpdate={setInterviewStats}
+      />
+
+      <UserProfileModal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        user={user}
+        profile={profile}
+        onProfileUpdate={(updated) => setProfile(updated)}
       />
 
       {/* Spark.E Floating Bubble */}

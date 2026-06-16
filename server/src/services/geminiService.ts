@@ -1,1 +1,1 @@
-export { generateDeepSeekResponse, generateDeepSeekBatch, getDeepSeekCostSummary, clearDeepSeekCache } from "./deepseekService.js";
+export { generateDeepSeekResponse, generateDeepSeekBatch, getDeepSeekCostSummary, clearDeepSeekCache, probeProviders, getActiveProvider, getAllProviders } from "./deepseekService.js";

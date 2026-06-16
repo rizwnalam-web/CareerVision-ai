@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { generateDeepSeekBatch, generateDeepSeekResponse, getDeepSeekCostSummary, clearDeepSeekCache } from "../services/geminiService.js";
+import { generateDeepSeekBatch, generateDeepSeekResponse, getDeepSeekCostSummary, clearDeepSeekCache, probeProviders, getActiveProvider, getAllProviders } from "../services/geminiService.js";
 
 const router = Router();
 
@@ -105,6 +105,60 @@ router.get("/cost", (_req: Request, res: Response) => {
 router.post("/clear-cache", (_req: Request, res: Response) => {
   clearDeepSeekCache();
   res.json({ success: true, message: "DeepSeek cache cleared" });
+});
+
+// ── LLM Health / Provider Discovery ──────────────────────────────────────────
+// Returns the currently active provider. If none locked yet, probes all providers.
+// The frontend calls this once on login to know which model is in use.
+router.get("/health", async (_req: Request, res: Response) => {
+  try {
+    let active = getActiveProvider();
+    if (!active) {
+      active = await probeProviders();
+    }
+    const costSummary = getDeepSeekCostSummary();
+    if (!active) {
+      return res.status(503).json({
+        success: false,
+        available: false,
+        message: "All LLM providers are currently unavailable.",
+        providers: getAllProviders().map(p => ({ name: p.name, label: p.label, available: false })),
+      });
+    }
+    return res.json({
+      success: true,
+      available: true,
+      activeProvider: {
+        name: active.name,
+        label: active.label,
+        model: active.model,
+      },
+      allProviders: getAllProviders().map(p => ({
+        name: p.name,
+        label: p.label,
+        model: p.model,
+        isActive: p.name === active!.name,
+        hasKey: !!p.apiKey,
+      })),
+      costSummary,
+    });
+  } catch (error) {
+    console.error("LLM health check error:", error);
+    res.status(500).json({ success: false, available: false, message: "Health check failed" });
+  }
+});
+
+// Force re-probe all providers (useful after env changes)
+router.post("/probe", async (_req: Request, res: Response) => {
+  try {
+    const provider = await probeProviders();
+    if (!provider) {
+      return res.status(503).json({ success: false, message: "All providers unavailable" });
+    }
+    res.json({ success: true, activeProvider: { name: provider.name, label: provider.label, model: provider.model } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Probe failed" });
+  }
 });
 
 export default router;

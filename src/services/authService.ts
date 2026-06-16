@@ -124,3 +124,37 @@ export async function getUserProfile(userId: string): Promise<any> {
     throw error;
   }
 }
+
+export async function updateUserProfile(userId: string, data: {
+  name?: string;
+  age?: number;
+  education?: string;
+  country?: string;
+  targetLocation?: string;
+  budget?: number;
+  interests?: string[];
+  gpa?: number;
+  achievements?: string;
+}): Promise<any> {
+  try {
+    const response = await fetch(buildApiPath(`users/${userId}`), {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+      credentials: 'include',
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Profile update failed');
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Update profile error:', error);
+    throw error;
+  }
+}
