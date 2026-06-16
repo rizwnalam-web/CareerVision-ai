@@ -667,33 +667,36 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
             ) : marketInsights ? (
               <div className="space-y-8">
                 {/* Salaries */}
+                {marketInsights.salaryBenchmarks && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Salary Benchmarks</p>
-                    <span className="px-2 py-1 bg-white/10 rounded-md text-[8px] font-black uppercase">{marketInsights.salaryBenchmarks.currency} / Yr</span>
+                    <span className="px-2 py-1 bg-white/10 rounded-md text-[8px] font-black uppercase">{marketInsights.salaryBenchmarks.currency ?? 'USD'} / Yr</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
                       <p className="text-[8px] font-bold text-slate-500 uppercase mb-1">Entry</p>
-                      <p className="text-xs font-black">{(marketInsights.salaryBenchmarks.entry / 1000).toFixed(0)}k</p>
+                      <p className="text-xs font-black">{((marketInsights.salaryBenchmarks.entry ?? 0) / 1000).toFixed(0)}k</p>
                     </div>
                     <div className="bg-indigo-500/20 p-3 rounded-2xl border border-indigo-500/30">
                       <p className="text-[8px] font-bold text-indigo-400 uppercase mb-1">Mid</p>
-                      <p className="text-xs font-black">{(marketInsights.salaryBenchmarks.mid / 1000).toFixed(0)}k</p>
+                      <p className="text-xs font-black">{((marketInsights.salaryBenchmarks.mid ?? 0) / 1000).toFixed(0)}k</p>
                     </div>
                     <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
                       <p className="text-[8px] font-bold text-slate-500 uppercase mb-1">Senior</p>
-                      <p className="text-xs font-black">{(marketInsights.salaryBenchmarks.senior / 1000).toFixed(0)}k</p>
+                      <p className="text-xs font-black">{((marketInsights.salaryBenchmarks.senior ?? 0) / 1000).toFixed(0)}k</p>
                     </div>
                   </div>
                 </div>
+                )}
 
                 {/* Growth */}
+                {marketInsights.growthForecast && (
                 <div className="bg-emerald-500/10 p-5 rounded-3xl border border-emerald-500/20">
                   <div className="flex justify-between items-start mb-3">
                     <div>
                       <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Growth Forecast</p>
-                      <p className="text-lg font-black mt-1">+{marketInsights.growthForecast.percentage}% Demand</p>
+                      <p className="text-lg font-black mt-1">+{marketInsights.growthForecast.percentage ?? 0}% Demand</p>
                     </div>
                     <div className={cn(
                       "p-2 rounded-xl",
@@ -703,11 +706,13 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
                     </div>
                   </div>
                   <p className="text-[10px] font-medium text-emerald-100/60 leading-relaxed italic">
-                    "{marketInsights.growthForecast.description}"
+                    "{marketInsights.growthForecast.description ?? ''}"
                   </p>
                 </div>
+                )}
 
                 {/* Skills */}
+                {marketInsights.inDemandSkills?.length > 0 && (
                 <div className="space-y-4">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">In-Demand Skills</p>
                   <div className="space-y-3">
@@ -728,8 +733,10 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
                     ))}
                   </div>
                 </div>
+                )}
 
                 {/* Companies */}
+                {marketInsights.topHiringCompanies?.length > 0 && (
                 <div>
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Core Hiring Nodes</p>
                   <div className="flex flex-wrap gap-2">
@@ -740,6 +747,7 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
                     ))}
                   </div>
                 </div>
+                )}
               </div>
             ) : (
               <div className="py-12 text-center">
@@ -756,7 +764,7 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
               <p className="text-[10px] font-black text-indigo-900 uppercase tracking-widest">Spark.E Tip</p>
             </div>
             <p className="text-xs font-medium text-indigo-900/70 leading-relaxed italic">
-              "Focusing on {marketInsights?.inDemandSkills[0]?.name || 'emerging technologies'} can increase your mid-level salary potential by up to 25% in the {profile.country} market."
+              "Focusing on {marketInsights?.inDemandSkills?.[0]?.name || 'emerging technologies'} can increase your mid-level salary potential by up to 25% in the {profile.country} market."
             </p>
           </div>
         </div>

@@ -347,5 +347,37 @@ router.post("/global-context-insights", async (req: Request, res: Response) => {
   }
 });
 
+router.post("/career-directories", async (req: Request, res: Response) => {
+  try {
+    const { profile } = req.body;
+    if (!profile) {
+      return res.status(400).json({ error: "profile is required" });
+    }
+    const result = await careerAiService.getCareerDirectories(profile);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error("Career directories error:", error);
+    res.status(500).json({ error: "Failed to get career directories" });
+  }
+});
+
+router.post("/careers-by-country", async (req: Request, res: Response) => {
+  try {
+    const { country, profile, forceRefresh } = req.body;
+    if (!country) {
+      return res.status(400).json({ error: "country is required" });
+    }
+    const result = await careerAiService.getCareersByCountry(
+      country,
+      profile || {},
+      Boolean(forceRefresh)
+    );
+    res.json({ success: true, data: result, cached: !forceRefresh });
+  } catch (error) {
+    console.error("Careers by country error:", error);
+    res.status(500).json({ error: "Failed to get careers by country" });
+  }
+});
+
 export default router;
 

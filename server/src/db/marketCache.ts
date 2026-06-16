@@ -534,3 +534,71 @@ export async function setCacheMetadata(
     console.error("Error setting cache metadata:", error);
   }
 }
+
+// ─── Country Careers Cache ─────────────────────────────────────────────────
+
+export interface CountryCareerEntry {
+  id: string;
+  title: string;
+  description: string;
+  growth: "high" | "medium" | "stable";
+  category: string;
+  subCategory: string;
+  workType: "Remote" | "On-site" | "Hybrid" | "Mobile";
+  tags: string[];
+  visibility: "public" | "private";
+  demandScore: number;
+  avgSalaryUSD: number;
+  topSkills: string[];
+  topCompanies: string[];
+  country: string;
+}
+
+export async function getCachedCountryCareers(
+  country: string
+): Promise<CountryCareerEntry[] | null> {
+  try {
+    const row = await db.oneOrNone(
+      `SELECT careers_json FROM country_careers_cache
+       WHERE country = $1 AND expires_at > NOW()`,
+      [country]
+    );
+    if (!row) return null;
+    return JSON.parse(row.careers_json) as CountryCareerEntry[];
+  } catch (error) {
+    console.error("Error fetching country careers cache:", error);
+    return null;
+  }
+}
+
+export async function saveCountryCareersCache(
+  country: string,
+  careers: CountryCareerEntry[]
+): Promise<void> {
+  try {
+    await db.none(
+      `INSERT INTO country_careers_cache (country, careers_json, cached_at, expires_at)
+       VALUES ($1, $2, NOW(), NOW() + INTERVAL '24 hours')
+       ON CONFLICT (country) DO UPDATE SET
+         careers_json = EXCLUDED.careers_json,
+         cached_at    = NOW(),
+         expires_at   = NOW() + INTERVAL '24 hours'`,
+      [country, JSON.stringify(careers)]
+    );
+  } catch (error) {
+    console.error("Error saving country careers cache:", error);
+  }
+}
+
+export async function invalidateCountryCareersCache(
+  country: string
+): Promise<void> {
+  try {
+    await db.none(
+      `UPDATE country_careers_cache SET expires_at = NOW() WHERE country = $1`,
+      [country]
+    );
+  } catch (error) {
+    console.error("Error invalidating country careers cache:", error);
+  }
+}

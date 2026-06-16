@@ -178,3 +178,57 @@ export async function getGlobalContextInsights(
     targetCareerId,
   });
 }
+
+export interface CareerDirectoryEntry {
+  id: string;
+  title: string;
+  category: string;
+  sector: string;
+  visibility: "public" | "private";
+  country: string;
+  demandScore: number;
+  avgSalaryUSD: number;
+  growth: "high" | "medium" | "stable";
+  workType: "Remote" | "On-site" | "Hybrid" | "Mobile";
+  tags: string[];
+  topSkills: string[];
+  topCompanies: string[];
+  matchScore: number;
+  matchReason: string;
+  visaFriendly: boolean;
+}
+
+export interface CareerDirectoryResult {
+  homeCountry: CareerDirectoryEntry[];
+  targetCountry: CareerDirectoryEntry[];
+  top10: CareerDirectoryEntry[];
+}
+
+export async function getCareerDirectories(profile: UserProfile): Promise<CareerDirectoryResult> {
+  return callBackend<CareerDirectoryResult>('/career-directories', 'POST', { profile });
+}
+
+export interface CountryCareerEntry {
+  id: string;
+  title: string;
+  description: string;
+  growth: "high" | "medium" | "stable";
+  category: string;
+  subCategory: string;
+  workType: "Remote" | "On-site" | "Hybrid" | "Mobile";
+  tags: string[];
+  visibility: "public" | "private";
+  demandScore: number;
+  avgSalaryUSD: number;
+  topSkills: string[];
+  topCompanies: string[];
+  country: string;
+}
+
+export async function getCareersByCountry(
+  country: string,
+  profile: Partial<UserProfile>,
+  forceRefresh = false
+): Promise<CountryCareerEntry[]> {
+  return callBackend<CountryCareerEntry[]>('/careers-by-country', 'POST', { country, profile, forceRefresh });
+}

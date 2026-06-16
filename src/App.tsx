@@ -58,7 +58,8 @@ import {
   AlertCircle,
   ChevronDown,
   DollarSign,
-  Users
+  Users,
+  Layers
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle } from 'react-leaflet';
@@ -95,7 +96,7 @@ import {
 import { cn } from './lib/utils';
 // mock data removed — all data is loaded from the AI/backend
 import { CareerPath, UserProfile, Institution, FundingOpportunity, DashboardIntelligence, CareerSkillGap } from './types/career';
-import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobalCareers, aiSearchCareerPaths, generateCoverLetter, getLatestCareerNews, getAiInstitutionRecommendations, getDynamicInstitutions, getDynamicStudyMaterials, getVisaGuidance, getCareerHubIntelligence, aiSearchInstitutions, aiSearchCareerHubs, getDashboardIntelligence, getCareerSkillGap, getGlobalContextInsights, GlobalInsight } from './services/geminiService';
+import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobalCareers, aiSearchCareerPaths, generateCoverLetter, getLatestCareerNews, getAiInstitutionRecommendations, getDynamicInstitutions, getDynamicStudyMaterials, getVisaGuidance, getCareerHubIntelligence, aiSearchInstitutions, aiSearchCareerHubs, getDashboardIntelligence, getCareerSkillGap, getGlobalContextInsights, getCareersByCountry, GlobalInsight, type CountryCareerEntry } from './services/geminiService';
 import ReactMarkdown from 'react-markdown';
 
 import { LandingPage } from './components/LandingPage';
@@ -896,25 +897,59 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
   const [skillGapCache, setSkillGapCache] = useState<Record<string, CareerSkillGap[]>>({});
   const [skillGapLoading, setSkillGapLoading] = useState<Record<string, boolean>>({});
   const [skillGapError, setSkillGapError] = useState<Record<string, boolean>>({});
-  const [selectedCountry, setSelectedCountry] = useState<string>('Global');
+
+  // Default to user's home country if it matches a COUNTRY_FILTERS entry, else 'Global'
+  const defaultCountry = (() => {
+    if (!profile.country) return 'Global';
+    const match = COUNTRY_FILTERS.find(c =>
+      c.label.toLowerCase() === profile.country.toLowerCase() ||
+      (profile.country.toLowerCase().includes('uk') && c.label === 'UK') ||
+      (profile.country.toLowerCase().includes('united states') && c.label === 'USA') ||
+      (profile.country.toLowerCase().includes('united kingdom') && c.label === 'UK')
+    );
+    return match?.label ?? 'Global';
+  })();
+
+  const [selectedCountry, setSelectedCountry] = useState<string>(defaultCountry);
   const [isCountryLoading, setIsCountryLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [countryEntries, setCountryEntries] = useState<CountryCareerEntry[]>([]);
+  const [countryEntriesError, setCountryEntriesError] = useState(false);
+
+  // Fetch country-specific careers from backend (cached)
+  const fetchCountryEntries = async (country: string, forceRefresh = false) => {
+    setIsCountryLoading(true);
+    setCountryEntriesError(false);
+    try {
+      const result = await getCareersByCountry(country, {
+        interests: profile.interests,
+        targetCareerId: profile.targetCareerId,
+        education: profile.education,
+      }, forceRefresh);
+      setCountryEntries(result);
+    } catch {
+      setCountryEntriesError(true);
+    } finally {
+      setIsCountryLoading(false);
+      if (forceRefresh) setIsSyncing(false);
+    }
+  };
+
+  // On mount — load for default country
+  useEffect(() => { fetchCountryEntries(defaultCountry); }, []);
 
   const handleCountrySelect = async (chip: typeof COUNTRY_FILTERS[0]) => {
-    if (chip.label === selectedCountry) return; // already active
+    if (chip.label === selectedCountry && countryEntries.length > 0) return;
     setSelectedCountry(chip.label);
     setExpandedPath(null);
     setSkillGapCache({});
     setSkillGapError({});
-    if (chip.query === null) {
-      // Reset to global top careers
-      setIsCountryLoading(true);
-      await onResetToGlobal();
-      setIsCountryLoading(false);
-    } else {
-      setIsCountryLoading(true);
-      await onAiCareerSearch(chip.query);
-      setIsCountryLoading(false);
-    }
+    fetchCountryEntries(chip.label === 'Global' ? 'Global' : chip.label);
+  };
+
+  const handleSync = () => {
+    setIsSyncing(true);
+    fetchCountryEntries(selectedCountry, true);
   };
 
   const readinessBreakdown = dashboardIntel ? [
@@ -1055,11 +1090,38 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
     }
   };
 
-  const filteredPaths = careers.filter(p =>
-    searchQuery.trim() === '' ||
-    p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'public' | 'private'>('all');
+
+  // getVisibility for CareerPath objects (used only for expanded skill gap panel)
+  const PUBLIC_CATEGORIES = ['Technology & Digital', 'Healthcare & Life Sciences', 'Business, Finance & Management', 'Engineering, Science & Environment'];
+  const getVisibility = (path: { category?: string; tags?: string[]; visibility?: string }): 'public' | 'private' => {
+    if (path.visibility === 'public' || path.visibility === 'private') return path.visibility;
+    if (PUBLIC_CATEGORIES.includes(path.category ?? '')) return 'public';
+    if (Array.isArray(path.tags) && path.tags.some((t: string) => ['Remote Economy', 'AI Integration', 'Global Demand', 'Global Mobility'].includes(t))) return 'public';
+    return 'private';
+  };
+
+  // filteredEntries — operates on countryEntries (have explicit visibility) + falls back to careers
+  const filteredEntries = countryEntries.length > 0
+    ? countryEntries.filter(e => {
+        const q = searchQuery.toLowerCase();
+        const matchSearch = !q ||
+          e.title.toLowerCase().includes(q) ||
+          e.description.toLowerCase().includes(q) ||
+          e.category.toLowerCase().includes(q);
+        const matchVis = visibilityFilter === 'all' || e.visibility === visibilityFilter;
+        return matchSearch && matchVis;
+      })
+    : [];
+
+  // Legacy filteredPaths for fallback when countryEntries is empty (initial load)
+  const filteredPaths = careers.filter(p => {
+    const q = searchQuery.toLowerCase();
+    const matchSearch = !q ||
+      p.title.toLowerCase().includes(q) ||
+      p.description.toLowerCase().includes(q);
+    return matchSearch;
+  });
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 pb-12 animate-in fade-in duration-700">
@@ -1290,17 +1352,17 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
         <div className="space-y-5">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 px-1">
             <div>
-              <h3 className="text-xl font-black text-slate-900 tracking-tight leading-none mb-1">Career Trajectories</h3>
-              <p className="text-[9px] text-indigo-500 font-black uppercase tracking-widest">AI-Optimized Multi-Path Analysis · 2026</p>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight leading-none mb-1">Career Directories</h3>
+              <p className="text-[9px] text-indigo-500 font-black uppercase tracking-widest">AI-Optimized Career Intelligence · 2026</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {/* Country dropdown */}
               <div className="relative">
                 <Globe size={10} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none" />
                 {isCountryLoading && <Loader2 size={9} className="absolute right-6 top-1/2 -translate-y-1/2 text-indigo-400 animate-spin pointer-events-none" />}
                 <select
                   value={selectedCountry}
-                  disabled={isCountryLoading || isAiCareerLoading}
+                  disabled={isCountryLoading}
                   onChange={e => {
                     const chip = COUNTRY_FILTERS.find(c => c.label === e.target.value);
                     if (chip) handleCountrySelect(chip);
@@ -1308,42 +1370,59 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
                   className="pl-7 pr-7 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none appearance-none cursor-pointer hover:border-indigo-300 focus:border-indigo-400 transition-all disabled:opacity-50 text-slate-700"
                 >
                   {COUNTRY_FILTERS.map(chip => (
-                    <option key={chip.label} value={chip.label}>
-                      {chip.flag} {chip.label}
-                    </option>
+                    <option key={chip.label} value={chip.label}>{chip.flag} {chip.label}</option>
                   ))}
                 </select>
                 <ChevronDown size={9} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               </div>
+              {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={11} />
-                <input type="text" placeholder="Filter paths..."
+                <input type="text" placeholder="Filter careers..."
                   className="pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none w-32 focus:w-44 transition-all"
                   value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
               </div>
-              <button onClick={() => onAiCareerSearch(searchQuery)} disabled={isAiCareerLoading || !searchQuery.trim()}
-                className="h-9 px-3 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 transition-all disabled:opacity-50 flex items-center gap-1.5">
-                {isAiCareerLoading ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />} AI
+              {/* Visibility filter */}
+              <div className="flex gap-0.5 bg-slate-100 rounded-xl p-1">
+                {(['all', 'public', 'private'] as const).map(v => (
+                  <button key={v} onClick={() => setVisibilityFilter(v)}
+                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${
+                      visibilityFilter === v ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                    }`}>
+                    {v === 'all' ? 'All' : v === 'public' ? '🌐 Public' : '🔒 Private'}
+                  </button>
+                ))}
+              </div>
+              {/* Sync button */}
+              <button onClick={handleSync} disabled={isSyncing || isCountryLoading}
+                title="Sync latest data from AI"
+                className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-40 border border-slate-200 hover:border-emerald-200">
+                <RotateCcw size={10} className={isSyncing ? 'animate-spin' : ''} />
+                {isSyncing ? 'Syncing…' : 'Sync'}
               </button>
             </div>
           </div>
 
-          {aiCareerSearchMessage && <p className="text-[10px] text-slate-400 uppercase tracking-widest px-1">{aiCareerSearchMessage}</p>}
+          {/* Cache status hint */}
+          {countryEntriesError && (
+            <p className="text-[10px] text-rose-400 font-bold px-1">Failed to load career data. <button onClick={() => fetchCountryEntries(selectedCountry)} className="underline">Retry</button></p>
+          )}
 
           {/* Timeline spine + path rows */}
           <div className="relative">
             <div className="absolute left-[11px] top-5 bottom-5 w-0.5 bg-gradient-to-b from-indigo-500 via-indigo-200 to-transparent" />
             <div className="space-y-3 relative">
-              {isLoading ? (
-                [...Array(3)].map((_, i) => <div key={i} className="ml-7 h-20 bg-slate-100 rounded-3xl animate-pulse" />)
-              ) : filteredPaths.length === 0 ? (
+              {isCountryLoading ? (
+                [...Array(5)].map((_, i) => <div key={i} className="ml-7 h-20 bg-slate-100 rounded-3xl animate-pulse" />)
+              ) : filteredEntries.length === 0 && !isLoading ? (
                 <div className="ml-7 py-12 bg-slate-50 rounded-3xl border border-dashed border-slate-200 flex flex-col items-center gap-2">
                   <Search size={20} className="text-slate-300" />
-                  <p className="text-[10px] font-black text-slate-400 uppercase">No paths match your search</p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase">No careers match your filters</p>
+                  <button onClick={() => { setSearchQuery(''); setVisibilityFilter('all'); }} className="text-[9px] text-indigo-500 hover:underline font-black uppercase tracking-widest">Clear filters</button>
                 </div>
-              ) : (showAllPaths ? filteredPaths : filteredPaths.slice(0, 5)).map((path, idx) => {
+              ) : (showAllPaths ? filteredEntries : filteredEntries.slice(0, 5)).map((path, idx) => {
                 const isExpanded = expandedPath === path.id;
-                const matchScore = Math.max(58, 95 - idx * 8);
+                const matchScore = Math.round(Math.max(58, 95 - idx * 6));
                 const skillGap = skillGapCache[path.id] ?? [];
                 const isSkillGapLoading = skillGapLoading[path.id] ?? false;
                 const isSkillGapError = skillGapError[path.id] ?? false;
@@ -1358,7 +1437,16 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
                       <div className={`flex-1 bg-white border rounded-3xl p-5 shadow-sm transition-all hover:shadow-md ${isExpanded ? 'border-indigo-200 shadow-indigo-50/60' : 'border-slate-100 hover:border-indigo-100'}`}>
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1 min-w-0">
-                            <h4 className={`text-base font-black tracking-tight uppercase transition-colors ${isExpanded ? 'text-indigo-600' : 'text-slate-900 group-hover/row:text-indigo-600'}`}>{path.title}</h4>
+                            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                              <h4 className={`text-base font-black tracking-tight uppercase transition-colors ${isExpanded ? 'text-indigo-600' : 'text-slate-900 group-hover/row:text-indigo-600'}`}>{path.title}</h4>
+                              <span className={`shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider ${
+                                path.visibility === 'public'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+                              }`}>
+                                {path.visibility === 'public' ? '🌐 Public' : '🔒 Private'}
+                              </span>
+                            </div>
                             <p className="text-slate-500 text-[10px] font-medium leading-relaxed line-clamp-1 mt-0.5">{path.description}</p>
                           </div>
                           <div className="flex flex-col items-end gap-1 shrink-0">
@@ -1367,9 +1455,9 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
                           </div>
                         </div>
                         <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-50">
-                          <div className="flex items-center gap-1"><TrendingUp size={10} className="text-indigo-400" /><span className="text-[9px] font-black text-slate-400">{path.milestones?.length ?? 0} stages</span></div>
-                          <div className="flex items-center gap-1"><CircleDollarSign size={10} className="text-emerald-500" /><span className="text-[9px] font-black text-slate-400">$65k–$180k</span></div>
-                          <div className="flex items-center gap-1"><Globe size={10} className="text-indigo-400" /><span className="text-[9px] font-black text-slate-400">Global</span></div>
+                          <div className="flex items-center gap-1"><TrendingUp size={10} className="text-indigo-400" /><span className="text-[9px] font-black text-slate-400">{path.demandScore}/100 demand</span></div>
+                          <div className="flex items-center gap-1"><CircleDollarSign size={10} className="text-emerald-500" /><span className="text-[9px] font-black text-slate-400">${Math.round((path.avgSalaryUSD ?? 0) / 1000)}k avg</span></div>
+                          <div className="flex items-center gap-1"><Globe size={10} className="text-indigo-400" /><span className="text-[9px] font-black text-slate-400">{path.country}</span></div>
                           <ChevronRight size={12} className={`ml-auto transition-all ${isExpanded ? 'rotate-90 text-indigo-500' : 'text-slate-300 group-hover/row:text-indigo-400'}`} />
                         </div>
                       </div>
@@ -4812,59 +4900,20 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
           <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 font-black text-white shadow-xl shadow-indigo-200 group-hover:scale-110 transition-transform">CV</div>
           <span className="text-2xl font-black tracking-tighter text-slate-900">CareerVision<span className="text-indigo-600 italic">AI</span></span>
         </div>
-        <nav className="hidden lg:flex gap-1 items-center relative">          {(
+        <nav className="hidden lg:flex gap-1 items-center relative">
+          {(
             [
-              { label: 'Control', view: 'dashboard', icon: LayoutDashboard },
-              { label: 'Roadmap', view: 'roadmap', icon: Map },
-              { label: 'Global', view: 'institutions', icon: School },
-              { label: 'Academy', view: 'materials', icon: BookOpen },
-            ] as { label: string; view: 'dashboard' | 'roadmap' | 'institutions' | 'materials'; icon: React.ElementType }[]
+              { label: 'Control',      view: 'dashboard',    icon: LayoutDashboard },
+              { label: 'Roadmap',      view: 'roadmap',      icon: Map },
+              { label: 'Global',       view: 'institutions', icon: School },
+              { label: 'Academy',      view: 'materials',    icon: BookOpen },
+              { label: 'Jobs Board',   view: 'jobs',         icon: Briefcase },
+              { label: 'Market Hubs',  view: 'heatmap',      icon: Globe },
+              { label: 'Finance',      view: 'expenses',     icon: CircleDollarSign },
+            ] as { label: string; view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'jobs' | 'heatmap' | 'expenses'; icon: React.ElementType }[]
           ).map(item => (
             <NavItem key={item.view} label={item.label} icon={item.icon} active={activeView === item.view} onClick={() => handleNavigate(item.view)} />
           ))}
-          {/* More dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setShowMoreNav(v => !v)}
-              className={cn(
-                "relative px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-1.5",
-                ['jobs', 'heatmap', 'expenses'].includes(activeView) ? "text-indigo-600" : "text-slate-400 hover:text-slate-900"
-              )}
-            >
-              {['jobs', 'heatmap', 'expenses'].includes(activeView) && (
-                <motion.div layoutId="activeNav" className="absolute inset-0 bg-indigo-50/60 rounded-xl -z-0" transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }} />
-              )}
-              <span className="relative z-10">More</span>
-              <ChevronDown size={10} className={cn('transition-transform duration-200 relative z-10', showMoreNav && 'rotate-180')} />
-            </button>
-            <AnimatePresence>
-              {showMoreNav && (
-                <motion.div
-                  initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl shadow-slate-200/60 py-2 z-50 min-w-[160px]"
-                >
-                  {([
-                    { label: 'Jobs Board', view: 'jobs', icon: Briefcase },
-                    { label: 'Market Hubs', view: 'heatmap', icon: Globe },
-                    { label: 'Finance', view: 'expenses', icon: CircleDollarSign },
-                  ] as { label: string; view: 'jobs' | 'heatmap' | 'expenses'; icon: React.ElementType }[]).map(item => (
-                    <button key={item.view}
-                      onClick={() => { handleNavigate(item.view); setShowMoreNav(false); }}
-                      className={cn(
-                        'w-full flex items-center gap-2.5 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all',
-                        activeView === item.view ? 'text-indigo-600 bg-indigo-50' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                      )}
-                    >
-                      {(() => { const Icon = item.icon; return <Icon size={12} />; })()} {item.label}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
         </nav>
         <div className="flex items-center gap-3">
           {/* Hamburger – mobile/tablet only */}

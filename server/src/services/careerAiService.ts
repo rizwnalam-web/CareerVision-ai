@@ -1,4 +1,4 @@
-import { generateDeepSeekResponse } from "./deepseekService.js";
+import { generateDeepSeekResponse, type DeepSeekResult } from "./deepseekService.js";
 import { DeepSeekCostCalculator, type DeepSeekCostCalculatorOptions, type MonthlyCostUsage, type MonthlyCostResult } from "./costCalculator.js";
 import { db } from "../db/database.js";
 import {
@@ -11,6 +11,10 @@ import {
   saveCachedStudyMaterials,
   getCachedTopCareers,
   saveCachedTopCareers,
+  getCachedCountryCareers,
+  saveCountryCareersCache,
+  invalidateCountryCareersCache,
+  type CountryCareerEntry,
 } from "../db/marketCache.js";
 import type {
   FundingOpportunity,
@@ -198,14 +202,17 @@ function isInsufficientBalanceError(error: unknown): boolean {
 }
 
 // Simple concurrency limiter: allow at most 1 concurrent LLM call to avoid provider rate limits
-let _llmQueueHead = Promise.resolve();
+let _llmQueueHead: Promise<void> = Promise.resolve();
 async function callLLM(prompt: string, systemInstruction: string, options: DeepSeekRequest = {}) {
   // Chain onto the current queue so requests run sequentially
-  const result = await (_llmQueueHead = _llmQueueHead.then(async () => {
-    return generateDeepSeekResponse(prompt, { ...options, systemInstruction });
+  let _result!: DeepSeekResult;
+  _llmQueueHead = _llmQueueHead.then(async () => {
+    _result = await generateDeepSeekResponse(prompt, { ...options, systemInstruction });
   }).catch(async () => {
-    return generateDeepSeekResponse(prompt, { ...options, systemInstruction });
-  }));
+    _result = await generateDeepSeekResponse(prompt, { ...options, systemInstruction });
+  });
+  await _llmQueueHead;
+  const result = _result;
 
   if (result.source === "error") {
     const errorMessage = result.error || "LLM request failed";
@@ -1139,6 +1146,220 @@ export async function getGlobalContextInsights(
       { flag: '🇺🇸', city: 'NYC', country: 'USA', stat: 'AI ROLES +32%', category: 'AI', color: 'rose' },
       { flag: '🇦🇪', city: 'DUBAI', country: 'UAE', stat: 'CLOUD +28%', category: 'Cloud', color: 'purple' },
       { flag: '🇨🇦', city: 'TORONTO', country: 'Canada', stat: 'HIRING +21%', category: 'Tech', color: 'emerald' },
+    ];
+  }
+}
+
+// ─── Career Directories ───────────────────────────────────────────────────────
+
+export interface CareerDirectoryEntry {
+  id: string;
+  title: string;
+  category: string;
+  sector: string;
+  visibility: "public" | "private"; // public = global demand, private = local/niche
+  country: string;
+  demandScore: number;     // 0–100
+  avgSalaryUSD: number;
+  growth: "high" | "medium" | "stable";
+  workType: "Remote" | "On-site" | "Hybrid" | "Mobile";
+  tags: string[];
+  topSkills: string[];
+  topCompanies: string[];
+  matchScore: number;      // 0–100, personalised match to user goal
+  matchReason: string;
+  visaFriendly: boolean;
+}
+
+export interface CareerDirectoryResult {
+  homeCountry: CareerDirectoryEntry[];    // top roles in user's home country
+  targetCountry: CareerDirectoryEntry[];  // top roles in user's target country
+  top10: CareerDirectoryEntry[];          // top 10 globally matched to user goals
+}
+
+export async function getCareerDirectories(
+  profile: UserProfile
+): Promise<CareerDirectoryResult> {
+  const homeCountry = profile.country || "Global";
+  const targetCountry = profile.targetLocation || homeCountry;
+  const interests = profile.interests?.join(", ") || "Technology";
+  const targetCareer = profile.targetCareer || profile.targetCareerId || "any career";
+  const education = profile.education || "any";
+  const budget = profile.budget ?? 30000;
+
+  const systemInstruction = `You are a global career intelligence engine. Return ONLY valid JSON. No markdown, no explanation.`;
+
+  const prompt = `Build a career directory for the following user:
+- Home country: ${homeCountry}
+- Target country: ${targetCountry}
+- Interests: ${interests}
+- Target career goal: ${targetCareer}
+- Education level: ${education}
+- Budget: USD ${budget}
+
+Return a JSON object with exactly this shape:
+{
+  "homeCountry": [ /* 8 CareerDirectoryEntry for ${homeCountry} */ ],
+  "targetCountry": [ /* 8 CareerDirectoryEntry for ${targetCountry} */ ],
+  "top10": [ /* exactly 10 CareerDirectoryEntry globally matched to user's goals */ ]
+}
+
+Each CareerDirectoryEntry must follow this schema:
+{
+  "id": "slug-string",
+  "title": "Job title",
+  "category": "e.g. Technology & Digital",
+  "sector": "e.g. AI & Data",
+  "visibility": "public" | "private",
+  "country": "country name",
+  "demandScore": 0-100,
+  "avgSalaryUSD": number,
+  "growth": "high" | "medium" | "stable",
+  "workType": "Remote" | "On-site" | "Hybrid" | "Mobile",
+  "tags": ["string"],
+  "topSkills": ["string"],
+  "topCompanies": ["string"],
+  "matchScore": 0-100,
+  "matchReason": "one-sentence explanation why it fits this user",
+  "visaFriendly": true | false
+}
+
+Rules:
+- visibility = "public" for globally recognized in-demand roles, "private" for local/niche/government roles
+- matchScore must reflect alignment with user's interests, career goal and education
+- top10 should be sorted by matchScore descending
+- Use REAL company names relevant to each country
+- Vary sectors across entries, avoid duplicates`;
+
+  try {
+    const raw = await callLLM(prompt, systemInstruction, { temperature: 0.3, maxTokens: 4000 });
+    const parsed = parseAIJson<CareerDirectoryResult>(raw);
+    if (!parsed) throw new Error("parse failed");
+
+    const sanitize = (arr: any[]): CareerDirectoryEntry[] =>
+      (Array.isArray(arr) ? arr : []).map((e: any) => ({
+        id: String(e.id ?? ""),
+        title: String(e.title ?? ""),
+        category: String(e.category ?? ""),
+        sector: String(e.sector ?? ""),
+        visibility: e.visibility === "private" ? "private" : "public",
+        country: String(e.country ?? ""),
+        demandScore: Math.min(100, Math.max(0, Number(e.demandScore) || 50)),
+        avgSalaryUSD: Number(e.avgSalaryUSD) || 0,
+        growth: ["high", "medium", "stable"].includes(e.growth) ? e.growth : "stable",
+        workType: ["Remote", "On-site", "Hybrid", "Mobile"].includes(e.workType) ? e.workType : "Hybrid",
+        tags: Array.isArray(e.tags) ? e.tags : [],
+        topSkills: Array.isArray(e.topSkills) ? e.topSkills.slice(0, 5) : [],
+        topCompanies: Array.isArray(e.topCompanies) ? e.topCompanies.slice(0, 4) : [],
+        matchScore: Math.min(100, Math.max(0, Number(e.matchScore) || 50)),
+        matchReason: String(e.matchReason ?? ""),
+        visaFriendly: Boolean(e.visaFriendly),
+      }));
+
+    return {
+      homeCountry: sanitize(parsed.homeCountry),
+      targetCountry: sanitize(parsed.targetCountry),
+      top10: sanitize(parsed.top10).slice(0, 10),
+    };
+  } catch (error) {
+    if (isInsufficientBalanceError(error)) {
+      console.warn("Career Directories: LLM balance insufficient, returning fallback.");
+    } else {
+      console.error("Career Directories Error:", error);
+    }
+    // Minimal fallback so the UI doesn't crash
+    const fallback: CareerDirectoryEntry[] = [
+      { id: "ai-engineer", title: "AI & ML Engineer", category: "Technology & Digital", sector: "AI & Data", visibility: "public", country: homeCountry, demandScore: 95, avgSalaryUSD: 140000, growth: "high", workType: "Remote", tags: ["AI", "Remote"], topSkills: ["Python", "PyTorch", "MLOps"], topCompanies: ["Google", "Microsoft", "OpenAI"], matchScore: 90, matchReason: "Aligns with tech interests and high global demand.", visaFriendly: true },
+      { id: "fullstack-dev", title: "Full-Stack Developer", category: "Technology & Digital", sector: "Software", visibility: "public", country: homeCountry, demandScore: 88, avgSalaryUSD: 110000, growth: "high", workType: "Hybrid", tags: ["Web", "Remote"], topSkills: ["React", "Node.js", "TypeScript"], topCompanies: ["Meta", "Shopify", "Stripe"], matchScore: 85, matchReason: "High hiring volume globally.", visaFriendly: true },
+    ];
+    return { homeCountry: fallback, targetCountry: fallback, top10: fallback };
+  }
+}
+
+// ─── Country-specific Career Directory (with backend cache) ─────────────────
+
+export { type CountryCareerEntry };
+
+export async function getCareersByCountry(
+  country: string,
+  userProfile: { interests?: string[]; targetCareerId?: string; education?: string },
+  forceRefresh = false
+): Promise<CountryCareerEntry[]> {
+  const cacheKey = country.trim().toLowerCase();
+
+  // 1. Return from cache unless forced
+  if (!forceRefresh) {
+    const cached = await getCachedCountryCareers(cacheKey);
+    if (cached && cached.length > 0) {
+      console.log(`[CountryCareers] Serving ${country} from cache (${cached.length} entries)`);
+      return cached;
+    }
+  } else {
+    await invalidateCountryCareersCache(cacheKey);
+  }
+
+  const isGlobal = cacheKey === 'global' || cacheKey === '';
+  const interests = userProfile.interests?.join(', ') || 'Technology, Business';
+  const targetCareer = userProfile.targetCareerId || 'any career';
+  const education = userProfile.education || 'any';
+
+  const systemInstruction = `You are a global career intelligence engine. Return ONLY valid JSON — no markdown, no explanation.`;
+
+  const prompt = isGlobal
+    ? `List the top 15 most in-demand careers globally in 2026.
+       For each career include: id, title, description, growth, category, subCategory, workType, tags, visibility, demandScore, avgSalaryUSD, topSkills, topCompanies, country.
+       
+       User context: interests = ${interests}, target = ${targetCareer}, education = ${education}.
+       
+       visibility must be "public" for globally recognised internationally-sought roles, "private" for local/government/niche roles.
+       Return a JSON array of CountryCareerEntry objects.`
+    : `List the top 15 most in-demand careers in ${country} in 2026.
+       For each career include: id, title, description, growth, category, subCategory, workType, tags, visibility, demandScore, avgSalaryUSD, topSkills, topCompanies, country.
+       
+       User context: interests = ${interests}, target = ${targetCareer}, education = ${education}.
+       
+       visibility must be "public" for internationally recognised, globally-transferable roles, "private" for local government, domestic-only, or niche-market roles in ${country}.
+       country field must be "${country}".
+       topCompanies must be real companies actively hiring in ${country}.
+       Return a JSON array of CountryCareerEntry objects.`;
+
+  try {
+    const raw = await callLLM(prompt, systemInstruction, { temperature: 0.2, maxTokens: 3000 });
+    const parsed = parseAIJson<CountryCareerEntry[]>(raw);
+    if (!parsed || !Array.isArray(parsed)) throw new Error("parse failed");
+
+    const sanitized: CountryCareerEntry[] = parsed.map((e: any, i: number) => ({
+      id: String(e.id || `${cacheKey}-${i}`),
+      title: String(e.title || ""),
+      description: String(e.description || ""),
+      growth: ["high", "medium", "stable"].includes(e.growth) ? e.growth : "stable",
+      category: String(e.category || "General"),
+      subCategory: String(e.subCategory || e.sub_category || ""),
+      workType: ["Remote", "On-site", "Hybrid", "Mobile"].includes(e.workType) ? e.workType : "Hybrid",
+      tags: Array.isArray(e.tags) ? e.tags : [],
+      visibility: e.visibility === "private" ? "private" : "public",
+      demandScore: Math.min(100, Math.max(0, Number(e.demandScore) || 70)),
+      avgSalaryUSD: Number(e.avgSalaryUSD) || 0,
+      topSkills: Array.isArray(e.topSkills) ? e.topSkills.slice(0, 5) : [],
+      topCompanies: Array.isArray(e.topCompanies) ? e.topCompanies.slice(0, 4) : [],
+      country: isGlobal ? (String(e.country || "Global")) : country,
+    }));
+
+    // Persist to DB cache
+    await saveCountryCareersCache(cacheKey, sanitized);
+    console.log(`[CountryCareers] Fetched & cached ${sanitized.length} careers for ${country}`);
+    return sanitized;
+  } catch (error) {
+    if (isInsufficientBalanceError(error)) {
+      console.warn(`[CountryCareers] LLM balance insufficient for ${country}, using fallback`);
+    } else {
+      console.error(`[CountryCareers] Error for ${country}:`, error);
+    }
+    // Return a basic fallback
+    return [
+      { id: "ai-engineer", title: "AI & ML Engineer", description: "Design and build AI systems.", growth: "high", category: "Technology & Digital", subCategory: "AI & Data", workType: "Remote", tags: ["AI", "Remote Economy"], visibility: "public", demandScore: 95, avgSalaryUSD: 130000, topSkills: ["Python", "PyTorch", "MLOps"], topCompanies: ["Google", "Microsoft", "Amazon"], country: isGlobal ? "Global" : country },
+      { id: "fullstack-dev", title: "Full-Stack Developer", description: "Build complete web applications.", growth: "high", category: "Technology & Digital", subCategory: "Software", workType: "Hybrid", tags: ["Remote Economy"], visibility: "public", demandScore: 88, avgSalaryUSD: 105000, topSkills: ["React", "Node.js", "TypeScript"], topCompanies: ["Meta", "Shopify", "Stripe"], country: isGlobal ? "Global" : country },
+      { id: "data-analyst", title: "Data Analyst", description: "Analyse data to drive business decisions.", growth: "high", category: "Business, Finance & Management", subCategory: "Data", workType: "Hybrid", tags: ["AI Integration"], visibility: "public", demandScore: 85, avgSalaryUSD: 85000, topSkills: ["SQL", "Python", "Power BI"], topCompanies: ["Deloitte", "KPMG", "IBM"], country: isGlobal ? "Global" : country },
     ];
   }
 }

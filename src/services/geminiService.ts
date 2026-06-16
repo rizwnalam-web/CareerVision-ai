@@ -23,9 +23,11 @@ export {
   getAiInstitutionRecommendations,
   getAiProactiveJobRecommendations,
   getMarketInsights,
+  getCareerDirectories,
+  getCareersByCountry,
 } from "./careerAiProxy.js";
 
-export type { GlobalInsight } from "./careerAiProxy.js";
+export type { GlobalInsight, CareerDirectoryEntry, CareerDirectoryResult, CountryCareerEntry } from "./careerAiProxy.js";
 /*
   const model = "gemini-2.0-flash";
   
