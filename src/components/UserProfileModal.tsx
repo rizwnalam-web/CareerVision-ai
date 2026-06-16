@@ -109,21 +109,50 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Persist to backend if user has a DB id
-      if (user?.profile?.id) {
-        await updateUserProfile(user.profile.id, {
+      // user.id is the DB id for email/password users; user.profile?.id is a legacy fallback
+      const userId = user?.id || user?.profile?.id;
+      if (userId) {
+        await updateUserProfile(userId, {
           name: draft.name,
           age: draft.age,
           education: draft.education,
           country: draft.country,
           targetLocation: draft.targetLocation,
+          targetCareerId: draft.targetCareerId,
           budget: draft.budget,
           interests: Array.isArray(draft.interests) ? draft.interests : [],
           gpa: draft.academicPerformance?.gpa,
           achievements: draft.academicPerformance?.achievements?.join(', '),
         });
       }
-      // Always update local state (Firestore sync handled by App.tsx useEffect)
+
+      // Persist the updated fields into localStorage so the data survives a page refresh.
+      try {
+        const stored = localStorage.getItem('cv_local_user');
+        if (stored) {
+          const localUser = JSON.parse(stored);
+          const merged = {
+            ...localUser,
+            name: draft.name,
+            age: draft.age,
+            education: draft.education,
+            country: draft.country,
+            targetLocation: draft.targetLocation,
+            target_location: draft.targetLocation,
+            targetCareerId: draft.targetCareerId || null,
+            target_career_id: draft.targetCareerId || null,
+            budget: draft.budget,
+            interests: draft.interests,
+            gpa: draft.academicPerformance?.gpa,
+            achievements: draft.academicPerformance?.achievements?.join(', ') ?? '',
+          };
+          localStorage.setItem('cv_local_user', JSON.stringify(merged));
+        }
+      } catch {
+        // localStorage write failure is non-critical
+      }
+
+      // Update React state
       onProfileUpdate(draft);
       setIsEditing(false);
       setSaveSuccess(true);
@@ -152,8 +181,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     : 'Email';
 
   const completedCount = profile.completedMilestones?.length ?? 0;
-  const gpaDisplay = profile.academicPerformance?.gpa
-    ? `${profile.academicPerformance.gpa.toFixed(1)} GPA`
+  const gpaRaw = profile.academicPerformance?.gpa;
+  const gpaDisplay = gpaRaw != null && gpaRaw !== ''
+    ? `${Number(gpaRaw).toFixed(1)} GPA`
     : 'Not set';
 
   return (

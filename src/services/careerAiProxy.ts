@@ -163,8 +163,13 @@ export async function getLatestCareerNews(preferredCountry?: string): Promise<{ 
   return callBackend<{ career: string; country: string; aiTech: string }[]>('/latest-career-news', 'POST', { preferredCountry });
 }
 
-export async function getVisaGuidance(profile: UserProfile, targetCountry: string, targetCareer: string): Promise<any> {
-  return callBackend<any>('/visa-guidance', 'POST', { profile, targetCountry, targetCareer });
+export async function getVisaGuidance(
+  profile: UserProfile,
+  targetCountry: string,
+  targetCareer: string,
+  institution?: { name: string; city?: string; country?: string; type?: string; programs?: string[] }
+): Promise<any> {
+  return callBackend<any>('/visa-guidance', 'POST', { profile, targetCountry, targetCareer, institution });
 }
 
 export async function getGlobalContextInsights(
@@ -231,4 +236,121 @@ export async function getCareersByCountry(
   forceRefresh = false
 ): Promise<CountryCareerEntry[]> {
   return callBackend<CountryCareerEntry[]>('/careers-by-country', 'POST', { country, profile, forceRefresh });
+}
+
+export interface JobDirectoryCategory {
+  category: string;
+  jobs: string[];
+}
+
+export interface JobDirectorySector {
+  sector: 'Government' | 'Private';
+  icon: string;
+  categories: JobDirectoryCategory[];
+}
+
+export interface JobDirectory {
+  country: string;
+  sectors: JobDirectorySector[];
+  generatedAt: string;
+}
+
+export async function getJobDirectory(country: string): Promise<JobDirectory> {
+  return callBackend<JobDirectory>(`/job-directory/${encodeURIComponent(country)}`, 'GET');
+}
+
+// ─── Career Requirements & Artifacts ─────────────────────────────────────────
+
+export interface EligibilityCriterion {
+  label: string;
+  value: string;
+  type: 'education' | 'age' | 'nationality' | 'physical' | 'exam' | 'experience' | 'other';
+  mandatory: boolean;
+}
+
+export interface SelectionStage {
+  stage: number;
+  title: string;
+  description: string;
+  type: 'written' | 'interview' | 'physical' | 'medical' | 'document' | 'online' | 'skill-test';
+  duration?: string;
+  tips?: string;
+}
+
+export interface KeyExam {
+  name: string;
+  conductedBy: string;
+  frequency: string;
+  syllabusHighlights: string[];
+  examPattern: string;
+  officialUrl?: string;
+}
+
+export interface ArtifactItem {
+  name: string;
+  description: string;
+  priority: 'Essential' | 'Important' | 'Optional';
+  whenNeeded: string;
+  format?: string;
+}
+
+export interface ArtifactCategory {
+  category: string;
+  icon: string;
+  items: ArtifactItem[];
+}
+
+export interface PreparationPhase {
+  phase: string;
+  duration: string;
+  icon: string;
+  focusAreas: string[];
+  keyAction: string;
+}
+
+export interface CareerRequirements {
+  careerTitle: string;
+  country: string;
+  sector: 'government' | 'private' | 'both';
+  overview: string;
+  eligibility: EligibilityCriterion[];
+  selectionProcess: SelectionStage[];
+  keyExams: KeyExam[];
+  artifacts: ArtifactCategory[];
+  preparationTimeline: PreparationPhase[];
+  proTips: string[];
+  officialLinks: { label: string; url: string }[];
+}
+
+export async function getCareerRequirements(
+  careerTitle: string,
+  country: string
+): Promise<CareerRequirements> {
+  const result = await callBackend<{ data: CareerRequirements }>('/career-requirements', 'POST', {
+    careerTitle,
+    country,
+  });
+  // callBackend returns the parsed JSON; the route wraps in { success, data }
+  return (result as unknown as { data: CareerRequirements }).data ?? (result as unknown as CareerRequirements);
+}
+
+export interface CareerMilestone {
+  ageRange: string;
+  title: string;
+  description: string;
+  requirements: string[];
+}
+
+export async function getCareerMilestones(
+  careerTitle: string,
+  userAge: number,
+  userEducation: string,
+  country: string
+): Promise<CareerMilestone[]> {
+  return callBackend<CareerMilestone[]>('/milestones', 'POST', {
+    careerTitle,
+    userAge,
+    userEducation,
+    country,
+  });
 }

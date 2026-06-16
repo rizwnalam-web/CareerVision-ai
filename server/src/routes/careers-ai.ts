@@ -275,8 +275,13 @@ router.post("/match-scholarships", async (req: Request, res: Response) => {
     const result = await careerAiService.matchScholarships(profile);
     res.json({ success: true, data: result });
   } catch (error) {
-    console.error("Match scholarships error:", error);
-    res.status(500).json({ error: "Failed to match scholarships" });
+    const msg = error instanceof Error ? error.message : String(error);
+    const isRateLimit = /429|rate.?limit|too many requests/i.test(msg);
+    console.error("Match scholarships error:", msg);
+    res
+      .status(isRateLimit ? 503 : 500)
+      .set(isRateLimit ? { 'Retry-After': '60' } : {})
+      .json({ error: isRateLimit ? "LLM providers are temporarily rate-limited. Please retry in ~60 seconds." : "Failed to match scholarships" });
   }
 });
 
@@ -321,11 +326,11 @@ router.post("/latest-career-news", async (req: Request, res: Response) => {
 
 router.post("/visa-guidance", async (req: Request, res: Response) => {
   try {
-    const { profile, targetCountry, targetCareer } = req.body;
+    const { profile, targetCountry, targetCareer, institution } = req.body;
     if (!profile || !targetCountry || !targetCareer) {
       return res.status(400).json({ error: "profile, targetCountry, and targetCareer are required" });
     }
-    const result = await careerAiService.getVisaGuidance(profile, targetCountry, targetCareer);
+    const result = await careerAiService.getVisaGuidance(profile, targetCountry, targetCareer, institution);
     res.json({ success: true, data: result });
   } catch (error) {
     console.error("Get visa guidance error:", error);
@@ -376,6 +381,51 @@ router.post("/careers-by-country", async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Careers by country error:", error);
     res.status(500).json({ error: "Failed to get careers by country" });
+  }
+});
+
+router.post("/milestones", async (req: Request, res: Response) => {
+  try {
+    const { careerTitle, userAge, userEducation, country } = req.body;
+    if (!careerTitle) {
+      return res.status(400).json({ error: "careerTitle is required" });
+    }
+    const milestones = await careerAiService.getCareerMilestones(
+      careerTitle,
+      Number(userAge) || 22,
+      String(userEducation || ""),
+      String(country || "Global")
+    );
+    res.json({ success: true, data: milestones });
+  } catch (error) {
+    console.error("Milestones error:", error);
+    res.status(500).json({ error: "Failed to generate milestones" });
+  }
+});
+
+router.get("/job-directory/:country", async (req: Request, res: Response) => {
+  try {
+    const { country } = req.params;
+    if (!country) return res.status(400).json({ error: "country is required" });
+    const result = await careerAiService.getJobDirectory(decodeURIComponent(country));
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error("Job directory error:", error);
+    res.status(500).json({ error: "Failed to get job directory" });
+  }
+});
+
+router.post("/career-requirements", async (req: Request, res: Response) => {
+  try {
+    const { careerTitle, country } = req.body;
+    if (!careerTitle || !country) {
+      return res.status(400).json({ error: "careerTitle and country are required" });
+    }
+    const result = await careerAiService.getCareerRequirements(decodeURIComponent(careerTitle), decodeURIComponent(country));
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error("Career requirements error:", error);
+    res.status(500).json({ error: "Failed to get career requirements" });
   }
 });
 

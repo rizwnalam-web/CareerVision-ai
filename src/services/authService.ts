@@ -131,6 +131,7 @@ export async function updateUserProfile(userId: string, data: {
   education?: string;
   country?: string;
   targetLocation?: string;
+  targetCareerId?: string;
   budget?: number;
   interests?: string[];
   gpa?: number;

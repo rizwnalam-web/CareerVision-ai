@@ -141,7 +141,6 @@ router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const {
-      email,
       name,
       age,
       education,
@@ -156,45 +155,65 @@ router.put("/:id", async (req, res) => {
       currentSavings,
     } = req.body;
 
+    // Helper: treat empty strings as null for strict DB column types
+    const uuid = (v: any) => (v && typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
+    const num = (v: any) => (v !== undefined && v !== null && v !== '' ? Number(v) : null);
+    const str = (v: any) => (v !== undefined && v !== null && v !== '' ? String(v) : null);
+    const interestsJson = Array.isArray(interests) && interests.length > 0
+      ? JSON.stringify(interests)
+      : interests !== undefined ? null : null;
+
+    // Use COALESCE so omitted/null fields keep their existing DB value
     await db.none(
-      `UPDATE users SET email = $1, name = $2, age = $3, education = $4, interests = $5, 
-       budget = $6, country = $7, target_location = $8, target_career_id = $9, gpa = $10,
-       achievements = $11, annual_income = $12, current_savings = $13 WHERE id = $14`,
+      `UPDATE users SET
+        name = COALESCE($1, name),
+        age = COALESCE($2, age),
+        education = COALESCE($3, education),
+        interests = COALESCE($4, interests),
+        budget = COALESCE($5, budget),
+        country = COALESCE($6, country),
+        target_location = COALESCE($7, target_location),
+        target_career_id = COALESCE($8::uuid, target_career_id),
+        gpa = COALESCE($9, gpa),
+        achievements = COALESCE($10, achievements),
+        annual_income = COALESCE($11, annual_income),
+        current_savings = COALESCE($12, current_savings)
+       WHERE id = $13`,
       [
-        email,
-        name,
-        age,
-        education,
-        interests,
-        budget,
-        country,
-        targetLocation,
-        targetCareerId,
-        gpa,
-        achievements,
-        annualIncome,
-        currentSavings,
+        str(name),
+        num(age),
+        str(education),
+        interestsJson,
+        num(budget),
+        str(country),
+        str(targetLocation),
+        uuid(targetCareerId),
+        num(gpa),
+        str(achievements),
+        num(annualIncome),
+        num(currentSavings),
         id,
       ]
     );
 
+    // Return the full updated row with camelCase keys
+    const updated = await db.oneOrNone('SELECT * FROM users WHERE id = $1', [id]);
+    if (!updated) return res.status(404).json({ error: 'User not found' });
+    const { password_hash: _ph, firebase_uid: _fu, target_location: _tl, target_career_id: _tc, annual_income: _ai, current_savings: _cs, created_at: _ca, updated_at: _ua, ...updatedRest } = updated;
     res.json({
-      id,
-      email,
-      name,
-      age,
-      education,
-      interests,
-      budget,
-      country,
-      targetLocation,
-      targetCareerId,
-      gpa,
-      achievements,
-      annualIncome,
-      currentSavings,
+      success: true,
+      user: {
+        ...updatedRest,
+        targetLocation: _tl || null,
+        targetCareerId: _tc || null,
+        annualIncome: _ai || null,
+        currentSavings: _cs || null,
+        createdAt: _ca,
+        updatedAt: _ua,
+      }
     });
   } catch (error) {
+    console.error('Update user error:', error);
     res.status(500).json({ error: "Failed to update user" });
   }
 });
@@ -366,6 +385,10 @@ router.post("/auth/login", async (req, res) => {
         ...rest,
         uid: firebase_uid || undefined,
         registrationMethod: registrationMethod || registration_method,
+        targetLocation: target_location || null,
+        targetCareerId: target_career_id || null,
+        annualIncome: annual_income || null,
+        currentSavings: current_savings || null,
         createdAt: created_at,
         updatedAt: updated_at
       }

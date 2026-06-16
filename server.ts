@@ -39,9 +39,15 @@ function isPortAvailable(port: number, host = "0.0.0.0"): Promise<boolean> {
 
 async function startBackendServer(port: number): Promise<void> {
   if (!(await isPortAvailable(port))) {
-    console.log(`[Backend] Reusing existing API server on http://localhost:${port}`);
-    backendProcess = null;
-    return;
+    // Kill the stale process instead of reusing it — it may be running old code
+    console.log(`[Backend] Port ${port} in use — killing stale process and restarting...`);
+    await new Promise<void>((resolve) => {
+      const killer = spawn("npx", ["kill-port", String(port)], { shell: true, stdio: "inherit" });
+      killer.on("close", () => resolve());
+      killer.on("error", () => resolve());
+    });
+    // Brief pause for OS to release the port
+    await new Promise(r => setTimeout(r, 800));
   }
 
   const serverDir = path.join(__dirname, "server");

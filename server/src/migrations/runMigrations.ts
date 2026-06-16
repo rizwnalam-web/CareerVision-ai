@@ -5,6 +5,10 @@ import * as migration003 from "./002_add_market_data_tables.js";
 import * as migration004 from "./004_add_password_reset_tokens.js";
 import * as migration005 from "./005_add_top_careers_cache.js";
 import * as migration006 from "./006_add_country_careers_cache.js";
+import * as migration007 from "./007_add_milestones_cache.js";
+import * as migration008 from "./008_add_hub_search_cache.js";
+import * as migration009 from "./009_add_ai_caches.js";
+import * as migration010 from "./010_add_ai_response_cache.js";
 
 const migrations = [
   { name: "001_initial_schema",        module: migration001 },
@@ -13,6 +17,10 @@ const migrations = [
   { name: "004_add_password_reset_tokens", module: migration004 },
   { name: "005_add_top_careers_cache", module: migration005 },
   { name: "006_add_country_careers_cache", module: migration006 },
+  { name: "007_add_milestones_cache",  module: migration007 },
+  { name: "008_add_hub_search_cache",  module: migration008 },
+  { name: "009_add_ai_caches",         module: migration009 },
+  { name: "010_add_ai_response_cache", module: migration010 },
 ];
 
 export async function runMigrations() {

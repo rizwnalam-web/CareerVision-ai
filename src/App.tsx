@@ -96,7 +96,7 @@ import {
 import { cn } from './lib/utils';
 // mock data removed — all data is loaded from the AI/backend
 import { CareerPath, UserProfile, Institution, FundingOpportunity, DashboardIntelligence, CareerSkillGap } from './types/career';
-import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobalCareers, aiSearchCareerPaths, generateCoverLetter, getLatestCareerNews, getAiInstitutionRecommendations, getDynamicInstitutions, getDynamicStudyMaterials, getVisaGuidance, getCareerHubIntelligence, aiSearchInstitutions, aiSearchCareerHubs, getDashboardIntelligence, getCareerSkillGap, getGlobalContextInsights, getCareersByCountry, GlobalInsight, type CountryCareerEntry } from './services/geminiService';
+import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobalCareers, aiSearchCareerPaths, generateCoverLetter, getLatestCareerNews, getAiInstitutionRecommendations, getDynamicInstitutions, getDynamicStudyMaterials, getVisaGuidance, getCareerHubIntelligence, aiSearchInstitutions, aiSearchCareerHubs, getDashboardIntelligence, getCareerSkillGap, getGlobalContextInsights, getCareersByCountry, getCareerMilestones, getJobDirectory, getCareerRequirements, GlobalInsight, type CountryCareerEntry, type CareerMilestone, type JobDirectory, type CareerRequirements } from './services/geminiService';
 import ReactMarkdown from 'react-markdown';
 
 import { LandingPage } from './components/LandingPage';
@@ -473,8 +473,8 @@ const HeatmapView = ({ profile }: { profile: UserProfile }) => {
             <div className="h-[360px]">
               <MapContainer center={mapCenter} zoom={2} scrollWheelZoom={false} className="h-full w-full">
               <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
               />
               {markerHubs.map((hub, idx) => (
                 <React.Fragment key={`${hub.city}-${hub.country}-${idx}`}>
@@ -891,7 +891,7 @@ const COUNTRY_FILTERS: { flag: string; label: string; query: string | null }[] =
   { flag: '🇳🇱', label: 'Netherlands', query: 'top 10 most in-demand jobs in Netherlands 2026' },
 ];
 
-const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview, onAiCareerSearch, isAiCareerLoading, aiCareerSearchMessage, onNavigate, dashboardIntel, isDashboardIntelLoading, onResetToGlobal }: { profile: UserProfile, onSelectPath: (id: string) => void, careers: CareerPath[], isLoading: boolean, onInitInterview: (role: string, company?: string) => void, onAiCareerSearch: (query: string) => Promise<void>, isAiCareerLoading: boolean, aiCareerSearchMessage: string, onNavigate: (view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs') => void, dashboardIntel: DashboardIntelligence | null, isDashboardIntelLoading: boolean, onResetToGlobal: () => Promise<void> }) => {
+const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading, onInitInterview, onAiCareerSearch, isAiCareerLoading, aiCareerSearchMessage, onNavigate, dashboardIntel, isDashboardIntelLoading, onResetToGlobal }: { profile: UserProfile, onSelectPath: (id: string) => void, onSelectByTitle: (title: string) => void, careers: CareerPath[], isLoading: boolean, onInitInterview: (role: string, company?: string) => void, onAiCareerSearch: (query: string) => Promise<void>, isAiCareerLoading: boolean, aiCareerSearchMessage: string, onNavigate: (view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs') => void, dashboardIntel: DashboardIntelligence | null, isDashboardIntelLoading: boolean, onResetToGlobal: () => Promise<void> }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedPath, setExpandedPath] = useState<string | null>(null);
   const [skillGapCache, setSkillGapCache] = useState<Record<string, CareerSkillGap[]>>({});
@@ -951,6 +951,35 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
     setIsSyncing(true);
     fetchCountryEntries(selectedCountry, true);
   };
+
+  // ── Job Directory state ──
+  const homeCountry = profile.country || defaultCountry;
+  const [jobDirectory, setJobDirectory] = useState<JobDirectory | null>(null);
+  const [isJobDirLoading, setIsJobDirLoading] = useState(false);
+  const [jobDirError, setJobDirError] = useState(false);
+  const [activeDirSector, setActiveDirSector] = useState<'Government' | 'Private'>('Government');
+  const [expandedDirCategory, setExpandedDirCategory] = useState<string | null>(null);
+
+  const fetchJobDirectory = async (country: string, attempt = 1) => {
+    setIsJobDirLoading(true);
+    setJobDirError(false);
+    try {
+      const result = await getJobDirectory(country);
+      // If sectors came back empty and we haven't retried yet, wait 3s and retry once
+      if ((!result.sectors || result.sectors.length === 0) && attempt === 1) {
+        console.warn('[JobDirectory] Received empty sectors, retrying in 3s...');
+        setTimeout(() => fetchJobDirectory(country, 2), 3000);
+        return;
+      }
+      setJobDirectory(result);
+    } catch {
+      setJobDirError(true);
+    } finally {
+      setIsJobDirLoading(false);
+    }
+  };
+
+  useEffect(() => { if (homeCountry) fetchJobDirectory(homeCountry); }, [homeCountry]);
 
   const readinessBreakdown = dashboardIntel ? [
     { label: 'Skills', value: dashboardIntel.readiness.skills, color: '#6366f1' },
@@ -1348,237 +1377,112 @@ const Dashboard = ({ profile, onSelectPath, careers, isLoading, onInitInterview,
           </div>
         </div>
 
-        {/* Multi-path Trajectory Timeline */}
+        {/* Career Directories */}
         <div className="space-y-5">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 px-1">
             <div>
               <h3 className="text-xl font-black text-slate-900 tracking-tight leading-none mb-1">Career Directories</h3>
-              <p className="text-[9px] text-indigo-500 font-black uppercase tracking-widest">AI-Optimized Career Intelligence · 2026</p>
+              <p className="text-[9px] text-indigo-500 font-black uppercase tracking-widest">
+                {homeCountry} · Government &amp; Private Sector · AI-Generated
+              </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Country dropdown */}
-              <div className="relative">
-                <Globe size={10} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none" />
-                {isCountryLoading && <Loader2 size={9} className="absolute right-6 top-1/2 -translate-y-1/2 text-indigo-400 animate-spin pointer-events-none" />}
-                <select
-                  value={selectedCountry}
-                  disabled={isCountryLoading}
-                  onChange={e => {
-                    const chip = COUNTRY_FILTERS.find(c => c.label === e.target.value);
-                    if (chip) handleCountrySelect(chip);
-                  }}
-                  className="pl-7 pr-7 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none appearance-none cursor-pointer hover:border-indigo-300 focus:border-indigo-400 transition-all disabled:opacity-50 text-slate-700"
-                >
-                  {COUNTRY_FILTERS.map(chip => (
-                    <option key={chip.label} value={chip.label}>{chip.flag} {chip.label}</option>
-                  ))}
-                </select>
-                <ChevronDown size={9} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={11} />
-                <input type="text" placeholder="Filter careers..."
-                  className="pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none w-32 focus:w-44 transition-all"
-                  value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-              </div>
-              {/* Visibility filter */}
-              <div className="flex gap-0.5 bg-slate-100 rounded-xl p-1">
-                {(['all', 'public', 'private'] as const).map(v => (
-                  <button key={v} onClick={() => setVisibilityFilter(v)}
-                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${
-                      visibilityFilter === v ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                    }`}>
-                    {v === 'all' ? 'All' : v === 'public' ? '🌐 Public' : '🔒 Private'}
-                  </button>
-                ))}
-              </div>
-              {/* Sync button */}
-              <button onClick={handleSync} disabled={isSyncing || isCountryLoading}
-                title="Sync latest data from AI"
-                className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-40 border border-slate-200 hover:border-emerald-200">
-                <RotateCcw size={10} className={isSyncing ? 'animate-spin' : ''} />
-                {isSyncing ? 'Syncing…' : 'Sync'}
-              </button>
-            </div>
+            <button
+              onClick={() => fetchJobDirectory(homeCountry)}
+              disabled={isJobDirLoading}
+              className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-40 border border-slate-200 hover:border-emerald-200"
+            >
+              <RotateCcw size={10} className={isJobDirLoading ? 'animate-spin' : ''} />
+              {isJobDirLoading ? 'Loading…' : 'Refresh'}
+            </button>
           </div>
 
-          {/* Cache status hint */}
-          {countryEntriesError && (
-            <p className="text-[10px] text-rose-400 font-bold px-1">Failed to load career data. <button onClick={() => fetchCountryEntries(selectedCountry)} className="underline">Retry</button></p>
-          )}
+          {/* Sector tab switcher */}
+          <div className="flex gap-2">
+            {(['Government', 'Private'] as const).map(s => (
+              <button
+                key={s}
+                onClick={() => { setActiveDirSector(s); setExpandedDirCategory(null); }}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+                  activeDirSector === s
+                    ? s === 'Government'
+                      ? 'bg-indigo-600 text-white border-indigo-700 shadow-md shadow-indigo-200'
+                      : 'bg-slate-900 text-white border-slate-950 shadow-md shadow-slate-200'
+                    : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-200 hover:text-indigo-600'
+                }`}
+              >
+                <span className="text-base leading-none">{s === 'Government' ? '🏛️' : '🏢'}</span>
+                {s} Sector
+              </button>
+            ))}
+          </div>
 
-          {/* Timeline spine + path rows */}
-          <div className="relative">
-            <div className="absolute left-[11px] top-5 bottom-5 w-0.5 bg-gradient-to-b from-indigo-500 via-indigo-200 to-transparent" />
-            <div className="space-y-3 relative">
-              {isCountryLoading ? (
-                [...Array(5)].map((_, i) => <div key={i} className="ml-7 h-20 bg-slate-100 rounded-3xl animate-pulse" />)
-              ) : filteredEntries.length === 0 && !isLoading ? (
-                <div className="ml-7 py-12 bg-slate-50 rounded-3xl border border-dashed border-slate-200 flex flex-col items-center gap-2">
-                  <Search size={20} className="text-slate-300" />
-                  <p className="text-[10px] font-black text-slate-400 uppercase">No careers match your filters</p>
-                  <button onClick={() => { setSearchQuery(''); setVisibilityFilter('all'); }} className="text-[9px] text-indigo-500 hover:underline font-black uppercase tracking-widest">Clear filters</button>
-                </div>
-              ) : (showAllPaths ? filteredEntries : filteredEntries.slice(0, 5)).map((path, idx) => {
-                const isExpanded = expandedPath === path.id;
-                const matchScore = Math.round(Math.max(58, 95 - idx * 6));
-                const skillGap = skillGapCache[path.id] ?? [];
-                const isSkillGapLoading = skillGapLoading[path.id] ?? false;
-                const isSkillGapError = skillGapError[path.id] ?? false;
+          {/* Directory content */}
+          {isJobDirLoading ? (
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => <div key={i} className="h-14 bg-slate-100 rounded-2xl animate-pulse" />)}
+            </div>
+          ) : jobDirError ? (
+            <div className="py-12 bg-rose-50 rounded-3xl border border-rose-100 flex flex-col items-center gap-3">
+              <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest">Failed to load directory</p>
+              <button
+                onClick={() => fetchJobDirectory(homeCountry)}
+                className="text-[9px] font-black uppercase tracking-widest px-4 py-2 bg-white text-rose-500 border border-rose-200 rounded-xl hover:bg-rose-50 transition-all"
+              >
+                ↻ Retry
+              </button>
+            </div>
+          ) : !jobDirectory || jobDirectory.sectors.length === 0 ? (
+            <div className="py-12 bg-slate-50 rounded-3xl border border-dashed border-slate-200 flex flex-col items-center gap-3">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI is generating your directory…</p>
+              <p className="text-[9px] text-slate-400">This may take a moment on first load</p>
+              <button
+                onClick={() => fetchJobDirectory(homeCountry)}
+                className="text-[9px] font-black uppercase tracking-widest px-4 py-2 bg-white text-indigo-500 border border-indigo-200 rounded-xl hover:bg-indigo-50 transition-all"
+              >
+                ↻ Retry Now
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {(jobDirectory.sectors.find(s => s.sector === activeDirSector)?.categories ?? []).map(cat => {
+                const isOpen = expandedDirCategory === cat.category;
                 return (
-                  <div key={path.id}>
-                    <div className="flex items-start gap-4 cursor-pointer group/row" onClick={() => handleTogglePath(path.id, path.title)}>
-                      {/* Node */}
-                      <div className={`mt-5 w-6 h-6 rounded-full flex items-center justify-center ring-4 ring-white shadow-sm shrink-0 transition-all ${isExpanded ? 'bg-indigo-600 scale-110' : idx === 0 ? 'bg-slate-900' : 'bg-slate-300 group-hover/row:bg-indigo-400'}`}>
-                        {isExpanded ? <ChevronDown size={10} className="text-white" /> : <span className="text-[7px] font-black text-white">{idx + 1}</span>}
+                  <div key={cat.category} className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+                    <button
+                      className="w-full flex items-center justify-between px-5 py-3.5 text-left"
+                      onClick={() => setExpandedDirCategory(isOpen ? null : cat.category)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-2 h-2 rounded-full ${activeDirSector === 'Government' ? 'bg-indigo-500' : 'bg-slate-800'}`} />
+                        <span className="text-[11px] font-black text-slate-900 uppercase tracking-wider">{cat.category}</span>
+                        <span className="text-[8px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{cat.jobs.length} roles</span>
                       </div>
-                      {/* Card row */}
-                      <div className={`flex-1 bg-white border rounded-3xl p-5 shadow-sm transition-all hover:shadow-md ${isExpanded ? 'border-indigo-200 shadow-indigo-50/60' : 'border-slate-100 hover:border-indigo-100'}`}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                              <h4 className={`text-base font-black tracking-tight uppercase transition-colors ${isExpanded ? 'text-indigo-600' : 'text-slate-900 group-hover/row:text-indigo-600'}`}>{path.title}</h4>
-                              <span className={`shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider ${
-                                path.visibility === 'public'
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  : 'bg-amber-50 text-amber-700 border border-amber-200'
-                              }`}>
-                                {path.visibility === 'public' ? '🌐 Public' : '🔒 Private'}
-                              </span>
-                            </div>
-                            <p className="text-slate-500 text-[10px] font-medium leading-relaxed line-clamp-1 mt-0.5">{path.description}</p>
-                          </div>
-                          <div className="flex flex-col items-end gap-1 shrink-0">
-                            <span className="bg-slate-950 text-white text-[7px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest">{path.growth} Growth</span>
-                            <span className={`text-[7px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest ${matchScore >= 80 ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-700'}`}>{matchScore}% Match</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-50">
-                          <div className="flex items-center gap-1"><TrendingUp size={10} className="text-indigo-400" /><span className="text-[9px] font-black text-slate-400">{path.demandScore}/100 demand</span></div>
-                          <div className="flex items-center gap-1"><CircleDollarSign size={10} className="text-emerald-500" /><span className="text-[9px] font-black text-slate-400">${Math.round((path.avgSalaryUSD ?? 0) / 1000)}k avg</span></div>
-                          <div className="flex items-center gap-1"><Globe size={10} className="text-indigo-400" /><span className="text-[9px] font-black text-slate-400">{path.country}</span></div>
-                          <ChevronRight size={12} className={`ml-auto transition-all ${isExpanded ? 'rotate-90 text-indigo-500' : 'text-slate-300 group-hover/row:text-indigo-400'}`} />
+                      <ChevronDown size={14} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {isOpen && (
+                      <div className="px-5 pb-4 border-t border-slate-50">
+                        <div className="flex flex-wrap gap-1.5 pt-3">
+                          {cat.jobs.map(job => (
+                            <button
+                              key={job}
+                              onClick={() => onSelectByTitle(job)}
+                              className={`text-[9px] font-black px-3 py-1.5 rounded-xl uppercase tracking-wide border transition-all cursor-pointer ${
+                                activeDirSector === 'Government'
+                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-600 hover:text-white hover:border-indigo-600'
+                                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-900 hover:text-white hover:border-slate-900'
+                              }`}
+                            >
+                              {job} →
+                            </button>
+                          ))}
                         </div>
                       </div>
-                    </div>
-
-                    {/* Expanded detail panel */}
-                    <AnimatePresence>
-                      {isExpanded && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.28, ease: 'easeInOut' }}
-                          className="overflow-hidden"
-                        >
-                          <div className="ml-10 mt-2 mb-1 bg-gradient-to-b from-indigo-50/70 to-white/90 border border-indigo-100 rounded-3xl p-6">
-                            <div className="grid grid-cols-2 gap-6">
-                              {/* Salary trend area chart */}
-                              <div>
-                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                                  <TrendingUp size={9} className="text-indigo-500" /> Salary Trajectory
-                                </p>
-                                <div className="h-28">
-                                  {salaryTrendData.length >= 2 ? (
-                                  <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-                                    <AreaChart data={salaryTrendData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
-                                      <defs>
-                                        <linearGradient id={`sg-${idx}`} x1="0" y1="0" x2="0" y2="1">
-                                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
-                                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                                        </linearGradient>
-                                      </defs>
-                                      <XAxis dataKey="y" fontSize={7} axisLine={false} tickLine={false} tick={{ fill: '#94a3b8' }} />
-                                      <YAxis fontSize={7} axisLine={false} tickLine={false} tick={{ fill: '#94a3b8' }} tickFormatter={v => `$${v / 1000}k`} />
-                                      <RechartsTooltip contentStyle={{ fontSize: '9px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} formatter={(v: any) => [`$${(v / 1000).toFixed(0)}k avg`, '']} />
-                                      <Area type="monotone" dataKey="v" stroke="#6366f1" strokeWidth={2} fill={`url(#sg-${idx})`} dot={false} activeDot={false} />
-                                    </AreaChart>
-                                  </ResponsiveContainer>
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center">
-                                      <div className="text-[9px] text-slate-300 font-black uppercase tracking-widest animate-pulse">Loading trajectory…</div>
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-2 mt-2">
-                                  {salaryTrendData.length > 0 ? (
-                                    <>
-                                      <span className="text-xs font-black text-slate-800">${((salaryTrendData[salaryTrendData.length - 1]?.v ?? 0) / 1000).toFixed(0)}k</span>
-                                      <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-md">
-                                        +{salaryTrendData.length >= 2 ? Math.round(((salaryTrendData[salaryTrendData.length-1].v - salaryTrendData[0].v) / salaryTrendData[0].v) * 100 / (salaryTrendData.length - 1)) : 14}% YoY
-                                      </span>
-                                    </>
-                                  ) : <span className="text-xs font-black text-slate-400">Loading...</span>}
-                                  <span className="text-[7px] text-slate-400">(AI projected)</span>
-                                </div>
-                              </div>
-
-                              {/* Skill Gap Analysis */}
-                              <div>
-                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                                  <Target size={9} className="text-indigo-500" /> Skill Gap Analysis
-                                </p>
-                                <div className="space-y-3">
-                                  {isSkillGapLoading ? (
-                                    [0,1,2,3].map(i => <div key={i} className="h-8 bg-slate-100 rounded-xl animate-pulse" />)
-                                  ) : isSkillGapError ? (
-                                    <div className="flex flex-col items-center gap-2 py-3">
-                                      <p className="text-[9px] text-rose-400 text-center">Failed to load skill data</p>
-                                      <button
-                                        onClick={e => { e.stopPropagation(); fetchSkillGap(path.id, path.title); }}
-                                        className="text-[8px] font-black uppercase tracking-widest px-3 py-1.5 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all"
-                                      >
-                                        ↻ Retry
-                                      </button>
-                                    </div>
-                                  ) : skillGap.length === 0 ? (
-                                    <div className="flex flex-col items-center gap-2 py-3">
-                                      <div className="flex gap-1 items-center">
-                                        <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                        <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                        <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                                      </div>
-                                      <p className="text-[9px] text-slate-400 text-center">Fetching skill data…</p>
-                                    </div>
-                                  ) : skillGap.map(s => (
-                                    <div key={s.skill} className="space-y-1">
-                                      <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-1.5">
-                                          <div className={`w-1.5 h-1.5 rounded-full ${s.owned ? 'bg-emerald-500' : 'bg-rose-400'}`} />
-                                          <span className="text-[9px] font-bold text-slate-700">{s.skill}</span>
-                                        </div>
-                                        <span className={`text-[7px] font-black uppercase ${s.owned ? 'text-emerald-600' : 'text-rose-500'}`}>{s.owned ? 'Owned' : 'Gap'}</span>
-                                      </div>
-                                      <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
-                                        <div className={`h-full rounded-full ${s.owned ? 'bg-emerald-400' : 'bg-rose-300'}`} style={{ width: `${s.demand}%` }} />
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="mt-5 pt-4 border-t border-indigo-100 flex items-center justify-between">
-                              <div className="flex flex-wrap gap-1.5">
-                                {(skillGapCache[path.id] ?? []).filter(s => s.owned).slice(0, 3).map(s => (
-                                  <span key={s.skill} className="text-[7px] font-black px-2 py-1 bg-white text-slate-500 border border-slate-200 rounded-lg uppercase tracking-widest">{s.skill}</span>
-                                ))}
-                              </div>
-                              <button onClick={() => onSelectPath(path.id)} className="px-4 py-2 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-500 transition-all flex items-center gap-1.5">
-                                Full Roadmap <ChevronRight size={10} />
-                              </button>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                    )}
                   </div>
                 );
               })}
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -1754,7 +1658,12 @@ const RoadmapView = ({ profile, pathId, careers, onNavigate, onInitInterview }: 
   const [completedMilestones, setCompletedMilestones] = useState<Set<string>>(
     new Set(profile.completedMilestones || [])
   );
-  const [activeTab, setActiveTab] = useState<'milestones' | 'skills' | 'actions'>('milestones');
+  const [activeTab, setActiveTab] = useState<'milestones' | 'skills' | 'requirements' | 'artifacts' | 'actions'>('milestones');
+  const [liveMilestones, setLiveMilestones] = useState<CareerMilestone[]>([]);
+  const [isMilestonesLoading, setIsMilestonesLoading] = useState(false);
+  const [careerRequirements, setCareerRequirements] = useState<CareerRequirements | null>(null);
+  const [isRequirementsLoading, setIsRequirementsLoading] = useState(false);
+  const [checkedArtifacts, setCheckedArtifacts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!path) return;
@@ -1763,6 +1672,41 @@ const RoadmapView = ({ profile, pathId, careers, onNavigate, onInitInterview }: 
       .then(setSkillGap)
       .catch(() => setSkillGap([]))
       .finally(() => setIsSkillGapLoading(false));
+  }, [path?.id]);
+
+  // Fetch milestones from backend (cached) when path has none
+  useEffect(() => {
+    if (!path) return;
+    const hasMilestones = Array.isArray(path.milestones) && path.milestones.length > 0;
+    if (hasMilestones) {
+      setLiveMilestones(path.milestones as CareerMilestone[]);
+      return;
+    }
+    setIsMilestonesLoading(true);
+    setLiveMilestones([]);
+    getCareerMilestones(
+      path.title,
+      Number(profile.age) || 22,
+      profile.education || '',
+      profile.targetLocation || profile.country || 'Global'
+    )
+      .then(setLiveMilestones)
+      .catch(() => setLiveMilestones([]))
+      .finally(() => setIsMilestonesLoading(false));
+  }, [path?.id]);
+
+  // Fetch career requirements when requirements/artifacts tab is active or on path change
+  useEffect(() => {
+    if (!path) return;
+    setIsRequirementsLoading(true);
+    setCareerRequirements(null);
+    getCareerRequirements(
+      path.title,
+      profile.targetLocation || profile.country || 'Global'
+    )
+      .then(setCareerRequirements)
+      .catch(() => setCareerRequirements(null))
+      .finally(() => setIsRequirementsLoading(false));
   }, [path?.id]);
 
   if (!path) {
@@ -1782,8 +1726,8 @@ const RoadmapView = ({ profile, pathId, careers, onNavigate, onInitInterview }: 
     });
   };
 
-  const totalMilestones = path.milestones?.length ?? 0;
-  const completedCount = path.milestones?.filter((_, i) => completedMilestones.has(`${path.id}-${i}`)).length ?? 0;
+  const totalMilestones = liveMilestones.length;
+  const completedCount = liveMilestones.filter((_, i) => completedMilestones.has(`${path.id}-${i}`)).length;
   const progressPct = totalMilestones > 0 ? Math.round((completedCount / totalMilestones) * 100) : 0;
 
   const GROWTH_COLOR = path.growth === 'high' ? 'text-emerald-600 bg-emerald-50 border-emerald-200' :
@@ -1872,16 +1816,22 @@ const RoadmapView = ({ profile, pathId, careers, onNavigate, onInitInterview }: 
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
-        {(['milestones', 'skills', 'actions'] as const).map(tab => (
+      <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit overflow-x-auto">
+        {([
+          { key: 'milestones', label: '🗺️ Milestones' },
+          { key: 'skills', label: '🎯 Skills' },
+          { key: 'requirements', label: '📋 Requirements' },
+          { key: 'artifacts', label: '🗂️ Artifacts' },
+          { key: 'actions', label: '⚡ Actions' },
+        ] as const).map(tab => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
-              activeTab === tab ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+              activeTab === tab.key ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'
             }`}
           >
-            {tab}
+            {tab.label}
           </button>
         ))}
       </div>
@@ -1889,13 +1839,19 @@ const RoadmapView = ({ profile, pathId, careers, onNavigate, onInitInterview }: 
       {/* Tab: Milestones */}
       {activeTab === 'milestones' && (
         <div className="space-y-4">
-          {totalMilestones === 0 ? (
+          {isMilestonesLoading ? (
             <div className="bg-white rounded-[2rem] border border-slate-100 p-10 flex flex-col items-center gap-3 text-center">
-              <Loader2 size={24} className="text-indigo-300 animate-spin" />
+              <Loader2 size={24} className="text-indigo-400 animate-spin" />
               <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Generating milestones…</p>
+              <p className="text-[9px] text-slate-300 uppercase tracking-widest">Building your personalised roadmap</p>
+            </div>
+          ) : liveMilestones.length === 0 ? (
+            <div className="bg-white rounded-[2rem] border border-dashed border-slate-200 p-10 flex flex-col items-center gap-3 text-center">
+              <Search size={20} className="text-slate-300" />
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No milestones available</p>
             </div>
           ) : (
-            (path.milestones ?? []).map((milestone, idx) => {
+            liveMilestones.map((milestone, idx) => {
               const key = `${path.id}-${idx}`;
               const isDone = completedMilestones.has(key);
               const isLast = idx === (path.milestones?.length ?? 1) - 1;
@@ -2084,6 +2040,328 @@ const RoadmapView = ({ profile, pathId, careers, onNavigate, onInitInterview }: 
           })}
         </div>
       )}
+
+      {/* Tab: Requirements */}
+      {activeTab === 'requirements' && (
+        <div className="space-y-6">
+          {isRequirementsLoading ? (
+            <div className="bg-white rounded-[2rem] border border-slate-100 p-10 flex flex-col items-center gap-3 text-center">
+              <Loader2 size={24} className="text-indigo-400 animate-spin" />
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Analysing requirements…</p>
+              <p className="text-[9px] text-slate-300 uppercase tracking-widest">Building your competition blueprint</p>
+            </div>
+          ) : !careerRequirements ? (
+            <div className="bg-white rounded-[2rem] border border-dashed border-slate-200 p-10 flex flex-col items-center gap-3">
+              <Search size={20} className="text-slate-300" />
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No requirements data</p>
+            </div>
+          ) : (
+            <>
+              {/* Overview */}
+              <div className="bg-gradient-to-br from-indigo-50 to-violet-50 rounded-[2rem] border border-indigo-100 p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-lg">📌</span>
+                  <h3 className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">Career Overview</h3>
+                  <span className={`ml-auto text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${
+                    careerRequirements.sector === 'government' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                    careerRequirements.sector === 'private' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                    'bg-violet-100 text-violet-700 border-violet-200'
+                  }`}>{careerRequirements.sector} sector</span>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-relaxed">{careerRequirements.overview}</p>
+              </div>
+
+              {/* Eligibility */}
+              <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6">
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <span>✅</span> Eligibility Criteria
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {careerRequirements.eligibility.map((crit, idx) => {
+                    const typeColor: Record<string, string> = {
+                      education: 'bg-blue-50 border-blue-200 text-blue-700',
+                      age: 'bg-amber-50 border-amber-200 text-amber-700',
+                      nationality: 'bg-indigo-50 border-indigo-200 text-indigo-700',
+                      physical: 'bg-rose-50 border-rose-200 text-rose-700',
+                      exam: 'bg-violet-50 border-violet-200 text-violet-700',
+                      experience: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+                      other: 'bg-slate-50 border-slate-200 text-slate-600',
+                    };
+                    return (
+                      <div key={idx} className={`rounded-xl border p-3 ${typeColor[crit.type] || typeColor.other}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[8px] font-black uppercase tracking-widest opacity-70">{crit.type}</span>
+                          {crit.mandatory && <span className="text-[7px] font-black uppercase tracking-widest bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full">Mandatory</span>}
+                        </div>
+                        <p className="text-[10px] font-black leading-none mb-0.5">{crit.label}</p>
+                        <p className="text-[10px] leading-relaxed opacity-80">{crit.value}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Selection Process */}
+              <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6">
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-5 flex items-center gap-2">
+                  <span>🔄</span> Selection Process
+                </h3>
+                <div className="space-y-4">
+                  {careerRequirements.selectionProcess.map((stage, idx) => {
+                    const stageIcon: Record<string, string> = {
+                      written: '📝', interview: '🎤', physical: '🏃', medical: '🏥',
+                      document: '📁', online: '💻', 'skill-test': '🔬',
+                    };
+                    const stageColor: Record<string, string> = {
+                      written: 'bg-blue-600', interview: 'bg-violet-600', physical: 'bg-rose-600',
+                      medical: 'bg-green-600', document: 'bg-amber-600', online: 'bg-indigo-600', 'skill-test': 'bg-teal-600',
+                    };
+                    const isLast = idx === careerRequirements.selectionProcess.length - 1;
+                    return (
+                      <div key={idx} className="relative flex gap-4">
+                        {!isLast && <div className="absolute left-5 top-10 bottom-0 w-0.5 bg-gradient-to-b from-indigo-200 to-transparent" />}
+                        <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white text-sm z-10 shadow-md ${stageColor[stage.type] || 'bg-indigo-600'}`}>
+                          {stageIcon[stage.type] || stage.stage}
+                        </div>
+                        <div className="flex-1 bg-slate-50 rounded-[1.5rem] border border-slate-100 p-4">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest">Stage {stage.stage}</span>
+                            {stage.duration && <span className="text-[8px] text-slate-400 border border-slate-200 rounded-full px-2 py-0.5">{stage.duration}</span>}
+                          </div>
+                          <p className="text-[11px] font-black text-slate-900 mb-1">{stage.title}</p>
+                          <p className="text-[10px] text-slate-500 leading-relaxed mb-2">{stage.description}</p>
+                          {stage.tips && (
+                            <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+                              <span className="text-amber-500 text-xs mt-px">💡</span>
+                              <p className="text-[9px] text-amber-700 leading-relaxed">{stage.tips}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Key Exams */}
+              {careerRequirements.keyExams.length > 0 && (
+                <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <span>📚</span> Key Competitive Exams
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {careerRequirements.keyExams.map((exam, idx) => (
+                      <div key={idx} className="border border-indigo-100 rounded-[1.5rem] p-4 bg-indigo-50/30">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div>
+                            <p className="text-[11px] font-black text-indigo-900">{exam.name}</p>
+                            <p className="text-[9px] text-indigo-500">{exam.conductedBy}</p>
+                          </div>
+                          <span className="shrink-0 text-[8px] font-black bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-200">{exam.frequency}</span>
+                        </div>
+                        <p className="text-[9px] text-slate-600 mb-2 italic">{exam.examPattern}</p>
+                        <div className="flex flex-wrap gap-1">
+                          {exam.syllabusHighlights.map((topic, tIdx) => (
+                            <span key={tIdx} className="text-[8px] font-bold px-2 py-0.5 bg-white border border-indigo-200 rounded-lg text-indigo-700">{topic}</span>
+                          ))}
+                        </div>
+                        {exam.officialUrl && (
+                          <a href={exam.officialUrl} target="_blank" rel="noopener noreferrer" className="mt-3 flex items-center gap-1 text-[8px] text-indigo-500 font-bold hover:text-indigo-700 transition-colors">
+                            <Globe size={9} /> Official Site
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Preparation Timeline */}
+              {careerRequirements.preparationTimeline.length > 0 && (
+                <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-5 flex items-center gap-2">
+                    <span>⏱️</span> Preparation Timeline
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {careerRequirements.preparationTimeline.map((phase, idx) => {
+                      const gradients = ['from-blue-500 to-indigo-600', 'from-violet-500 to-purple-600', 'from-amber-500 to-orange-600', 'from-emerald-500 to-teal-600'];
+                      return (
+                        <div key={idx} className={`bg-gradient-to-br ${gradients[idx % gradients.length]} rounded-[1.5rem] p-5 text-white`}>
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-xl">{phase.icon}</span>
+                            <div>
+                              <p className="text-[9px] font-black uppercase tracking-widest text-white/70">{phase.duration}</p>
+                              <p className="text-[11px] font-black leading-tight">{phase.phase}</p>
+                            </div>
+                          </div>
+                          <div className="space-y-1 mb-3">
+                            {phase.focusAreas.map((area, aIdx) => (
+                              <div key={aIdx} className="flex items-start gap-1.5">
+                                <div className="w-1 h-1 rounded-full bg-white/50 mt-1.5 shrink-0" />
+                                <p className="text-[9px] text-white/80">{area}</p>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="bg-white/10 rounded-xl px-3 py-2">
+                            <p className="text-[8px] text-white/60 uppercase tracking-widest mb-0.5">Key Action</p>
+                            <p className="text-[9px] font-bold text-white">{phase.keyAction}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Pro Tips */}
+              {careerRequirements.proTips.length > 0 && (
+                <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-[2rem] border border-amber-100 p-6">
+                  <h3 className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <span>⭐</span> Pro Tips
+                  </h3>
+                  <div className="space-y-2.5">
+                    {careerRequirements.proTips.map((tip, idx) => (
+                      <div key={idx} className="flex items-start gap-3">
+                        <span className="shrink-0 w-5 h-5 rounded-full bg-amber-200 text-amber-800 text-[8px] font-black flex items-center justify-center">{idx + 1}</span>
+                        <p className="text-[10px] text-amber-800 leading-relaxed">{tip}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Artifacts */}
+      {activeTab === 'artifacts' && (
+        <div className="space-y-6">
+          {isRequirementsLoading ? (
+            <div className="bg-white rounded-[2rem] border border-slate-100 p-10 flex flex-col items-center gap-3 text-center">
+              <Loader2 size={24} className="text-indigo-400 animate-spin" />
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Loading artifacts checklist…</p>
+            </div>
+          ) : !careerRequirements ? (
+            <div className="bg-white rounded-[2rem] border border-dashed border-slate-200 p-10 flex flex-col items-center gap-3">
+              <Search size={20} className="text-slate-300" />
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No artifacts data</p>
+            </div>
+          ) : (
+            <>
+              {/* Summary bar */}
+              <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-5 flex items-center gap-6 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                    <span className="text-sm">🗂️</span>
+                  </div>
+                  <div>
+                    <p className="text-[8px] text-slate-400 uppercase tracking-widest font-bold">Total Artifacts</p>
+                    <p className="text-sm font-black text-slate-900">{careerRequirements.artifacts.reduce((acc, cat) => acc + cat.items.length, 0)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-red-50 border border-red-100 flex items-center justify-center">
+                    <span className="text-sm">🔴</span>
+                  </div>
+                  <div>
+                    <p className="text-[8px] text-slate-400 uppercase tracking-widest font-bold">Essential</p>
+                    <p className="text-sm font-black text-red-600">{careerRequirements.artifacts.reduce((acc, cat) => acc + cat.items.filter(i => i.priority === 'Essential').length, 0)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center">
+                    <span className="text-sm">🟡</span>
+                  </div>
+                  <div>
+                    <p className="text-[8px] text-slate-400 uppercase tracking-widest font-bold">Important</p>
+                    <p className="text-sm font-black text-amber-600">{careerRequirements.artifacts.reduce((acc, cat) => acc + cat.items.filter(i => i.priority === 'Important').length, 0)}</p>
+                  </div>
+                </div>
+                <div className="ml-auto">
+                  <p className="text-[8px] text-slate-400 uppercase tracking-widest font-bold mb-1">Checked</p>
+                  <p className="text-sm font-black text-indigo-600">{checkedArtifacts.size} / {careerRequirements.artifacts.reduce((acc, cat) => acc + cat.items.length, 0)}</p>
+                </div>
+              </div>
+
+              {/* Categories */}
+              {careerRequirements.artifacts.map((cat, catIdx) => (
+                <div key={catIdx} className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6">
+                  <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <span className="text-lg">{cat.icon}</span> {cat.category}
+                  </h3>
+                  <div className="space-y-2.5">
+                    {cat.items.map((item, itemIdx) => {
+                      const key = `${catIdx}-${itemIdx}`;
+                      const isChecked = checkedArtifacts.has(key);
+                      const priorityStyle: Record<string, string> = {
+                        Essential: 'bg-red-100 text-red-700 border-red-200',
+                        Important: 'bg-amber-100 text-amber-700 border-amber-200',
+                        Optional: 'bg-slate-100 text-slate-500 border-slate-200',
+                      };
+                      return (
+                        <div
+                          key={key}
+                          className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all cursor-pointer group ${
+                            isChecked ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-100 hover:border-slate-200 bg-slate-50/50'
+                          }`}
+                          onClick={() => {
+                            setCheckedArtifacts(prev => {
+                              const next = new Set(prev);
+                              if (next.has(key)) next.delete(key); else next.add(key);
+                              return next;
+                            });
+                          }}
+                        >
+                          {/* Checkbox */}
+                          <div className={`shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                            isChecked ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 group-hover:border-indigo-300'
+                          }`}>
+                            {isChecked && <CheckCircle size={12} className="text-white" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                              <p className={`text-[10px] font-black ${isChecked ? 'line-through text-slate-400' : 'text-slate-900'}`}>{item.name}</p>
+                              <span className={`text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${priorityStyle[item.priority]}`}>{item.priority}</span>
+                            </div>
+                            <p className="text-[9px] text-slate-500 leading-relaxed">{item.description}</p>
+                            <div className="flex gap-3 mt-1.5 flex-wrap">
+                              <span className="text-[8px] text-slate-400">📅 {item.whenNeeded}</span>
+                              {item.format && <span className="text-[8px] text-slate-400">📄 {item.format}</span>}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              {/* Official Links */}
+              {careerRequirements.officialLinks.length > 0 && (
+                <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <Globe size={12} /> Official Resources
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {careerRequirements.officialLinks.map((link, idx) => (
+                      <a
+                        key={idx}
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-xl text-[9px] font-bold hover:bg-indigo-100 transition-colors"
+                      >
+                        <Globe size={9} /> {link.label}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -2114,6 +2392,61 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
   const [aiSearchResults, setAiSearchResults] = useState<Institution[]>([]);
   const [hasAiSearched, setHasAiSearched] = useState(false);
 
+  // Country quick-switch — profile's target country first, then popular alternatives
+  const popularCountries = ["United States", "United Kingdom", "Germany", "Canada", "Australia", "Singapore", "Japan", "France", "Netherlands", "UAE"];
+  const targetFirst = profile.targetLocation || "";
+  const homeCountry = profile.country || "";
+  const [activeCountryFilter, setActiveCountryFilter] = React.useState<string>(targetFirst || "");
+
+  // Sync to profile target location changes
+  React.useEffect(() => {
+    if (profile.targetLocation) setActiveCountryFilter(profile.targetLocation);
+  }, [profile.targetLocation]);
+
+  // Country-specific institution fetch (backend cache-first, LLM fallback)
+  const [countryInstitutions, setCountryInstitutions] = useState<Institution[]>([]);
+  const [isCountryLoading, setIsCountryLoading] = useState(false);
+  const [fetchedForCountry, setFetchedForCountry] = useState<string | null>(null);
+
+  const fetchInstitutionsForCountry = async (country: string) => {
+    // Guard against bare numeric IDs (e.g. "1") — use a meaningful fallback
+    const isUsableTitle = (s?: string) => !!s && !/^\d+$/.test(s);
+    const career = isUsableTitle(careerTitle)
+      ? careerTitle!
+      : isUsableTitle(selectedPathId)
+        ? selectedPathId.replace(/-/g, ' ')
+        : 'Technology & Computing';
+    setIsCountryLoading(true);
+    setCountryInstitutions([]);
+    try {
+      const result = await getDynamicInstitutions(
+        profile,
+        career,
+        country || 'Global'
+      );
+      setCountryInstitutions(result || []);
+    } catch {
+      setCountryInstitutions([]);
+    } finally {
+      setIsCountryLoading(false);
+      setFetchedForCountry(country);
+    }
+  };
+
+  // Fetch whenever activeCountryFilter changes; also runs on mount (fetchedForCountry starts null)
+  React.useEffect(() => {
+    const target = activeCountryFilter || profile.targetLocation || profile.country || 'Global';
+    if (fetchedForCountry !== target) {
+      fetchInstitutionsForCountry(target);
+    }
+  }, [activeCountryFilter]);
+
+  const forceRefresh = () => {
+    setFetchedForCountry(null);
+    const target = activeCountryFilter || profile.targetLocation || profile.country || 'Global';
+    fetchInstitutionsForCountry(target);
+  };
+
   const fetchAiRecs = async () => {
     setIsAiLoading(true);
     setShowAiRecs(true);
@@ -2135,26 +2468,12 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
 
     setIsAiSearching(true);
     try {
-      const results = await aiSearchCareerHubs(q);
-      // Map lightweight {city,country} results into minimal Institution objects
-      const mapped: Institution[] = (results || []).map((loc, idx) => ({
-        id: `${loc.city.toLowerCase().replace(/\s+/g, '-')}-${idx}`,
-        name: `${loc.city} Hub`,
-        location: `${loc.city}, ${loc.country}`,
-        type: 'University',
-        avgCost: 25000,
-        programs: [],
-        image: '',
-        applicationDeadline: '',
-        website: '',
-        allowsInternationalStudents: true,
-        visaSupport: 'Full',
-        coordinates: { lat: 0, lng: 0 },
-        city: loc.city,
-        country: loc.country,
-        costOfLivingIndex: 1.0
-      }));
-      setAiSearchResults(mapped);
+      // Use aiSearchInstitutions which returns full Institution objects with real coordinates
+      const results = await aiSearchInstitutions(q, profile);
+      setAiSearchResults(results || []);
+      setHasAiSearched(true);
+    } catch {
+      setAiSearchResults([]);
       setHasAiSearched(true);
     } finally {
       setIsAiSearching(false);
@@ -2184,17 +2503,6 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
   // Mock user location for radius filtering simulation
   const userCountry = profile.country || "";
 
-  // Country quick-switch — profile's target country first, then popular alternatives
-  const popularCountries = ["United States", "United Kingdom", "Germany", "Canada", "Australia", "Singapore", "Japan", "France", "Netherlands", "UAE"];
-  const targetFirst = profile.targetLocation || "";
-  const homeCountry = profile.country || "";
-  const [activeCountryFilter, setActiveCountryFilter] = React.useState<string>(targetFirst || "");
-
-  // Sync to profile target location changes
-  React.useEffect(() => {
-    if (profile.targetLocation) setActiveCountryFilter(profile.targetLocation);
-  }, [profile.targetLocation]);
-
   const hubCountryFilters = Array.from(new Set([
     ...(targetFirst ? [targetFirst] : []),
     ...(homeCountry && homeCountry !== targetFirst ? [homeCountry] : []),
@@ -2208,8 +2516,9 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
       : institutions.filter(i => i.programs.includes(p)).length
   }));
 
-  // When AI search results are present, show them instead of local filter results
-  const baseInstitutions = hasAiSearched ? aiSearchResults : institutions;
+  // When AI search results are present, use those; otherwise use country-fetched institutions
+  const baseInstitutions = hasAiSearched ? aiSearchResults : countryInstitutions;
+  const isDataLoading = isLoading || isCountryLoading;
 
   const filtered = baseInstitutions.filter(inst => {
     const matchesSearch = !search || inst.name.toLowerCase().includes(search.toLowerCase()) || 
@@ -2220,17 +2529,8 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
     const matchesCost = inst.avgCost <= maxCost;
     const matchesProgram = selectedProgram === "All Programs" || inst.programs.includes(selectedProgram);
     const matchesVisa = visaFilter === "All" || inst.visaSupport === visaFilter;
-    const matchesCountry = !activeCountryFilter || inst.country.toLowerCase().includes(activeCountryFilter.toLowerCase());
-    
-    // Radius Filter Logic (only apply when not in AI search mode and no country filter active)
-    let matchesRadius = true;
-    if (!hasAiSearched && !activeCountryFilter) {
-      if (radius === "National") {
-        matchesRadius = inst.country === userCountry;
-      }
-    }
-
-    return matchesSearch && matchesIntl && matchesCost && matchesProgram && matchesRadius && matchesVisa && matchesCountry;
+    // Don't filter by country when data is already country-specific from backend fetch
+    return matchesSearch && matchesIntl && matchesCost && matchesProgram && matchesVisa;
   });
 
   const visibleInstitutions = filtered;
@@ -2269,6 +2569,13 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
           profile,
           selectedInstitution.country,
           roadmapContext?.careerTitle || selectedPathId,
+          {
+            name: selectedInstitution.name,
+            city: selectedInstitution.city,
+            country: selectedInstitution.country,
+            type: selectedInstitution.type,
+            programs: selectedInstitution.programs,
+          }
         );
         if (!cancelled) {
           setSelectedInstitutionVisaGuidance(guidance);
@@ -2330,10 +2637,42 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <SectionTitle 
-        title="Global Hub Navigator" 
-        subtitle={`${isLoading ? '🔄 Discovering Institutions...' : 'Spatial Intelligence'} • ${filtered.length} Institutions Found`} 
-      />
+      {/* ── Page Header ─────────────────────────────── */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-indigo-600 mb-1">Global Hub Navigator</p>
+          <h2 className="text-2xl font-black tracking-tight text-slate-900">
+            {isDataLoading ? 'Discovering Institutions…' : `${filtered.length} Institution${filtered.length !== 1 ? 's' : ''} Found`}
+          </h2>
+          <p className="text-sm text-slate-400 font-bold mt-0.5">
+            {activeCountryFilter ? `Filtered by ${activeCountryFilter}` : 'Worldwide · Spatial Intelligence'}
+            {hasAiSearched ? ' · AI Global Search Active' : ''}
+          </p>
+        </div>
+
+        {/* Stats chips */}
+        <div className="flex flex-wrap gap-2 items-center">
+          {[
+            { label: 'Institutions', value: filtered.length.toString(), color: 'indigo' },
+            { label: 'Countries', value: String(new Set(filtered.map(i => i.country)).size), color: 'sky' },
+            { label: 'Avg Cost', value: filtered.length ? `$${Math.round(filtered.reduce((s,i)=>s+i.avgCost,0)/filtered.length).toLocaleString()}` : '—', color: 'emerald' },
+            { label: 'Intl Friendly', value: `${filtered.filter(i=>i.allowsInternationalStudents).length}`, color: 'violet' },
+          ].map(chip => (
+            <div key={chip.label} className={`px-3 py-2 rounded-2xl border bg-${chip.color}-50 border-${chip.color}-200 flex flex-col items-center min-w-[64px]`}>
+              <span className={`text-sm font-black text-${chip.color}-700`}>{chip.value}</span>
+              <span className={`text-[8px] font-black uppercase tracking-widest text-${chip.color}-500`}>{chip.label}</span>
+            </div>
+          ))}
+          <button
+            onClick={forceRefresh}
+            disabled={isDataLoading}
+            className="ml-1 p-2.5 rounded-2xl border border-slate-200 bg-white text-slate-400 hover:text-indigo-600 hover:border-indigo-400 transition-all disabled:opacity-40"
+            title="Refresh institutions from AI"
+          >
+            <RotateCcw size={14} className={isDataLoading ? 'animate-spin' : ''} />
+          </button>
+        </div>
+      </div>
 
       {roadmapContext && (
         <div className="rounded-[2rem] border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-cyan-50 p-6 shadow-sm">
@@ -2355,7 +2694,7 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
       )}
       
       <div className="rounded-[3rem] overflow-hidden border border-slate-200 shadow-2xl relative bg-slate-50 h-[620px]">
-        {isLoading && (
+        {isDataLoading && (
           <div className="absolute inset-0 z-[2000] flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm gap-4">
             <Loader2 size={36} className="text-indigo-500 animate-spin" />
             <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Discovering institutions worldwide…</p>
@@ -2367,8 +2706,8 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
           className="h-full w-full z-0"
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
           />
           {filtered.map((inst) => {
             const isSelected = selectedInstitution?.id === inst.id;
@@ -2424,7 +2763,7 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
                  <Popup className="max-w-[260px] rounded-3xl border border-slate-200 shadow-2xl">
                    <div className="space-y-3">
                      <div className="overflow-hidden rounded-2xl">
-                       <img src={inst.image} alt={inst.name} className="w-full h-28 object-cover" referrerPolicy="no-referrer" />
+                       <img src={inst.image || undefined} alt={inst.name} className="w-full h-28 object-cover" referrerPolicy="no-referrer" />
                      </div>
                      <div className="space-y-1 text-slate-800">
                        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-indigo-600">{inst.city}, {inst.country}</p>
@@ -2447,7 +2786,7 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
           <div className="absolute left-1/2 top-8 z-[1005] w-[260px] -translate-x-1/2 pointer-events-none">
             <div className="rounded-[2rem] border border-white bg-white/95 p-5 shadow-2xl backdrop-blur-xl pointer-events-auto">
               <div className="mb-4 overflow-hidden rounded-2xl">
-                <img src={selectedInstitution.image} className="h-24 w-full object-cover" referrerPolicy="no-referrer" />
+                <img src={selectedInstitution.image || undefined} className="h-24 w-full object-cover" referrerPolicy="no-referrer" />
               </div>
               <h4 className="text-xs font-black uppercase leading-none text-slate-900">{selectedInstitution.name}</h4>
               <p className="mt-2 text-[10px] font-bold text-slate-400">{selectedInstitution.city}, {selectedInstitution.country}</p>
@@ -2558,11 +2897,15 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
                 {!hasAiSearched && (
                   <>
                     <div className="space-y-1.5">
-                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Country</p>
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                        Country
+                        {isCountryLoading && <Loader2 size={8} className="text-indigo-400 animate-spin" />}
+                      </p>
                       <div className="flex flex-wrap gap-1">
                         <button
                           onClick={() => { setActiveCountryFilter(""); setSearch(""); }}
-                          className={`px-2 py-1 border rounded-lg text-[8px] font-black uppercase tracking-widest transition-colors ${activeCountryFilter === "" ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-slate-200 text-slate-400 hover:border-indigo-400"}`}
+                          disabled={isCountryLoading}
+                          className={`px-2 py-1 border rounded-lg text-[8px] font-black uppercase tracking-widest transition-colors ${activeCountryFilter === "" ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-slate-200 text-slate-400 hover:border-indigo-400"} disabled:opacity-50`}
                         >
                           All
                         </button>
@@ -2570,7 +2913,8 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
                           <button 
                             key={country} 
                             onClick={() => { setActiveCountryFilter(country); setSearch(""); }}
-                            className={`px-2 py-1 border rounded-lg text-[8px] font-black uppercase tracking-widest transition-colors ${activeCountryFilter === country ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-slate-200 text-slate-400 hover:border-indigo-400"}`}
+                            disabled={isCountryLoading}
+                            className={`px-2 py-1 border rounded-lg text-[8px] font-black uppercase tracking-widest transition-colors ${activeCountryFilter === country ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-slate-200 text-slate-400 hover:border-indigo-400"} disabled:opacity-50`}
                             title={country === targetFirst ? "Your target country" : country === homeCountry ? "Your home country" : ""}
                           >
                             {country === targetFirst ? `⭐ ${country}` : country}
@@ -2649,40 +2993,44 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
                    ))
                  ) : (
                    filtered.map(inst => (
-                     <div className={cn("p-3 bg-slate-50 rounded-2xl border flex flex-col gap-3 group transition-all cursor-pointer", selectedInstitution?.id === inst.id ? "border-indigo-500 shadow-sm" : "border-slate-100 hover:border-indigo-500")}
+                     <div className={cn("p-3 rounded-2xl border flex flex-col gap-2.5 group transition-all cursor-pointer", selectedInstitution?.id === inst.id ? "bg-indigo-50 border-indigo-400 shadow-sm" : "bg-slate-50 border-slate-100 hover:border-indigo-300")}
                           key={inst.id}
                           onClick={() => setSelectedInstitution(inst)}
                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-slate-200 shrink-0 overflow-hidden">
-                             <img src={inst.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        <div className="flex items-center gap-2.5">
+                          <div className="relative w-11 h-11 rounded-xl bg-slate-200 shrink-0 overflow-hidden">
+                             <img src={inst.image || undefined} className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e)=>{(e.target as HTMLImageElement).style.display='none';}} />
+                             <div className="absolute bottom-0 left-0 right-0 bg-slate-900/70 text-white text-center text-[7px] font-black py-0.5">#{inst.ranking || '—'}</div>
                           </div>
                           <div className="flex-1 overflow-hidden">
-                             <p className="text-[10px] font-black uppercase truncate group-hover:text-indigo-600">{inst.name}</p>
+                             <p className="text-[10px] font-black uppercase truncate group-hover:text-indigo-700 transition-colors">{inst.name}</p>
                              <p className="text-[8px] text-slate-400 font-bold uppercase">{inst.city}, {inst.country}</p>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between text-[8px] text-slate-500 uppercase tracking-[0.2em] font-black gap-2">
-                           <span>{inst.ranking ? `#${inst.ranking}` : 'Global Hub'}</span>
-                           <span>${inst.avgCost.toLocaleString()}</span>
-                           <span>{inst.visaSupport}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap text-[8px] font-black uppercase">
+                           <span className="bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-full px-2 py-0.5">${inst.avgCost.toLocaleString()}/yr</span>
+                           <span className={`rounded-full px-2 py-0.5 border ${inst.visaSupport === 'Full' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : inst.visaSupport === 'Partial' ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>{inst.visaSupport}</span>
+                           {inst.allowsInternationalStudents && <span className="bg-sky-50 border border-sky-200 text-sky-700 rounded-full px-2 py-0.5">Intl ✓</span>}
                         </div>
-                        <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center justify-between gap-1.5">
                           <button
                             onClick={(e) => { e.stopPropagation(); toggleCompare(inst.id); }}
                             className={cn(
-                              "flex-1 py-2 rounded-xl text-[9px] font-black uppercase transition-all",
-                              compareIds.includes(inst.id) ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-indigo-50"
+                              "flex-1 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all",
+                              compareIds.includes(inst.id) ? "bg-indigo-600 text-white" : "bg-white border border-slate-200 text-slate-500 hover:bg-indigo-50 hover:border-indigo-300"
                             )}
                           >
-                            {compareIds.includes(inst.id) ? 'Selected' : 'Compare'}
+                            {compareIds.includes(inst.id) ? '✓ Selected' : 'Compare'}
                           </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setSelectedInstitution(inst); }}
-                            className="flex-1 py-2 rounded-xl bg-white border border-slate-200 text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all"
+                          <a
+                            href={inst.website}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="flex-1 py-1.5 rounded-xl bg-indigo-600 text-white text-[8px] font-black uppercase text-center hover:bg-indigo-700 transition-all"
                           >
-                            View
-                          </button>
+                            Visit
+                          </a>
                         </div>
                      </div>
                    ))
@@ -2694,20 +3042,123 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
 
         {/* Legend Overlay */}
         <div className="absolute bottom-6 right-6 z-[1000] pointer-events-none">
-           <div className="bg-slate-900/90 backdrop-blur-xl p-5 rounded-[2.5rem] border border-slate-800 shadow-2xl text-white min-w-[220px] pointer-events-auto">
-              <div className="space-y-4">
+           <div className="bg-slate-900/90 backdrop-blur-xl p-4 rounded-[2rem] border border-slate-800 shadow-2xl text-white min-w-[200px] pointer-events-auto">
+              <div className="space-y-3">
                  <div>
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-1">Active Ecosystem Density</p>
-                    <p className="text-xl font-black">{visibleInstitutions.length} <span className="text-xs text-indigo-400 uppercase">Training Nodes</span></p>
+                    <p className="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em] mb-0.5">On Map</p>
+                    <p className="text-xl font-black">{filtered.length} <span className="text-[10px] text-indigo-400 uppercase font-black">Institutions</span></p>
                  </div>
                  <div className="h-px bg-slate-800" />
-                 <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
-                    <span className="text-slate-400">Hub Accuracy</span>
-                    <span className="text-emerald-400">99.8%</span>
+                 <div className="space-y-1.5 text-[9px] font-black uppercase tracking-widest">
+                    <div className="flex justify-between"><span className="text-slate-500">Countries</span><span className="text-white">{new Set(filtered.map(i=>i.country)).size}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-500">Intl Friendly</span><span className="text-emerald-400">{filtered.filter(i=>i.allowsInternationalStudents).length}</span></div>
+                    {filtered.length > 0 && <div className="flex justify-between"><span className="text-slate-500">Avg Cost</span><span className="text-indigo-400">${Math.round(filtered.reduce((s,i)=>s+i.avgCost,0)/filtered.length).toLocaleString()}</span></div>}
                  </div>
               </div>
            </div>
         </div>
+      </div>
+
+      {/* ── Top 10 Universities Ranked Grid ─────────── */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-indigo-600">Top Ranked</p>
+            <h3 className="text-lg font-black text-slate-900">
+              {activeCountryFilter ? `${activeCountryFilter} Universities` : 'Global Top Universities'}
+            </h3>
+          </div>
+          {isDataLoading && <Loader2 size={18} className="text-indigo-400 animate-spin" />}
+        </div>
+
+        {isDataLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4 animate-pulse space-y-3">
+                <div className="h-28 w-full rounded-xl bg-slate-200" />
+                <div className="h-3 w-3/4 bg-slate-200 rounded" />
+                <div className="h-2 w-1/2 bg-slate-100 rounded" />
+                <div className="flex gap-2">
+                  <div className="h-5 flex-1 bg-slate-100 rounded-full" />
+                  <div className="h-5 flex-1 bg-slate-100 rounded-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-[2rem] border border-dashed border-slate-200 p-12 text-center">
+            <Globe size={40} className="mx-auto text-slate-300 mb-4" />
+            <p className="text-sm font-black text-slate-400 uppercase tracking-widest">No institutions found</p>
+            <p className="text-xs text-slate-300 mt-1">Try selecting a different country or adjusting your filters</p>
+            <button onClick={forceRefresh} className="mt-4 px-4 py-2 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-xl hover:bg-indigo-700 transition-all">
+              Generate with AI
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            {filtered.slice(0, 10).map((inst, index) => (
+              <div
+                key={inst.id}
+                onClick={() => setSelectedInstitution(inst)}
+                className={`rounded-[1.5rem] border bg-white shadow-sm hover:shadow-md transition-all cursor-pointer group overflow-hidden ${selectedInstitution?.id === inst.id ? 'border-indigo-400 ring-2 ring-indigo-200' : 'border-slate-100 hover:border-indigo-300'}`}
+              >
+                {/* Image */}
+                <div className="relative h-28 bg-gradient-to-br from-indigo-100 to-slate-100 overflow-hidden">
+                  {inst.image ? (
+                    <img src={inst.image} alt={inst.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
+                  ) : null}
+                  {/* Rank badge */}
+                  <div className="absolute top-2 left-2 bg-slate-900/80 backdrop-blur text-white rounded-xl px-2 py-1 flex items-center gap-1">
+                    <span className="text-[8px] font-black text-slate-400 uppercase">#</span>
+                    <span className="text-xs font-black">{inst.ranking || index + 1}</span>
+                  </div>
+                  {/* Visa badge */}
+                  <div className={`absolute top-2 right-2 px-2 py-1 rounded-xl text-[8px] font-black uppercase backdrop-blur ${inst.visaSupport === 'Full' ? 'bg-emerald-500/90 text-white' : inst.visaSupport === 'Partial' ? 'bg-amber-500/90 text-white' : 'bg-slate-500/80 text-white'}`}>
+                    {inst.visaSupport}
+                  </div>
+                </div>
+
+                <div className="p-3 space-y-2">
+                  <div>
+                    <p className="text-[10px] font-black text-slate-900 leading-tight line-clamp-2 group-hover:text-indigo-700 transition-colors">{inst.name}</p>
+                    <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">{inst.city}, {inst.country}</p>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-indigo-700">${inst.avgCost.toLocaleString()}<span className="text-[8px] text-slate-400 font-bold">/yr</span></span>
+                    {inst.allowsInternationalStudents && (
+                      <span className="text-[8px] bg-sky-50 text-sky-600 border border-sky-200 rounded-full px-2 py-0.5 font-black uppercase">Intl</span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-1">
+                    {inst.programs.slice(0, 2).map(p => (
+                      <span key={p} className="text-[8px] bg-slate-50 border border-slate-100 rounded-full px-2 py-0.5 text-slate-500 font-bold truncate max-w-full">{p}</span>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-1.5 pt-1">
+                    <a
+                      href={inst.website}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={e => e.stopPropagation()}
+                      className="flex-1 text-center py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[8px] font-black uppercase rounded-lg transition-all"
+                    >
+                      Visit
+                    </a>
+                    <button
+                      onClick={e => { e.stopPropagation(); toggleCompare(inst.id); }}
+                      className={`flex-1 py-1.5 text-[8px] font-black uppercase rounded-lg transition-all ${compareIds.includes(inst.id) ? 'bg-indigo-100 text-indigo-700 border border-indigo-300' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                    >
+                      {compareIds.includes(inst.id) ? '✓ Sel' : 'Compare'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Floating Comparison Bar */}
@@ -3674,16 +4125,38 @@ const ParentalDashboard = ({ profile, onBack, careers }: { profile: UserProfile,
 
 const FundingOpportunitiesView = ({ profile }: { profile: UserProfile }) => {
   const [opportunities, setOpportunities] = useState<FundingOpportunity[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // start loading immediately
+  const [rateLimited, setRateLimited] = useState(false);
+  const [retryIn, setRetryIn] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [showSavedOnly, setShowSavedOnly] = useState(false);
 
   const performMatch = async () => {
     setIsLoading(true);
-    const matches = await matchScholarships(profile);
-    setOpportunities(matches);
-    setIsLoading(false);
+    setRateLimited(false);
+    try {
+      const matches = await matchScholarships(profile);
+      setOpportunities(matches);
+    } catch (err: any) {
+      const msg: string = err?.message || String(err);
+      if (/rate.?limit|503|429|retry/i.test(msg)) {
+        setRateLimited(true);
+        // Count down and auto-retry after 60s
+        let countdown = 60;
+        setRetryIn(countdown);
+        const timer = setInterval(() => {
+          countdown -= 1;
+          setRetryIn(countdown);
+          if (countdown <= 0) {
+            clearInterval(timer);
+            performMatch();
+          }
+        }, 1000);
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const toggleSave = (id: string, e: React.MouseEvent) => {
@@ -3753,6 +4226,17 @@ const FundingOpportunitiesView = ({ profile }: { profile: UserProfile }) => {
                <div className="h-12 bg-slate-50 rounded-2xl" />
             </div>
           ))}
+        </div>
+      ) : rateLimited ? (
+        <div className="bg-amber-50 border-2 border-amber-200 rounded-3xl p-10 text-center space-y-4">
+          <div className="bg-amber-100 w-14 h-14 rounded-2xl flex items-center justify-center mx-auto text-amber-600">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+          <h3 className="text-base font-bold text-amber-900">AI providers are rate-limited</h3>
+          <p className="text-amber-700 text-sm max-w-sm mx-auto">All LLM providers hit their request limits simultaneously. Auto-retrying in <span className="font-black">{retryIn}s</span>…</p>
+          <button onClick={performMatch} className="mt-2 px-5 py-2.5 bg-amber-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-700 transition-all">
+            Retry Now
+          </button>
         </div>
       ) : (
         <>
@@ -4638,20 +5122,31 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
     questionsAnswered: 0
   });
 
-  const [profile, setProfile] = useState<UserProfile>(user.profile || {
-    name: user.profile?.name || user.displayName || user.name || user.email?.split('@')[0] || "Explorer",
-    age: user.profile?.age || user.age || 16,
-    education: user.profile?.education || "High School",
-    interests: user.profile?.interests || ["Technology", "Science"],
-    budget: user.profile?.budget || 30000,
-    country: user.profile?.country || user.country || "",
-    targetLocation: user.profile?.targetLocation || user.targetLocation || "",
-    targetCareerId: user.profile?.targetCareerId || "",
-    completedMilestones: user.profile?.completedMilestones || [],
-    academicPerformance: user.profile?.academicPerformance || {
-      gpa: user.profile?.gpa || 3.0,
-      achievements: []
-    }
+  const [profile, setProfile] = useState<UserProfile>(() => {
+    // user can be a flat DB row (email login) or a Firebase user with nested .profile
+    // Flat fields use snake_case aliases written by the PUT route
+    const p = user.profile;
+    const interestsParsed = (() => {
+      const raw = p?.interests ?? user.interests;
+      if (Array.isArray(raw)) return raw;
+      if (typeof raw === 'string') { try { return JSON.parse(raw); } catch { return raw.split(',').map((s: string) => s.trim()).filter(Boolean); } }
+      return ["Technology", "Science"];
+    })();
+    return {
+      name: p?.name || user.displayName || user.name || user.email?.split('@')[0] || "Explorer",
+      age: p?.age ?? user.age ?? 16,
+      education: p?.education || user.education || "High School",
+      interests: interestsParsed,
+      budget: p?.budget ?? user.budget ?? 30000,
+      country: p?.country || user.country || "",
+      targetLocation: p?.targetLocation || user.targetLocation || user.target_location || "",
+      targetCareerId: p?.targetCareerId || user.targetCareerId || user.target_career_id || "",
+      completedMilestones: p?.completedMilestones || [],
+      academicPerformance: p?.academicPerformance || {
+        gpa: p?.gpa ?? user.gpa ?? 3.0,
+        achievements: [],
+      },
+    };
   });
 
   // Sync profile to Firestore when it changes
@@ -4713,6 +5208,37 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   const handleSelectPath = (id: string) => {
     setSelectedPathId(id);
     setProfile(prev => ({ ...prev, targetCareerId: id }));
+    setActiveView('roadmap');
+  };
+
+  // Navigate to roadmap by job title — matches existing career or creates a synthetic one
+  const handleSelectByTitle = (title: string) => {
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const existing = careers.find(
+      c => c.title.toLowerCase() === title.toLowerCase() || c.id === slug
+    );
+    if (existing) {
+      handleSelectPath(existing.id);
+      return;
+    }
+    // Create a synthetic career entry so RoadmapView has a title to work with
+    const synthetic: CareerPath = {
+      id: slug,
+      title,
+      description: `Explore the ${title} career path with AI-powered milestones and skill gap analysis.`,
+      growth: 'medium',
+      category: 'General',
+      subCategory: '',
+      milestones: [],
+      workType: 'On-site',
+      tags: [],
+    };
+    setCareers(prev => {
+      if (prev.some(c => c.id === slug)) return prev;
+      return [synthetic, ...prev];
+    });
+    setSelectedPathId(slug);
+    setProfile(prev => ({ ...prev, targetCareerId: slug }));
     setActiveView('roadmap');
   };
 
@@ -4779,52 +5305,46 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
     fetchDashboardIntel();
   }, [profile.targetCareerId, selectedPathId]);
 
-  // Fetch institutions dynamically when navigating to institutions view
+  // Institutions are now fetched internally by InstitutionsView based on country filter.
+  // This outer fetch is kept only to pre-warm the initial location cache.
   const [institutionsFetchedForPath, setInstitutionsFetchedForPath] = React.useState<string | null>(null);
   useEffect(() => {
-    const fetchKey = `${selectedPathId}__${profile.targetLocation || 'Global'}`;
-    if (activeView === 'institutions' && selectedPathId && fetchKey !== institutionsFetchedForPath) {
+    const fetchKey = `${selectedPathId}__${profile.targetLocation || profile.country || 'Global'}`;
+    if (activeView === 'institutions' && fetchKey !== institutionsFetchedForPath) {
       setInstitutionsFetchedForPath(fetchKey);
-      const fetchInstitutions = async () => {
-        setIsInstitutionsLoading(true);
-        const selectedCareer = careers.find(c => c.id === selectedPathId);
-        const targetLocation = profile.targetLocation || 'Global';
-        
-        const dynamicInsts = await getDynamicInstitutions(
-          profile,
-          selectedCareer?.title || selectedPathId,
-          targetLocation,
-        );
-        if (dynamicInsts && dynamicInsts.length > 0) {
-          setDynamicInstitutions(dynamicInsts);
-        } else {
-          setDynamicInstitutions([]);
-        }
-        setIsInstitutionsLoading(false);
-      };
-      fetchInstitutions();
     }
-  }, [activeView, selectedPathId, profile.targetLocation, institutionRoadmapContext]);
+  }, [activeView, selectedPathId, profile.targetLocation, profile.country, institutionRoadmapContext]);
 
   // Fetch study materials dynamically when navigating to materials view
   useEffect(() => {
-    if (activeView === 'materials' && selectedPathId) {
+    if (activeView === 'materials') {
       const fetchMaterials = async () => {
         setIsMaterialsLoading(true);
-        const skillLevel = profile.academicPerformance?.gpa ? (profile.academicPerformance.gpa > 3.7 ? 'Advanced' : 'Intermediate') : 'Beginner';
-        const region = profile.country === 'USA' ? 'NA' : 'Global';
-        
-        const materials = await getDynamicStudyMaterials(selectedPathId, skillLevel, region);
-        if (materials && materials.length > 0) {
-          setDynamicMaterials(materials);
-        } else {
+        const skillLevel = profile.academicPerformance?.gpa
+          ? (profile.academicPerformance.gpa > 3.7 ? 'Advanced' : 'Intermediate')
+          : 'Beginner';
+        const region = profile.targetLocation || profile.country || 'Global';
+
+        // Always resolve to a human-readable career title, never a bare numeric ID
+        const isUsableId = (s: string) => !!s && !/^\d+$/.test(s);
+        const selectedCareer = careers.find(c => c.id === selectedPathId);
+        const careerTitle = selectedCareer?.title
+          || (isUsableId(selectedPathId) ? selectedPathId.replace(/-/g, ' ') : null)
+          || profile.targetCareerId?.replace(/-/g, ' ')
+          || 'Technology & Computing';
+
+        try {
+          const materials = await getDynamicStudyMaterials(careerTitle, skillLevel, region);
+          setDynamicMaterials(materials && materials.length > 0 ? materials : []);
+        } catch {
           setDynamicMaterials([]);
+        } finally {
+          setIsMaterialsLoading(false);
         }
-        setIsMaterialsLoading(false);
       };
       fetchMaterials();
     }
-  }, [activeView, selectedPathId, profile]);
+  }, [activeView, selectedPathId]);
 
   // Fetch visa guidance only when on institutions view
   useEffect(() => {
@@ -4888,7 +5408,6 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
 
   return (
     <div className="flex flex-col h-screen bg-[#F8FAFC] font-sans text-slate-900 overflow-hidden relative">
-      <GlobalContextBar profile={profile} onInsightClick={handleInsightClick} />
       {/* Decorative Background Elements */}
       <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-b from-indigo-50/50 to-transparent pointer-events-none" />
       <div className="absolute top-[20%] right-[-10%] w-[500px] h-[500px] bg-indigo-100/30 rounded-full blur-[120px] pointer-events-none" />
@@ -5084,7 +5603,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
             transition={{ duration: 0.3, ease: "circOut" }}
             className={activeView === 'institutions' ? 'min-h-full' : 'h-full'}
           >
-            {activeView === 'dashboard' && <Dashboard profile={profile} onSelectPath={handleSelectPath} careers={careers} isLoading={isCareersLoading} onInitInterview={initiateInterview} onAiCareerSearch={handleAiCareerSearch} isAiCareerLoading={isAiCareerLoading} aiCareerSearchMessage={aiCareerSearchMessage} onNavigate={handleNavigate} dashboardIntel={dashboardIntel} isDashboardIntelLoading={isDashboardIntelLoading} onResetToGlobal={fetchTopGlobalCareers} />}
+            {activeView === 'dashboard' && <Dashboard profile={profile} onSelectPath={handleSelectPath} onSelectByTitle={handleSelectByTitle} careers={careers} isLoading={isCareersLoading} onInitInterview={initiateInterview} onAiCareerSearch={handleAiCareerSearch} isAiCareerLoading={isAiCareerLoading} aiCareerSearchMessage={aiCareerSearchMessage} onNavigate={handleNavigate} dashboardIntel={dashboardIntel} isDashboardIntelLoading={isDashboardIntelLoading} onResetToGlobal={fetchTopGlobalCareers} />}
             
             {activeView !== 'dashboard' && (
               <div className={activeView === 'institutions' ? 'grid grid-cols-12 gap-8' : 'grid grid-cols-12 gap-8 h-full'}>
@@ -5093,13 +5612,12 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                    {activeView === 'jobs' && <JobBoardView profile={profile} />}
                    {activeView === 'institutions' && <InstitutionsView profile={profile} selectedPathId={selectedPathId} careerTitle={careers.find(c => c.id === selectedPathId)?.title || selectedPathId} initialSearch={institutionSearchQuery} onInitInterview={initiateInterview} institutions={dynamicInstitutions} isLoading={isInstitutionsLoading} visaGuidance={visaGuidance} isVisaLoading={isVisaLoading} roadmapContext={institutionRoadmapContext} />}
                    {activeView === 'heatmap' && <HeatmapView profile={profile} />}
-                   {activeView === 'materials' && <MaterialsView materials={dynamicMaterials} isLoading={isMaterialsLoading} />}
+                   {activeView === 'materials' && <MaterialsView materials={dynamicMaterials} isLoading={isMaterialsLoading} careerTitle={careers.find(c => c.id === selectedPathId)?.title || profile.targetCareerId?.replace(/-/g,' ') || 'Technology'} />}
                    {activeView === 'parent' && <ParentalDashboard profile={profile} onBack={() => setActiveView('dashboard')} careers={careers} />}
                    {activeView === 'expenses' && <FinancialView profile={profile} setProfile={setProfile} />}
                 </section>
 
                 <section className="hidden xl:col-span-3 xl:flex flex-col gap-8 overflow-hidden">
-                   <IntelligenceFeedCard careerId={selectedPathId} />
                    <FinancialBreakdownWidget profile={profile} />
                    {/* Quick Spark.E CTA */}
                    <button

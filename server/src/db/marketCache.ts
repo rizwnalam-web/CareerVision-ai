@@ -229,11 +229,36 @@ export async function saveCachedTopCareers(careers: any[]): Promise<boolean> {
   }
 }
 
+// Map DB snake_case row → camelCase Institution object expected by frontend
+function mapInstitutionRow(row: any) {
+  return {
+    id: row.id,
+    name: row.name,
+    location: row.location,
+    city: row.city,
+    country: row.country,
+    type: row.type || "University",
+    avgCost: Number(row.avg_cost) || 0,
+    programs: typeof row.programs === 'string' ? JSON.parse(row.programs) : (row.programs || []),
+    ranking: row.ranking || null,
+    image: row.image || "",
+    applicationDeadline: row.application_deadline || "",
+    website: row.website || "",
+    allowsInternationalStudents: row.allows_international_students ?? true,
+    visaSupport: row.visa_support || "Full",
+    coordinates: {
+      lat: Number(row.latitude) || 0,
+      lng: Number(row.longitude) || 0,
+    },
+    costOfLivingIndex: Number(row.cost_of_living_index) || 1.0,
+  };
+}
+
 export async function getCachedInstitutions(
   targetLocation: string
 ): Promise<any[] | null> {
   try {
-    const institutions = await db.manyOrNone(
+    const rows = await db.manyOrNone(
       `SELECT * FROM institutions
        WHERE city ILIKE $1
           OR country ILIKE $1
@@ -242,7 +267,7 @@ export async function getCachedInstitutions(
        LIMIT 20`,
       [`%${targetLocation}%`]
     );
-    return institutions.length > 0 ? institutions : null;
+    return rows.length > 0 ? rows.map(mapInstitutionRow) : null;
   } catch (error) {
     console.error("Error fetching cached institutions:", error);
     return null;
@@ -253,7 +278,7 @@ export async function getCachedInstitutionsByQuery(
   query: string
 ): Promise<any[] | null> {
   try {
-    const institutions = await db.manyOrNone(
+    const rows = await db.manyOrNone(
       `SELECT * FROM institutions
        WHERE name ILIKE $1
           OR city ILIKE $1
@@ -264,7 +289,7 @@ export async function getCachedInstitutionsByQuery(
        LIMIT 20`,
       [`%${query}%`]
     );
-    return institutions.length > 0 ? institutions : null;
+    return rows.length > 0 ? rows.map(mapInstitutionRow) : null;
   } catch (error) {
     console.error("Error fetching cached institutions by query:", error);
     return null;
@@ -600,5 +625,201 @@ export async function invalidateCountryCareersCache(
     );
   } catch (error) {
     console.error("Error invalidating country careers cache:", error);
+  }
+}
+
+// ─── Milestones Cache ──────────────────────────────────────────────────────
+
+export interface CachedMilestone {
+  ageRange: string;
+  title: string;
+  description: string;
+  requirements: string[];
+}
+
+export async function getCachedMilestones(
+  cacheKey: string
+): Promise<CachedMilestone[] | null> {
+  try {
+    const row = await db.oneOrNone(
+      `SELECT milestones_json FROM milestones_cache
+       WHERE cache_key = $1 AND expires_at > NOW()`,
+      [cacheKey]
+    );
+    if (!row) return null;
+    return JSON.parse(row.milestones_json) as CachedMilestone[];
+  } catch (error) {
+    console.error("Error reading milestones cache:", error);
+    return null;
+  }
+}
+
+export async function saveMilestonesCache(
+  cacheKey: string,
+  milestones: CachedMilestone[]
+): Promise<void> {
+  try {
+    await db.none(
+      `INSERT INTO milestones_cache (cache_key, milestones_json, cached_at, expires_at)
+       VALUES ($1, $2, NOW(), NOW() + INTERVAL '7 days')
+       ON CONFLICT (cache_key) DO UPDATE SET
+         milestones_json = EXCLUDED.milestones_json,
+         cached_at       = NOW(),
+         expires_at      = NOW() + INTERVAL '7 days'`,
+      [cacheKey, JSON.stringify(milestones)]
+    );
+  } catch (error) {
+    console.error("Error saving milestones cache:", error);
+  }
+}
+
+// ─── Hub Search Cache ──────────────────────────────────────────────────────
+
+export async function getCachedHubSearch(
+  queryKey: string
+): Promise<{ city: string; country: string }[] | null> {
+  try {
+    const row = await db.oneOrNone(
+      `SELECT results_json FROM hub_search_cache
+       WHERE query_key = $1 AND expires_at > NOW()`,
+      [queryKey]
+    );
+    if (!row) return null;
+    return JSON.parse(row.results_json);
+  } catch (error) {
+    console.error("Error reading hub search cache:", error);
+    return null;
+  }
+}
+
+export async function saveHubSearchCache(
+  queryKey: string,
+  results: { city: string; country: string }[]
+): Promise<void> {
+  try {
+    await db.none(
+      `INSERT INTO hub_search_cache (query_key, results_json, cached_at, expires_at)
+       VALUES ($1, $2, NOW(), NOW() + INTERVAL '48 hours')
+       ON CONFLICT (query_key) DO UPDATE SET
+         results_json = EXCLUDED.results_json,
+         cached_at    = NOW(),
+         expires_at   = NOW() + INTERVAL '48 hours'`,
+      [queryKey, JSON.stringify(results)]
+    );
+  } catch (error) {
+    console.error("Error saving hub search cache:", error);
+  }
+}
+
+// ─── Dashboard Intelligence Cache (24-hour TTL) ─────────────────────────────
+
+export async function getCachedDashboardIntel(cacheKey: string): Promise<any | null> {
+  try {
+    const row = await db.oneOrNone<{ data_json: any }>(
+      `SELECT data_json FROM dashboard_cache WHERE cache_key = $1 AND expires_at > NOW()`,
+      [cacheKey]
+    );
+    return row?.data_json ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveDashboardIntelCache(cacheKey: string, data: any): Promise<void> {
+  try {
+    await db.none(
+      `INSERT INTO dashboard_cache (cache_key, data_json, expires_at)
+       VALUES ($1, $2, NOW() + INTERVAL '24 hours')
+       ON CONFLICT (cache_key) DO UPDATE SET data_json = EXCLUDED.data_json, expires_at = NOW() + INTERVAL '24 hours'`,
+      [cacheKey, JSON.stringify(data)]
+    );
+  } catch (err) {
+    console.warn("saveDashboardIntelCache failed (non-blocking):", err);
+  }
+}
+
+// ─── Skill Gap Cache (7-day TTL) ────────────────────────────────────────────
+
+export async function getCachedSkillGap(cacheKey: string): Promise<any[] | null> {
+  try {
+    const row = await db.oneOrNone<{ data_json: any[] }>(
+      `SELECT data_json FROM skillgap_cache WHERE cache_key = $1 AND expires_at > NOW()`,
+      [cacheKey]
+    );
+    return row?.data_json ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveSkillGapCache(cacheKey: string, data: any[]): Promise<void> {
+  try {
+    await db.none(
+      `INSERT INTO skillgap_cache (cache_key, data_json, expires_at)
+       VALUES ($1, $2, NOW() + INTERVAL '7 days')
+       ON CONFLICT (cache_key) DO UPDATE SET data_json = EXCLUDED.data_json, expires_at = NOW() + INTERVAL '7 days'`,
+      [cacheKey, JSON.stringify(data)]
+    );
+  } catch (err) {
+    console.warn("saveSkillGapCache failed (non-blocking):", err);
+  }
+}
+
+// ─── Scholarships Cache (24-hour TTL) ───────────────────────────────────────
+
+export async function getCachedScholarships(cacheKey: string): Promise<any[] | null> {
+  try {
+    const row = await db.oneOrNone<{ scholarships_json: any[] }>(
+      `SELECT scholarships_json FROM scholarships_cache WHERE cache_key = $1 AND expires_at > NOW()`,
+      [cacheKey]
+    );
+    return row?.scholarships_json ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveScholarshipsCache(cacheKey: string, data: any[]): Promise<void> {
+  try {
+    await db.none(
+      `INSERT INTO scholarships_cache (cache_key, scholarships_json, expires_at)
+       VALUES ($1, $2, NOW() + INTERVAL '24 hours')
+       ON CONFLICT (cache_key) DO UPDATE SET scholarships_json = EXCLUDED.scholarships_json, expires_at = NOW() + INTERVAL '24 hours'`,
+      [cacheKey, JSON.stringify(data)]
+    );
+  } catch (err) {
+    console.warn("saveScholarshipsCache failed (non-blocking):", err);
+  }
+}
+
+// ─── Generic AI Response Cache (ai_response_cache table) ─────────────────────
+// Used for: job listings, study materials, job directory, career requirements, etc.
+// TTL is caller-specified (default 24h).
+
+export async function getAiCache<T = any>(cacheKey: string): Promise<T | null> {
+  try {
+    const row = await db.oneOrNone<{ data_json: T }>(
+      `SELECT data_json FROM ai_response_cache WHERE cache_key = $1 AND expires_at > NOW()`,
+      [cacheKey]
+    );
+    return row?.data_json ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setAiCache(cacheKey: string, data: any, ttlHours = 24): Promise<void> {
+  try {
+    await db.none(
+      `INSERT INTO ai_response_cache (cache_key, data_json, cached_at, expires_at)
+       VALUES ($1, $2, NOW(), NOW() + ($3 || ' hours')::INTERVAL)
+       ON CONFLICT (cache_key) DO UPDATE SET
+         data_json  = EXCLUDED.data_json,
+         cached_at  = NOW(),
+         expires_at = NOW() + ($3 || ' hours')::INTERVAL`,
+      [cacheKey, JSON.stringify(data), ttlHours]
+    );
+  } catch (err) {
+    console.warn("setAiCache failed (non-blocking):", err);
   }
 }

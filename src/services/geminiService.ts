@@ -25,9 +25,12 @@ export {
   getMarketInsights,
   getCareerDirectories,
   getCareersByCountry,
+  getCareerMilestones,
+  getJobDirectory,
+  getCareerRequirements,
 } from "./careerAiProxy.js";
 
-export type { GlobalInsight, CareerDirectoryEntry, CareerDirectoryResult, CountryCareerEntry } from "./careerAiProxy.js";
+export type { GlobalInsight, CareerDirectoryEntry, CareerDirectoryResult, CountryCareerEntry, CareerMilestone, JobDirectory, JobDirectorySector, JobDirectoryCategory, CareerRequirements, EligibilityCriterion, SelectionStage, KeyExam, ArtifactItem, ArtifactCategory, PreparationPhase } from "./careerAiProxy.js";
 /*
   const model = "gemini-2.0-flash";
   

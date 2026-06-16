@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { 
   signInWithPopup, 
-  GoogleAuthProvider, 
   signOut,
   onAuthStateChanged,
   User
@@ -86,19 +85,6 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
-  const handleGoogleLogin = async () => {
-    setIsLoggingIn(true);
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error("Login Error:", error);
-      alert("Failed to sign in. Please try again.");
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -554,21 +540,6 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
         </div>
 
         <div className="space-y-3">
-          <button 
-            onClick={handleGoogleLogin}
-            disabled={isLoggingIn}
-            className="w-full h-16 bg-white hover:bg-slate-50 text-slate-900 rounded-2xl flex items-center justify-center gap-4 transition-all shadow-xl font-black uppercase tracking-tighter disabled:opacity-50"
-          >
-            {isLoggingIn ? (
-              <Loader2 className="animate-spin" size={24} />
-            ) : (
-              <>
-                <LogIn size={24} />
-                Sign in with Google
-              </>
-            )}
-          </button>
-
           <button
             onClick={() => {
               setAuthStage('emailLogin');

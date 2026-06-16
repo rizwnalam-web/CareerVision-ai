@@ -16,11 +16,12 @@ interface MaterialsLibraryProps {
   onBack?: () => void;
   materials?: StudyMaterial[];
   isLoading?: boolean;
+  careerTitle?: string;
 }
 
 type Provider = 'All' | 'Boclips' | 'YouTube' | 'Coursera' | 'Udemy' | 'MIT OCW' | 'Local';
 
-const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_MATERIALS, isLoading = false }) => {
+const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_MATERIALS, isLoading = false, careerTitle }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeType, setActiveType] = useState<string>("All");
   const [activeLevel, setActiveLevel] = useState<string>("All");
@@ -56,6 +57,21 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
   const [isAiSearching, setIsAiSearching] = useState(false);
   const [aiResults, setAiResults] = useState<StudyMaterial[]>([]);
   const [hasAiSearched, setHasAiSearched] = useState(false);
+
+  // Auto-fetch via AI search when no materials are provided from the parent
+  React.useEffect(() => {
+    if (!isLoading && materials.length === 0 && !hasAiSearched && !isAiSearching) {
+      const autoQuery = careerTitle
+        ? `${careerTitle} learning resources courses 2026`
+        : 'career readiness learning resources 2026';
+      setIsAiSearching(true);
+      setHasAiSearched(true);
+      aiSearchStudyMaterials(autoQuery)
+        .then(results => setAiResults(results || []))
+        .catch(() => setAiResults([]))
+        .finally(() => setIsAiSearching(false));
+    }
+  }, [isLoading, materials.length, careerTitle]);
 
   // Derive recent materials
   const recentMaterials = useMemo(() => {
@@ -221,14 +237,14 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
       const matchesLevel = activeLevel === "All" || m.skillLevel === activeLevel;
       const matchesCareer = activeCareer === "All" || m.careerId === activeCareer;
       const matchesLanguage = activeLanguage === "All" || m.language === activeLanguage;
-      const matchesProvider = activeProvider === "All" || 
-                             (activeProvider === "Local" && !externalResults.includes(m)) ||
-                             (activeProvider !== "Local" && m.provider === activeProvider);
+      const matchesProvider = selectedProviders.has("All") ||
+                             (selectedProviders.has("Local") && !externalResults.includes(m)) ||
+                             Array.from(selectedProviders).some(p => p !== "Local" && m.provider.toLowerCase().includes(p.toLowerCase()));
       const matchesRating = m.rating >= minRating;
 
       return matchesSearch && matchesType && matchesLevel && matchesCareer && matchesLanguage && matchesRating && matchesProvider;
     });
-  }, [searchQuery, activeType, activeLevel, activeCareer, activeLanguage, activeProvider, minRating, externalResults, aiResults, hasAiSearched, materials]);
+  }, [searchQuery, activeType, activeLevel, activeCareer, activeLanguage, selectedProviders, minRating, externalResults, aiResults, hasAiSearched, materials]);
 
   const handleAiSearch = async () => {
     const query = searchQuery.trim() ||
@@ -254,7 +270,6 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
     setActiveLevel("All");
     setActiveCareer("All");
     setActiveLanguage("All");
-    setActiveProvider("All");
     setMinRating(0);
     setHasAiSearched(false);
     setAiResults([]);
@@ -610,10 +625,10 @@ const MaterialsLibrary: React.FC<MaterialsLibraryProps> = ({ materials = STUDY_M
                   {providers.map(p => (
                     <button 
                       key={p}
-                      onClick={() => setActiveProvider(p)}
+                      onClick={() => toggleProvider(p)}
                       className={cn(
                         "px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all",
-                        activeProvider === p ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "bg-slate-50 text-slate-500 hover:bg-slate-100"
+                        selectedProviders.has(p) ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "bg-slate-50 text-slate-500 hover:bg-slate-100"
                       )}
                     >
                       {p === 'MIT OCW' ? 'MIT' : p}

@@ -176,7 +176,27 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
     const saved = localStorage.getItem('savedJobs');
     return saved ? JSON.parse(saved) : [];
   });
-  
+
+  // Real-time AI-fetched base jobs (replaces mock JOB_LISTINGS)
+  const [baseJobs, setBaseJobs] = useState<JobListing[]>([]);
+  const [isBaseJobsLoading, setIsBaseJobsLoading] = useState(true);
+
+  // Fetch real jobs from AI on mount + career change
+  useEffect(() => {
+    const fetchBaseJobs = async () => {
+      setIsBaseJobsLoading(true);
+      try {
+        const results = await getAiJobSuggestions(profile);
+        setBaseJobs(results && results.length > 0 ? results : JOB_LISTINGS);
+      } catch {
+        setBaseJobs(JOB_LISTINGS); // fallback to mock data
+      } finally {
+        setIsBaseJobsLoading(false);
+      }
+    };
+    fetchBaseJobs();
+  }, [profile.targetCareerId, profile.country, profile.targetLocation]);
+
   // AI Search State
   const [isAiSearching, setIsAiSearching] = useState(false);
   const [aiResults, setAiResults] = useState<JobListing[]>([]);
@@ -265,9 +285,9 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
   const loadProactiveRecs = async () => {
     setIsProactiveLoading(true);
     try {
-      const savedJobs = JOB_LISTINGS.filter(j => savedJobIds.includes(j.id));
+      const savedJobs = baseJobs.filter(j => savedJobIds.includes(j.id));
       if (savedJobs.length === 0) {
-        const fallback = JOB_LISTINGS.filter(j => j.careerId === profile.targetCareerId).slice(0, 4);
+        const fallback = baseJobs.filter(j => j.careerId === profile.targetCareerId).slice(0, 4);
         setProactiveRecs(fallback);
         setCurrentPage(1);
         return;
@@ -278,7 +298,7 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
       setCurrentPage(1);
     } catch (error) {
       console.error("Proactive Recs Error:", error);
-      const fallback = JOB_LISTINGS.filter(j => j.careerId === profile.targetCareerId).slice(0, 4);
+      const fallback = baseJobs.filter(j => j.careerId === profile.targetCareerId).slice(0, 4);
       setProactiveRecs(fallback);
       setCurrentPage(1);
     } finally {
@@ -289,20 +309,20 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
   const careers = ["All", ...CAREER_PATHS.map(c => c.title)];
 
   const filteredJobs = useMemo(() => {
-    // Merge local, AI search results, suggestions, and proactive recs
-    const baseList = [...JOB_LISTINGS];
-    if (hasAiSearched) baseList.unshift(...aiResults);
-    if (suggestions.length > 0) baseList.unshift(...suggestions);
-    if (proactiveRecs.length > 0) baseList.unshift(...proactiveRecs);
-    
+    // Real AI jobs as primary source, with AI search / proactive overrides
+    const sourceList = [...baseJobs];
+    if (hasAiSearched) sourceList.unshift(...aiResults);
+    if (suggestions.length > 0) sourceList.unshift(...suggestions);
+    if (proactiveRecs.length > 0) sourceList.unshift(...proactiveRecs);
+
     // Deduplicate by ID
-    const uniqueMap = new Map();
-    baseList.forEach(job => uniqueMap.set(job.id, job));
-    const combined = Array.from(uniqueMap.values()) as JobListing[];
+    const uniqueMap = new Map<string, JobListing>();
+    sourceList.forEach(job => uniqueMap.set(job.id, job));
+    const combined = Array.from(uniqueMap.values());
 
     return combined.filter(job => {
       const career = CAREER_PATHS.find(c => c.id === job.careerId);
-      const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            job.company.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesLocation = job.location.toLowerCase().includes(locationQuery.toLowerCase());
       const matchesCareer = activeCareer === "All" || career?.title === activeCareer;
@@ -311,7 +331,7 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
 
       return matchesSearch && matchesLocation && matchesCareer && matchesType && matchesSaved;
     });
-  }, [searchQuery, locationQuery, activeCareer, activeType, aiResults, hasAiSearched, suggestions, proactiveRecs, showSavedOnly, savedJobIds]);
+  }, [baseJobs, searchQuery, locationQuery, activeCareer, activeType, aiResults, hasAiSearched, suggestions, proactiveRecs, showSavedOnly, savedJobIds]);
 
   const totalPages = Math.max(1, Math.ceil(filteredJobs.length / pageSize));
   const paginatedJobs = filteredJobs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -331,7 +351,7 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
       setSuggestions(results);
     } catch (error) {
       console.error("Suggestions Error:", error);
-      const fallback = JOB_LISTINGS.filter(j => j.careerId === profile.targetCareerId).slice(0, 4);
+      const fallback = baseJobs.filter(j => j.careerId === profile.targetCareerId).slice(0, 4);
       setSuggestions(fallback);
     } finally {
       setIsSuggesting(false);
@@ -377,9 +397,17 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
           </div>
             <p className="text-slate-500 font-bold text-sm uppercase tracking-widest flex items-center gap-2">
             <TrendingUp size={14} className="text-emerald-500" />
-            {filteredJobs.length} Market Matches Analyzed
-            {filteredJobs.length > visibleJobsCount && (
-              <span className="text-[10px] text-slate-400 normal-case">({filteredJobs.length} total, page {currentPage}/{totalPages})</span>
+            {isBaseJobsLoading ? (
+              <span className="flex items-center gap-2 text-indigo-600">
+                <Loader2 size={14} className="animate-spin" /> Fetching live jobs…
+              </span>
+            ) : (
+              <>
+                {filteredJobs.length} Market Matches Analyzed
+                {filteredJobs.length > visibleJobsCount && (
+                  <span className="text-[10px] text-slate-400 normal-case">({filteredJobs.length} total, page {currentPage}/{totalPages})</span>
+                )}
+              </>
             )}
           </p>
         </div>
@@ -787,7 +815,7 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
                 matchScore={calculateMatchScore(job, profile, searchQuery, locationQuery, activeCareer)}
               />
             ))}
-            {filteredJobs.length === 0 && (
+            {filteredJobs.length === 0 && !isBaseJobsLoading && (
               <div className="col-span-full py-20 bg-white rounded-[3rem] border border-dashed border-slate-200 flex flex-col items-center gap-4 text-center">
                 <div className="p-6 bg-slate-50 rounded-full text-slate-300">
                   <Briefcase size={48} />
@@ -796,6 +824,12 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
                   <p className="text-lg font-black text-slate-900 uppercase tracking-tight">No positions found</p>
                   <p className="text-slate-500 font-medium">Try adjusting your filters or location</p>
                 </div>
+              </div>
+            )}
+            {isBaseJobsLoading && filteredJobs.length === 0 && (
+              <div className="col-span-full py-16 flex flex-col items-center gap-4">
+                <Loader2 size={36} className="text-indigo-500 animate-spin" />
+                <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Fetching live job listings…</p>
               </div>
             )}
           </div>

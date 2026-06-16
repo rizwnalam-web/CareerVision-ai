@@ -238,7 +238,32 @@ export async function probeProviders(): Promise<LLMProvider | null> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Main generation with full fallback chain
+// Per-provider rate-limit cooldown tracking
+// ─────────────────────────────────────────────────────────────────────────────
+const providerCooldowns = new Map<string, number>(); // name → timestamp when usable again
+
+function isRateLimitError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  return /status code 429|rate.?limit|too many requests/i.test(msg);
+}
+
+function isForbiddenError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  return /status code 403|status code 401|unauthorized|forbidden/i.test(msg);
+}
+
+function markCooldown(providerName: string, ms: number) {
+  providerCooldowns.set(providerName, Date.now() + ms);
+  console.warn(`[LLM] ${providerName} on cooldown for ${Math.round(ms / 1000)}s`);
+}
+
+function isCoolingDown(providerName: string): boolean {
+  const until = providerCooldowns.get(providerName) ?? 0;
+  return Date.now() < until;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main generation with full fallback chain + rate-limit retry
 // ─────────────────────────────────────────────────────────────────────────────
 async function generateResponse(prompt: string, options: DeepSeekRequestOptions = {}): Promise<DeepSeekResult> {
   const isOffPeakWindow = isOffPeak();
@@ -261,16 +286,21 @@ async function generateResponse(prompt: string, options: DeepSeekRequestOptions 
   ];
 
   const errors: string[] = [];
+  // Track providers that hit 429 so we can retry them after a backoff
+  const rateLimitedProviders: Array<{ provider: typeof PROVIDERS[0]; retryAfterMs: number }> = [];
 
   for (let i = 0; i < orderedProviders.length; i++) {
     const provider = orderedProviders[i];
     if (!provider.apiKey) continue;
+    if (isCoolingDown(provider.name)) {
+      errors.push(`${provider.label}: cooling down (rate-limited)`);
+      continue;
+    }
 
     try {
       const opts = { ...normalizedOptions, model: provider.model };
       const result = await callProvider(provider, prompt, opts);
 
-      // Lock this provider for future calls if not already locked
       if (activeProviderInfo?.name !== provider.name) {
         const globalIdx = PROVIDERS.findIndex(p => p.name === provider.name);
         activeProviderIndex = globalIdx;
@@ -291,7 +321,50 @@ async function generateResponse(prompt: string, options: DeepSeekRequestOptions 
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${provider.label}: ${msg.slice(0, 200)}`);
-      console.warn(`[LLM] ${provider.label} failed, trying next...`);
+
+      if (isRateLimitError(err)) {
+        // Back off: 60s first hit, up to 5 min
+        const existing = providerCooldowns.get(provider.name) ?? 0;
+        const currentCooldown = Math.max(0, existing - Date.now());
+        const backoff = currentCooldown > 0 ? Math.min(currentCooldown * 2, 300_000) : 60_000;
+        markCooldown(provider.name, backoff);
+        rateLimitedProviders.push({ provider, retryAfterMs: backoff });
+        console.warn(`[LLM] ${provider.label} rate-limited, trying next...`);
+      } else if (isForbiddenError(err)) {
+        // Auth error — long cooldown so we don't keep hitting it
+        markCooldown(provider.name, 600_000);
+        console.warn(`[LLM] ${provider.label} auth error (403/401), skipping for 10 min`);
+      } else {
+        console.warn(`[LLM] ${provider.label} failed, trying next...`);
+      }
+    }
+  }
+
+  // All providers failed first pass. If some were rate-limited, wait for the
+  // shortest cooldown and retry once.
+  if (rateLimitedProviders.length > 0) {
+    const shortest = rateLimitedProviders.reduce((a, b) => a.retryAfterMs < b.retryAfterMs ? a : b);
+    const waitMs = Math.min(shortest.retryAfterMs, 30_000); // cap retry wait at 30s
+    console.log(`[LLM] All providers rate-limited. Waiting ${Math.round(waitMs / 1000)}s then retrying ${shortest.provider.label}...`);
+    await new Promise(r => setTimeout(r, waitMs));
+
+    try {
+      const opts = { ...normalizedOptions, model: shortest.provider.model };
+      const result = await callProvider(shortest.provider, prompt, opts);
+      providerCooldowns.delete(shortest.provider.name); // clear cooldown on success
+      const response: DeepSeekResult = {
+        prompt,
+        text: result.text,
+        tokens: result.tokens,
+        costUsd: result.costUsd,
+        source: "fallback",
+        provider: shortest.provider.name,
+      };
+      cache.set(cacheKey, response, CACHE_TTL_SECONDS);
+      return response;
+    } catch (retryErr) {
+      const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+      errors.push(`Retry ${shortest.provider.label}: ${retryMsg.slice(0, 200)}`);
     }
   }
 
