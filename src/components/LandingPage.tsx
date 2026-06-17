@@ -23,8 +23,11 @@ import {
   Sparkles,
   Search,
   CircleDot,
+  Star,
+  Quote,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { getTopFeedbacks, Feedback } from '../services/feedbackService';
 
 interface LandingPageProps {
   onStart: () => void;
@@ -211,6 +214,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
 
       {/* Product Demo Section */}
       <DemoSection onStart={onStart} />
+
+      {/* Testimonials Section */}
+      <TestimonialsSection />
 
       {/* Feature Grid */}
       <section id="features" className="py-24 bg-slate-50">
@@ -623,3 +629,62 @@ const FeatureCard = ({ icon, title, description }: { icon: React.ReactNode, titl
     <p className="text-slate-500 text-sm font-medium leading-relaxed">{description}</p>
   </div>
 );
+
+const TestimonialsSection = () => {
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+
+  useEffect(() => {
+    getTopFeedbacks().then(setFeedbacks).catch(console.error);
+  }, []);
+
+  if (feedbacks.length === 0) return null;
+
+  return (
+    <section className="py-24 bg-white border-y border-slate-100 overflow-hidden">
+      <div className="max-w-7xl mx-auto px-8">
+        <div className="text-center mb-16">
+          <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em] mb-4">Wall of Fame</p>
+          <h2 className="text-4xl font-black text-slate-900 tracking-tight">Verified <span className="text-indigo-600 italic">User Insights.</span></h2>
+        </div>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {feedbacks.map((fb, i) => (
+            <motion.div 
+              key={fb.id}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+              className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 relative group hover:bg-white hover:shadow-2xl hover:shadow-indigo-100 transition-all"
+            >
+              <Quote size={40} className="absolute top-6 right-6 text-indigo-100 group-hover:text-indigo-200 transition-colors" />
+              
+              <div className="flex gap-1 mb-6">
+                {[...Array(5)].map((_, idx) => (
+                  <Star 
+                    key={idx} 
+                    size={14} 
+                    className={cn(idx < fb.rating ? "text-amber-400 fill-amber-400" : "text-slate-200")} 
+                  />
+                ))}
+              </div>
+
+              <p className="text-slate-600 font-medium leading-relaxed mb-8 italic">
+                "{fb.comment}"
+              </p>
+
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-black text-xs">
+                  {fb.user_name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-xs font-black text-slate-900 uppercase tracking-widest">{fb.user_name}</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Verified Pioneer</p>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};

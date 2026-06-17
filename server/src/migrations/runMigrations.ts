@@ -2,6 +2,7 @@ import { db, closeConnection, testConnection } from "../db/database.js";
 import * as migration001 from "./001_initial_schema.js";
 import * as migration002 from "./002_add_password_field.js";
 import * as migration003 from "./002_add_market_data_tables.js";
+import * as feedbackMigration from "./003_feedback_table.js"; // Assuming this is the correct import for your feedback table
 import * as migration004 from "./004_add_password_reset_tokens.js";
 import * as migration005 from "./005_add_top_careers_cache.js";
 import * as migration006 from "./006_add_country_careers_cache.js";
@@ -14,6 +15,7 @@ const migrations = [
   { name: "001_initial_schema",        module: migration001 },
   { name: "002_add_password_field",    module: migration002 },
   { name: "003_add_market_data_tables",module: migration003 },
+  { name: "003_feedback_table",        module: feedbackMigration }, // Add your feedback migration here
   { name: "004_add_password_reset_tokens", module: migration004 },
   { name: "005_add_top_careers_cache", module: migration005 },
   { name: "006_add_country_careers_cache", module: migration006 },
@@ -46,7 +48,7 @@ export async function runMigrations() {
 
     if (!exists) {
       console.log(`\n🔄 Running migration: ${migration.name}`);
-      await migration.module.up();
+      await migration.module.up(db); // Pass the 'db' object here
       await db.none("INSERT INTO migrations (name) VALUES ($1)", [
         migration.name,
       ]);

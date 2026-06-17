@@ -19,10 +19,12 @@ import {
   Heart,
   Trophy,
   ChevronRight,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { UserProfile } from '../types/career';
 import { updateUserProfile } from '../services/authService';
+import { FeedbackForm } from './FeedbackForm';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -88,6 +90,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [draft, setDraft] = useState<UserProfile>(profile);
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
 
   // Sync draft when profile prop changes (external updates)
   React.useEffect(() => {
@@ -181,10 +184,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     : 'Email';
 
   const completedCount = profile.completedMilestones?.length ?? 0;
-  const gpaRaw = profile.academicPerformance?.gpa;
-  const gpaDisplay = gpaRaw != null && gpaRaw !== ''
+  
+  // 1. Force TypeScript to treat the runtime string accurately
+const gpaRaw = profile.academicPerformance?.gpa as unknown as string;
+
+// 2. Your original code will now work perfectly without any type errors or crashes
+const gpaDisplay = gpaRaw != null && gpaRaw !== ''
     ? `${Number(gpaRaw).toFixed(1)} GPA`
     : 'Not set';
+
+
+
 
   return (
     <AnimatePresence>
@@ -270,7 +280,28 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               </div>
 
               {/* Body */}
-              <div className="flex-1 overflow-y-auto mt-10 px-8 pb-8 pt-4 space-y-6">
+              <div className="flex-1 overflow-y-auto mt-10 px-8 pb-8 pt-4 space-y-8">
+                {showFeedbackForm ? (
+                  <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600">
+                        System Feedback
+                      </h3>
+                      <button 
+                        onClick={() => setShowFeedbackForm(false)}
+                        className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600"
+                      >
+                        Back to profile
+                      </button>
+                    </div>
+                    <FeedbackForm 
+                      profile={profile} 
+                      userId={user?.id || user?.profile?.id} 
+                      onClose={() => setShowFeedbackForm(false)} 
+                    />
+                  </div>
+                ) : (
+                  <>
                 {/* Save success banner */}
                 <AnimatePresence>
                   {saveSuccess && (
@@ -525,10 +556,22 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     </div>
                   )}
                 </FieldSection>
-              </div>
-            </div>
-          </motion.div>
-        </>
+
+                <div className="pt-6 border-t border-slate-100">
+                  <button 
+                    onClick={() => setShowFeedbackForm(true)}
+                    className="w-full py-4 border-2 border-dashed border-slate-200 rounded-3xl text-slate-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all flex items-center justify-center gap-3 group"
+                  >
+                    <MessageSquare size={18} className="group-hover:scale-110 transition-transform" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Share Your Experience</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </>
       )}
     </AnimatePresence>
   );
