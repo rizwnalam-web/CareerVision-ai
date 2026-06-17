@@ -255,8 +255,11 @@ export interface JobDirectory {
   generatedAt: string;
 }
 
-export async function getJobDirectory(country: string): Promise<JobDirectory> {
-  return callBackend<JobDirectory>(`/job-directory/${encodeURIComponent(country)}`, 'GET');
+export async function getJobDirectory(
+  country: string,
+  profile?: { interests?: string[]; targetCareerId?: string; targetCareer?: string; education?: string }
+): Promise<JobDirectory> {
+  return callBackend<JobDirectory>('/job-directory', 'POST', { country, profile });
 }
 
 // ─── Career Requirements & Artifacts ─────────────────────────────────────────

@@ -1810,8 +1810,16 @@ export interface JobDirectory {
 
 const JOB_DIRECTORY_CACHE = new Map<string, { data: JobDirectory; expiresAt: number }>();
 
-export async function getJobDirectory(country: string): Promise<JobDirectory> {
-  const key = country.trim().toLowerCase();
+export interface JobDirectoryProfile {
+  interests?: string[];
+  targetCareerId?: string;
+  targetCareer?: string;
+  education?: string;
+}
+
+export async function getJobDirectory(country: string, profile?: JobDirectoryProfile): Promise<JobDirectory> {
+  // v2 in cache key busts any old 5-job cached entries
+  const key = `v2:${country.trim().toLowerCase()}`;
   const cached = JOB_DIRECTORY_CACHE.get(key);
   if (cached && Date.now() < cached.expiresAt) {
     console.log(`[JobDirectory] Serving ${country} from in-memory cache`);
@@ -1828,40 +1836,47 @@ export async function getJobDirectory(country: string): Promise<JobDirectory> {
 
   const systemInstruction = `You are a comprehensive career intelligence engine. Return ONLY valid JSON — no markdown, no explanation, no code fences.`;
 
-  // Concise prompt — keeps payload small to avoid Groq TPM limits
-  const prompt = `List government and private sector jobs in ${country} (2026).
+  // Profile context hints for the AI to prioritise relevant roles
+  const profileHint = profile
+    ? `User interests: ${profile.interests?.join(', ') || 'general'}. Target career: ${profile.targetCareer || profile.targetCareerId || 'any'}. Education: ${profile.education || 'any'}. Ensure this person's target career appears across relevant categories.`
+    : '';
 
-Return JSON object:
+  const prompt = `List government and private sector jobs available in ${country} (2026). ${profileHint}
+
+Return JSON:
 {
   "country": "${country}",
   "sectors": [
     { "sector": "Government", "icon": "🏛️", "categories": [
-      { "category": "Civil Services & Administration", "jobs": ["<job1>","<job2>","<job3>","<job4>","<job5>"] },
-      { "category": "Defence & Security", "jobs": [...5 jobs] },
-      { "category": "Public Finance & Banking", "jobs": [...5 jobs] },
-      { "category": "Public Health", "jobs": [...5 jobs] },
-      { "category": "Education", "jobs": [...5 jobs] },
-      { "category": "Judiciary & Legal", "jobs": [...5 jobs] },
-      { "category": "Infrastructure & Transport", "jobs": [...5 jobs] },
-      { "category": "Public Utilities", "jobs": [...5 jobs] }
+      { "category": "Civil Services & Administration", "jobs": ["Administrative Officer","District Collector","IAS Officer","Policy Analyst","Government Relations Manager","Public Sector Manager","Undersecretary","Municipal Commissioner"] },
+      { "category": "Defence & Security", "jobs": ["<8 real ${country} defence/security job titles>"] },
+      { "category": "Public Finance & Banking", "jobs": ["<8 real ${country} public finance/central bank job titles>"] },
+      { "category": "Public Health & Medicine", "jobs": ["Medical Officer","Government Doctor","Public Health Physician","Chief Medical Officer","District Health Officer","Epidemiologist","Public Health Inspector","Health Policy Advisor"] },
+      { "category": "Nursing & Allied Health (Govt)", "jobs": ["<8 real ${country} government nursing and allied-health job titles including Registered Nurse, Pharmacist, Physiotherapist, Lab Technician>"] },
+      { "category": "Education & Research", "jobs": ["<8 real ${country} government education/research job titles>"] },
+      { "category": "Judiciary & Legal Services", "jobs": ["<8 real ${country} judiciary/legal job titles>"] },
+      { "category": "Infrastructure & Environment", "jobs": ["<8 real ${country} infrastructure/environment/utilities job titles>"] }
     ]},
     { "sector": "Private", "icon": "🏢", "categories": [
-      { "category": "Information Technology", "jobs": [...6 jobs] },
-      { "category": "Banking & Finance", "jobs": [...5 jobs] },
-      { "category": "Healthcare & Pharma", "jobs": [...5 jobs] },
-      { "category": "Engineering & Manufacturing", "jobs": [...5 jobs] },
-      { "category": "Consulting", "jobs": [...5 jobs] },
-      { "category": "Media & Creative", "jobs": [...5 jobs] },
-      { "category": "Sales & Marketing", "jobs": [...5 jobs] },
-      { "category": "Legal", "jobs": [...5 jobs] },
-      { "category": "Hospitality & Tourism", "jobs": [...5 jobs] },
-      { "category": "Startups & Entrepreneurship", "jobs": [...5 jobs] }
+      { "category": "Information Technology", "jobs": ["<8 real ${country} private IT job titles>"] },
+      { "category": "Banking & Finance", "jobs": ["<8 real ${country} private banking/finance job titles>"] },
+      { "category": "Clinical Medicine & Specialists", "jobs": ["General Practitioner","Surgeon","Cardiologist","Pediatrician","Psychiatrist","Radiologist","Anesthesiologist","Emergency Medicine Physician"] },
+      { "category": "Healthcare & Pharmaceuticals", "jobs": ["<8 real ${country} private healthcare/pharma job titles>"] },
+      { "category": "Engineering & Manufacturing", "jobs": ["<8 real ${country} engineering/manufacturing job titles>"] },
+      { "category": "Consulting & Strategy", "jobs": ["<8 real ${country} consulting/strategy job titles>"] },
+      { "category": "Media, Creative & Design", "jobs": ["<8 real ${country} media/creative/design job titles>"] },
+      { "category": "Legal & Compliance", "jobs": ["<8 real ${country} legal/compliance job titles>"] },
+      { "category": "Sales, Marketing & Business", "jobs": ["<8 real ${country} sales/marketing job titles>"] },
+      { "category": "Startups & Entrepreneurship", "jobs": ["<8 real ${country} startup/entrepreneurship/VC job titles>"] }
     ]}
   ],
   "generatedAt": "${new Date().toISOString()}"
 }
 
-Use real ${country}-specific job titles. Output ONLY valid JSON.`;
+Rules:
+- Replace every placeholder with exactly 8 REAL job titles used in ${country}.
+- The two healthcare categories already seeded (Public Health & Medicine; Clinical Medicine & Specialists) must keep those titles and may add country-specific variants.
+- Output ONLY valid JSON.`;
 
   const tryLLM = async (maxTokens: number): Promise<JobDirectory | null> => {
     const llmResult = await generateDeepSeekResponse(prompt, { systemInstruction, temperature: 0.3, maxTokens });
@@ -1872,13 +1887,13 @@ Use real ${country}-specific job titles. Output ONLY valid JSON.`;
   };
 
   try {
-    // First attempt: 2000 tokens (fits within Groq free 6000 TPM)
-    let result = await tryLLM(2000);
+    // Expanded prompt needs more tokens (3500 first, 2000 fallback)
+    let result = await tryLLM(3500);
 
     // Second attempt with reduced tokens if first failed
     if (!result) {
-      console.warn(`[JobDirectory] First LLM attempt failed for ${country}, retrying with 1200 tokens`);
-      result = await tryLLM(1200);
+      console.warn(`[JobDirectory] First LLM attempt failed for ${country}, retrying with 2000 tokens`);
+      result = await tryLLM(2000);
     }
 
     if (!result) {

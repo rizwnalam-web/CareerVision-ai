@@ -403,11 +403,11 @@ router.post("/milestones", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/job-directory/:country", async (req: Request, res: Response) => {
+router.post("/job-directory", async (req: Request, res: Response) => {
   try {
-    const { country } = req.params;
+    const { country, profile } = req.body;
     if (!country) return res.status(400).json({ error: "country is required" });
-    const result = await careerAiService.getJobDirectory(decodeURIComponent(country));
+    const result = await careerAiService.getJobDirectory(decodeURIComponent(country), profile);
     res.json({ success: true, data: result });
   } catch (error) {
     console.error("Job directory error:", error);

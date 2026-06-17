@@ -194,7 +194,9 @@ async function saveInstitution(institution: any) {
       JSON.stringify(institution.programs),
       institution.ranking || null,
       institution.image,
-      institution.applicationDeadline,
+      institution.applicationDeadline && !isNaN(Date.parse(institution.applicationDeadline))
+        ? institution.applicationDeadline
+        : null,
       institution.website,
       institution.allowsInternationalStudents !== false,
       institution.visaSupport || "None",
@@ -219,6 +221,11 @@ router.post("/save-study-materials", async (req: Request, res: Response) => {
 
     if (!careerId) {
       return res.status(400).json({ error: "careerId is required" });
+    }
+
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_RE.test(careerId)) {
+      return res.status(400).json({ error: "careerId must be a valid UUID" });
     }
 
     // Save all materials
@@ -252,16 +259,18 @@ async function saveMaterial(material: any, careerId: string) {
     ON CONFLICT DO NOTHING`,
     [
       material.title,
-      material.type,
+      material.type?.toLowerCase() || null,
       material.provider,
       material.url,
       careerId,
       material.duration,
       material.thumbnail,
-      material.region || "Global",
+      ["Global", "NA", "EU", "ASIA", "UK"].includes(material.region) ? material.region : "Global",
       material.language || "English",
-      material.rating || 4.5,
-      material.skillLevel || "Intermediate",
+      material.rating ?? 4.5,
+      material.skillLevel
+        ? material.skillLevel.charAt(0).toUpperCase() + material.skillLevel.slice(1).toLowerCase()
+        : "Intermediate",
       JSON.stringify(material.tags || []),
       material.description || "",
     ]

@@ -964,7 +964,13 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
     setIsJobDirLoading(true);
     setJobDirError(false);
     try {
-      const result = await getJobDirectory(country);
+      const dirProfile = {
+        interests: profile.interests,
+        targetCareerId: profile.targetCareerId,
+        targetCareer: profile.targetCareer,
+        education: profile.education,
+      };
+      const result = await getJobDirectory(country, dirProfile);
       // If sectors came back empty and we haven't retried yet, wait 3s and retry once
       if ((!result.sectors || result.sectors.length === 0) && attempt === 1) {
         console.warn('[JobDirectory] Received empty sectors, retrying in 3s...');
