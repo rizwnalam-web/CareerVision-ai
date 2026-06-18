@@ -18,6 +18,9 @@ import marketRouter from "./routes/market.js";
 import llmRouter from "./routes/llm.js";
 import careersAiRouter from "./routes/careers-ai.js";
 import feedbackRouter from "./routes/feedback.js";
+import resumeRouter from "./routes/resume.js";
+import jobMatchRouter from "./routes/jobMatch.js";
+import interviewPrepRouter from "./routes/interviewPrep.js";
 
 dotenv.config();
 
@@ -90,6 +93,9 @@ app.use("/api/market", marketRouter);
 app.use("/api/llm", llmRouter);
 app.use("/api/careers-ai", careersAiRouter);
 app.use("/api/feedbacks", feedbackRouter);
+app.use("/api/resume", resumeRouter);
+app.use("/api/job-match", jobMatchRouter);
+app.use("/api/interview-prep", interviewPrepRouter);
 
 // 404 handler
 app.use(notFoundHandler);

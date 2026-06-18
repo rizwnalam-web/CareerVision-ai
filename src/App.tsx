@@ -121,28 +121,73 @@ type InstitutionRoadmapContext = {
   ageRange: string;
 };
 
-const NavItem = ({ label, active, onClick, icon: Icon }: { label: string, active: boolean, onClick: () => void, icon?: React.ElementType }) => (
-  <button
-    onClick={onClick}
-    className={cn(
-      "relative px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 group flex items-center gap-1.5",
-      active ? "text-indigo-600" : "text-slate-400 hover:text-slate-900"
-    )}
-  >
-    {Icon && <Icon size={11} className={active ? "text-indigo-600" : "text-slate-400 group-hover:text-slate-700 transition-colors"} />}
-    <span className="relative z-10">{label}</span>
-    {active && (
-      <motion.div
-        layoutId="activeNav"
-        className="absolute inset-0 bg-indigo-50/60 rounded-xl -z-0"
-        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-      />
-    )}
-  </button>
-);
+// Nav item accent colors per view
+const NAV_ACCENTS: Record<string, { bg: string; text: string; icon: string; ring: string }> = {
+  dashboard:    { bg: 'bg-slate-900',   text: 'text-white',        icon: 'text-white',         ring: 'ring-slate-200' },
+  roadmap:      { bg: 'bg-violet-600',  text: 'text-white',        icon: 'text-white',         ring: 'ring-violet-200' },
+  institutions: { bg: 'bg-sky-600',     text: 'text-white',        icon: 'text-white',         ring: 'ring-sky-200' },
+  materials:    { bg: 'bg-amber-500',   text: 'text-white',        icon: 'text-white',         ring: 'ring-amber-200' },
+  jobs:         { bg: 'bg-indigo-600',  text: 'text-white',        icon: 'text-white',         ring: 'ring-indigo-200' },
+  heatmap:      { bg: 'bg-teal-600',    text: 'text-white',        icon: 'text-white',         ring: 'ring-teal-200' },
+  expenses:     { bg: 'bg-emerald-600', text: 'text-white',        icon: 'text-white',         ring: 'ring-emerald-200' },
+  resume:       { bg: 'bg-rose-500',    text: 'text-white',        icon: 'text-white',         ring: 'ring-rose-200' },
+  'job-match':  { bg: 'bg-purple-600',  text: 'text-white',        icon: 'text-white',         ring: 'ring-purple-200' },
+  'interview':   { bg: 'bg-violet-600',  text: 'text-white',        icon: 'text-white',         ring: 'ring-violet-200' },
+};
+
+const NAV_HOVER_ICONS: Record<string, string> = {
+  dashboard:    'group-hover:text-slate-700',
+  roadmap:      'group-hover:text-violet-600',
+  institutions: 'group-hover:text-sky-600',
+  materials:    'group-hover:text-amber-500',
+  jobs:         'group-hover:text-indigo-600',
+  heatmap:      'group-hover:text-teal-600',
+  expenses:     'group-hover:text-emerald-600',
+  resume:       'group-hover:text-rose-500',
+  'job-match':  'group-hover:text-purple-600',
+};
+
+const NavItem = ({ label, active, onClick, icon: Icon, view }: { label: string, active: boolean, onClick: () => void, icon?: React.ElementType, view?: string }) => {
+  const accent = view ? NAV_ACCENTS[view] : NAV_ACCENTS.dashboard;
+  return (
+    <div className="relative group/nav">
+      <button
+        onClick={onClick}
+        aria-label={label}
+        className={cn(
+          "relative flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-150",
+          active
+            ? cn(accent.bg, "shadow-md shadow-black/10")
+            : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+        )}
+      >
+        {Icon && (
+          <Icon size={15} className={cn("transition-colors shrink-0", active ? "text-white" : "")} />
+        )}
+        {/* Active indicator dot */}
+        {active && (
+          <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-current opacity-60" />
+        )}
+      </button>
+      {/* Tooltip */}
+      <div className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50
+                      opacity-0 group-hover/nav:opacity-100 translate-y-1 group-hover/nav:translate-y-0
+                      transition-all duration-150">
+        <div className="bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest
+                        px-2.5 py-1 rounded-lg whitespace-nowrap shadow-xl">
+          {label}
+        </div>
+        <div className="w-2 h-2 bg-slate-900 rotate-45 absolute -top-1 left-1/2 -translate-x-1/2" />
+      </div>
+    </div>
+  );
+};
 
 import { NewsFlash } from './components/NewsFlash';
 import { JobBoardView } from './components/JobBoardView';
+import ResumeManager from './components/ResumeManager';
+import JobMatchView from './components/JobMatchView';
+import InterviewPrepView from './components/InterviewPrepView';
 import { InstitutionComparator } from './components/InstitutionComparator';
 import { UserProfileModal } from './components/UserProfileModal';
 import { fetchLLMHealth, reprobeLLM, type LLMHealthStatus } from './services/llmHealthService';
@@ -5099,8 +5144,8 @@ export default function App() {
 }
 
 function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
-  type AppView = 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs';
-  const VALID_VIEWS: AppView[] = ['dashboard', 'roadmap', 'institutions', 'materials', 'expenses', 'advisor', 'parent', 'heatmap', 'jobs'];
+  type AppView = 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'resume' | 'job-match' | 'interview';
+  const VALID_VIEWS: AppView[] = ['dashboard', 'roadmap', 'institutions', 'materials', 'expenses', 'advisor', 'parent', 'heatmap', 'jobs', 'resume', 'job-match', 'interview'];
   const persistedView = sessionStorage.getItem('cv_activeView') as AppView | null;
   const [activeView, setActiveViewState] = useState<AppView>(
     persistedView && VALID_VIEWS.includes(persistedView) ? persistedView : 'dashboard'
@@ -5420,65 +5465,85 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] bg-blue-50/50 rounded-full blur-[100px] pointer-events-none" />
 
       {/* Header Navigation */}
-      <header className="flex items-center justify-between border-b border-slate-200/60 bg-white/70 backdrop-blur-xl px-10 py-5 z-20 shrink-0 sticky top-0">
-        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => onExit()}>
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 font-black text-white shadow-xl shadow-indigo-200 group-hover:scale-110 transition-transform">CV</div>
-          <span className="text-2xl font-black tracking-tighter text-slate-900">CareerVision<span className="text-indigo-600 italic">AI</span></span>
+      <header className="flex items-center justify-between border-b border-slate-200/60 bg-white/70 backdrop-blur-xl px-5 py-3 z-20 shrink-0 sticky top-0">
+        <div className="flex items-center gap-2.5 cursor-pointer group shrink-0" onClick={() => onExit()}>
+          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-950 font-black text-white shadow-xl shadow-indigo-200 group-hover:scale-110 transition-transform text-sm">CV</div>
+          <span className="text-xl font-black tracking-tighter text-slate-900 hidden sm:block">CareerVision<span className="text-indigo-600 italic">AI</span></span>
         </div>
-        <nav className="hidden lg:flex gap-1 items-center relative">
-          {(
-            [
-              { label: 'Control',      view: 'dashboard',    icon: LayoutDashboard },
-              { label: 'Roadmap',      view: 'roadmap',      icon: Map },
-              { label: 'Global',       view: 'institutions', icon: School },
-              { label: 'Academy',      view: 'materials',    icon: BookOpen },
-              { label: 'Jobs Board',   view: 'jobs',         icon: Briefcase },
-              { label: 'Market Hubs',  view: 'heatmap',      icon: Globe },
-              { label: 'Finance',      view: 'expenses',     icon: CircleDollarSign },
-            ] as { label: string; view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'jobs' | 'heatmap' | 'expenses'; icon: React.ElementType }[]
-          ).map(item => (
-            <NavItem key={item.view} label={item.label} icon={item.icon} active={activeView === item.view} onClick={() => handleNavigate(item.view)} />
-          ))}
+        <nav className="hidden md:flex items-center gap-0.5 relative bg-slate-100/70 rounded-2xl p-1">
+          {/* Group 1: Core */}
+          <div className="flex items-center gap-0.5">
+            {([
+              { label: 'Control',  view: 'dashboard',    icon: LayoutDashboard },
+              { label: 'Roadmap',  view: 'roadmap',      icon: Map },
+              { label: 'Global',   view: 'institutions', icon: School },
+              { label: 'Academy',  view: 'materials',    icon: BookOpen },
+            ] as { label: string; view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'jobs' | 'heatmap' | 'expenses' | 'resume' | 'job-match'; icon: React.ElementType }[]).map(item => (
+              <NavItem key={item.view} view={item.view} label={item.label} icon={item.icon} active={activeView === item.view} onClick={() => handleNavigate(item.view)} />
+            ))}
+          </div>
+          {/* Divider */}
+          <div className="w-px h-5 bg-slate-300/60 mx-1" />
+          {/* Group 2: Market */}
+          <div className="flex items-center gap-0.5">
+            {([
+              { label: 'Jobs',    view: 'jobs',         icon: Briefcase },
+              { label: 'Markets', view: 'heatmap',      icon: Globe },
+              { label: 'Finance', view: 'expenses',     icon: CircleDollarSign },
+            ] as { label: string; view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'jobs' | 'heatmap' | 'expenses' | 'resume' | 'job-match'; icon: React.ElementType }[]).map(item => (
+              <NavItem key={item.view} view={item.view} label={item.label} icon={item.icon} active={activeView === item.view} onClick={() => handleNavigate(item.view)} />
+            ))}
+          </div>
+          {/* Divider */}
+          <div className="w-px h-5 bg-slate-300/60 mx-1" />
+          {/* Group 3: AI Tools */}
+          <div className="flex items-center gap-0.5">
+            {([
+              { label: 'Resume',    view: 'resume',     icon: FileText },
+              { label: 'AI Match',  view: 'job-match',  icon: BrainCircuit },
+              { label: 'Interview', view: 'interview',  icon: Mic },
+            ] as { label: string; view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'jobs' | 'heatmap' | 'expenses' | 'resume' | 'job-match' | 'interview'; icon: React.ElementType }[]).map(item => (
+              <NavItem key={item.view} view={item.view} label={item.label} icon={item.icon} active={activeView === item.view} onClick={() => handleNavigate(item.view)} />
+            ))}
+          </div>
         </nav>
-        <div className="flex items-center gap-3">
-          {/* Hamburger – mobile/tablet only */}
+        <div className="flex items-center gap-2">
+          {/* Hamburger – mobile only (nav shows at md+) */}
           <button
-            className="lg:hidden flex items-center justify-center w-9 h-9 rounded-xl bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 transition-colors"
+            className="md:hidden flex items-center justify-center w-9 h-9 rounded-xl bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 transition-colors"
             onClick={() => setShowMobileNav(true)}
             aria-label="Open navigation"
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect y="3" width="18" height="1.8" rx="0.9" fill="currentColor"/><rect y="8.1" width="18" height="1.8" rx="0.9" fill="currentColor"/><rect y="13.2" width="18" height="1.8" rx="0.9" fill="currentColor"/></svg>
           </button>
-          {/* Auth Security Badge */}
-          <div className="hidden md:flex flex-col items-end gap-1">
-            <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-xl px-2.5 py-1.5">
-              <ShieldCheck size={10} className="text-emerald-600" />
-              <span className="text-[7px] font-black text-emerald-700 uppercase tracking-widest">Auth Secure</span>
+          {/* Auth + logout (compact) */}
+          <div className="hidden lg:flex flex-col items-end gap-0.5">
+            <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1">
+              <ShieldCheck size={9} className="text-emerald-600" />
+              <span className="text-[7px] font-black text-emerald-700 uppercase tracking-widest">Secure</span>
             </div>
-            <button
-              onClick={handleLogout}
-              className="text-[8px] font-bold text-slate-400 hover:text-rose-500 flex items-center gap-1 transition-colors"
-            >
-              <LogOut size={8} /> Disconnect
+            <button onClick={handleLogout} className="text-[7px] font-bold text-slate-400 hover:text-rose-500 flex items-center gap-0.5 transition-colors">
+              <LogOut size={7} /> Sign out
             </button>
           </div>
-          <div className="flex items-center gap-3 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm pr-4 group cursor-pointer hover:border-indigo-200 transition-colors" onClick={() => setShowProfileModal(true)}>
-            <div className="h-8 w-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center group-hover:bg-indigo-600 transition-colors overflow-hidden">
+          {/* Profile button */}
+          <button className="flex items-center gap-2 bg-white pl-1 pr-3 py-1 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors group" onClick={() => setShowProfileModal(true)}>
+            <div className="h-7 w-7 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center group-hover:bg-indigo-600 transition-colors overflow-hidden">
               {user.photoURL ? (
                 <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
               ) : (
-                <User size={16} className="text-indigo-600 group-hover:text-white transition-colors" />
+                <User size={14} className="text-indigo-600 group-hover:text-white transition-colors" />
               )}
             </div>
-            <div className="hidden sm:flex flex-col">
-              <span className="text-xs font-black text-slate-800 uppercase tracking-tight truncate">{profile.name}</span>
-              <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none truncate">{profileStatusLabel}</span>
+            <div className="hidden sm:flex flex-col items-start">
+              <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight truncate max-w-[100px]">{profile.name}</span>
+              <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest leading-none truncate max-w-[100px]">{profileStatusLabel}</span>
             </div>
-          </div>
+          </button>
         </div>
       </header>
 
-      <div className="hidden lg:flex items-center justify-between gap-4 border-b border-slate-200/60 bg-indigo-50/80 px-10 py-3 text-[11px] text-slate-700 font-black uppercase tracking-[0.18em] z-20 shrink-0">
+      <div className="hidden md:flex items-center justify-between gap-4 border-b border-slate-200/60 bg-indigo-50/80 px-5 py-2 text-[11px] text-slate-700 font-black uppercase tracking-[0.18em] z-20 shrink-0">
         <div className="flex flex-col sm:flex-row sm:items-center gap-2">
           <span className="text-slate-900">{profileCompletion}% profile complete</span>
           <span className="text-slate-500">{profileStatusLabel} · {profile.targetLocation || 'Location pending'}</span>
@@ -5540,42 +5605,111 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
               className="fixed top-0 right-0 bottom-0 w-72 bg-white z-50 flex flex-col shadow-2xl lg:hidden"
             >
               {/* Drawer header */}
-              <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
-                <span className="text-sm font-black text-slate-900 uppercase tracking-widest">Navigation</span>
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-950">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-8 w-8 rounded-xl bg-white/10 flex items-center justify-center font-black text-white text-sm">CV</div>
+                  <span className="text-sm font-black text-white tracking-tighter">CareerVision<span className="text-indigo-400 italic">AI</span></span>
+                </div>
                 <button
                   onClick={() => setShowMobileNav(false)}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+                  className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
                   aria-label="Close navigation"
                 >
-                  <X size={16} />
+                  <X size={15} />
                 </button>
               </div>
               {/* Nav items */}
-              <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-                {([
-                  { label: 'Control', view: 'dashboard', icon: LayoutDashboard },
-                  { label: 'Roadmap', view: 'roadmap', icon: Map },
-                  { label: 'Global', view: 'institutions', icon: School },
-                  { label: 'Academy', view: 'materials', icon: BookOpen },
-                  { label: 'Jobs Board', view: 'jobs', icon: Briefcase },
-                  { label: 'Market Hubs', view: 'heatmap', icon: Globe },
-                  { label: 'Finance', view: 'expenses', icon: CircleDollarSign },
-                ] as { label: string; view: typeof activeView; icon: React.ElementType }[]).map(item => (
-                  <button
-                    key={item.view}
-                    onClick={() => { handleNavigate(item.view); setShowMobileNav(false); }}
-                    className={cn(
-                      'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all',
-                      activeView === item.view
-                        ? 'bg-indigo-50 text-indigo-600'
-                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                    )}
-                  >
-                    {(() => { const Icon = item.icon; return <Icon size={15} />; })()} 
-                    {item.label}
-                    {activeView === item.view && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-500" />}
-                  </button>
-                ))}
+              <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+                {/* Group 1 */}
+                <div>
+                  <p className="px-3 mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400">Explore</p>
+                  <div className="space-y-0.5">
+                    {([
+                      { label: 'Control',  view: 'dashboard',    icon: LayoutDashboard, color: 'text-slate-700',   bg: 'bg-slate-100' },
+                      { label: 'Roadmap',  view: 'roadmap',      icon: Map,             color: 'text-violet-600',  bg: 'bg-violet-50' },
+                      { label: 'Global',   view: 'institutions', icon: School,          color: 'text-sky-600',     bg: 'bg-sky-50' },
+                      { label: 'Academy',  view: 'materials',    icon: BookOpen,        color: 'text-amber-600',   bg: 'bg-amber-50' },
+                    ] as { label: string; view: typeof activeView; icon: React.ElementType; color: string; bg: string }[]).map(item => {
+                      const isActive = activeView === item.view;
+                      const accent = NAV_ACCENTS[item.view as string];
+                      return (
+                        <button
+                          key={item.view}
+                          onClick={() => { handleNavigate(item.view); setShowMobileNav(false); }}
+                          className={cn(
+                            'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all',
+                            isActive ? cn(accent.bg, accent.text) : 'text-slate-600 hover:bg-slate-50'
+                          )}
+                        >
+                          <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', isActive ? 'bg-white/20' : item.bg)}>
+                            {(() => { const Icon = item.icon; return <Icon size={14} className={isActive ? 'text-white' : item.color} />; })()}
+                          </div>
+                          {item.label}
+                          {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white/70" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                {/* Group 2 */}
+                <div>
+                  <p className="px-3 mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400">Market</p>
+                  <div className="space-y-0.5">
+                    {([
+                      { label: 'Jobs Board',   view: 'jobs',      icon: Briefcase,       color: 'text-indigo-600',  bg: 'bg-indigo-50' },
+                      { label: 'Market Hubs',  view: 'heatmap',   icon: Globe,           color: 'text-teal-600',    bg: 'bg-teal-50' },
+                      { label: 'Finance',      view: 'expenses',  icon: CircleDollarSign,color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                    ] as { label: string; view: typeof activeView; icon: React.ElementType; color: string; bg: string }[]).map(item => {
+                      const isActive = activeView === item.view;
+                      const accent = NAV_ACCENTS[item.view as string];
+                      return (
+                        <button
+                          key={item.view}
+                          onClick={() => { handleNavigate(item.view); setShowMobileNav(false); }}
+                          className={cn(
+                            'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all',
+                            isActive ? cn(accent.bg, accent.text) : 'text-slate-600 hover:bg-slate-50'
+                          )}
+                        >
+                          <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', isActive ? 'bg-white/20' : item.bg)}>
+                            {(() => { const Icon = item.icon; return <Icon size={14} className={isActive ? 'text-white' : item.color} />; })()}
+                          </div>
+                          {item.label}
+                          {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white/70" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                {/* Group 3 */}
+                <div>
+                  <p className="px-3 mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400">AI Tools</p>
+                  <div className="space-y-0.5">
+                    {([
+                      { label: 'Resume',    view: 'resume',     icon: FileText,    color: 'text-rose-500',    bg: 'bg-rose-50' },
+                      { label: 'AI Match',  view: 'job-match',  icon: BrainCircuit,color: 'text-purple-600',  bg: 'bg-purple-50' },
+                    ] as { label: string; view: typeof activeView; icon: React.ElementType; color: string; bg: string }[]).map(item => {
+                      const isActive = activeView === item.view;
+                      const accent = NAV_ACCENTS[item.view as string];
+                      return (
+                        <button
+                          key={item.view}
+                          onClick={() => { handleNavigate(item.view); setShowMobileNav(false); }}
+                          className={cn(
+                            'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all',
+                            isActive ? cn(accent.bg, accent.text) : 'text-slate-600 hover:bg-slate-50'
+                          )}
+                        >
+                          <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', isActive ? 'bg-white/20' : item.bg)}>
+                            {(() => { const Icon = item.icon; return <Icon size={14} className={isActive ? 'text-white' : item.color} />; })()}
+                          </div>
+                          {item.label}
+                          {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white/70" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </nav>
               {/* Drawer footer */}
               <div className="px-6 py-5 border-t border-slate-100 space-y-3">
@@ -5621,6 +5755,9 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                    {activeView === 'materials' && <MaterialsView materials={dynamicMaterials} isLoading={isMaterialsLoading} careerTitle={careers.find(c => c.id === selectedPathId)?.title || profile.targetCareerId?.replace(/-/g,' ') || 'Technology'} />}
                    {activeView === 'parent' && <ParentalDashboard profile={profile} onBack={() => setActiveView('dashboard')} careers={careers} />}
                    {activeView === 'expenses' && <FinancialView profile={profile} setProfile={setProfile} />}
+                   {activeView === 'resume' && <ResumeManager profile={profile} userId={user.id || user.uid} />}
+                   {activeView === 'job-match' && <JobMatchView userId={user.id || user.uid} resumeContent={null} />}
+                   {activeView === 'interview' && <InterviewPrepView userId={user.id || user.uid} defaultRole={profile.targetCareerId?.replace(/-/g,' ') || 'Software Engineer'} />}
                 </section>
 
                 <section className="hidden xl:col-span-3 xl:flex flex-col gap-8 overflow-hidden">

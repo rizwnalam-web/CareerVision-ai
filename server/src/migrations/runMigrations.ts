@@ -10,6 +10,10 @@ import * as migration007 from "./007_add_milestones_cache.js";
 import * as migration008 from "./008_add_hub_search_cache.js";
 import * as migration009 from "./009_add_ai_caches.js";
 import * as migration010 from "./010_add_ai_response_cache.js";
+import * as migration011 from "./011_add_resume_tables.js";
+import * as migration012 from "./012_resume_use_text_identifier.js";
+import * as migration013 from "./013_add_job_match_tables.js";
+import * as migration014 from "./014_interview_prep_tables.js";
 
 const migrations = [
   { name: "001_initial_schema",        module: migration001 },
@@ -23,6 +27,10 @@ const migrations = [
   { name: "008_add_hub_search_cache",  module: migration008 },
   { name: "009_add_ai_caches",         module: migration009 },
   { name: "010_add_ai_response_cache", module: migration010 },
+  { name: "011_add_resume_tables",           module: migration011 },
+  { name: "012_resume_use_text_identifier",   module: migration012 },
+  { name: "013_add_job_match_tables",          module: migration013 },
+  { name: "014_interview_prep_tables",          module: migration014 },
 ];
 
 export async function runMigrations() {

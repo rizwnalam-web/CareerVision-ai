@@ -1,0 +1,1076 @@
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import {
+  Upload, FileText, CheckCircle, AlertCircle, Sparkles, Clock,
+  Plus, Trash2, Edit3, Save, X, ExternalLink, Github, Star,
+  ChevronDown, ChevronRight, Loader2, RotateCcw, Download,
+  User, Briefcase, GraduationCap, Code, Award, FolderGit2,
+  TrendingUp, Target, Lightbulb, Shield,
+} from "lucide-react";
+import { cn } from "../lib/utils";
+import type { UserProfile } from "../types/career";
+import type {
+  ResumeContent, ResumeVersion, ATSReport, ATSSuggestion,
+  PortfolioProject, PortfolioProjectInput,
+} from "../types/resume";
+import {
+  uploadAndParseResume, getResume, saveResumeContent,
+  getResumeVersions, restoreResumeVersion, runATSCheck,
+  getResumeSuggestions, getPortfolioProjects,
+  createPortfolioProject, updatePortfolioProject, deletePortfolioProject,
+} from "../services/resumeService";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+type Tab = "editor" | "ats" | "versions" | "portfolio";
+
+interface Props {
+  profile: UserProfile;
+  userId: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function emptyContent(): ResumeContent {
+  return {
+    personalInfo: { name: "", email: "", phone: "", location: "", linkedin: "", website: "", summary: "" },
+    experience: [],
+    education: [],
+    skills: { technical: [], soft: [], languages: [], certifications: [] },
+    projects: [],
+    awards: [],
+  };
+}
+
+function scoreColor(score: number) {
+  if (score >= 80) return "text-emerald-600";
+  if (score >= 60) return "text-amber-500";
+  return "text-rose-500";
+}
+
+function scoreBg(score: number) {
+  if (score >= 80) return "bg-emerald-50 border-emerald-200";
+  if (score >= 60) return "bg-amber-50 border-amber-200";
+  return "bg-rose-50 border-rose-200";
+}
+
+function priorityBadge(priority: ATSSuggestion["priority"]) {
+  const map: Record<string, string> = {
+    critical: "bg-rose-100 text-rose-700",
+    high:     "bg-orange-100 text-orange-700",
+    medium:   "bg-amber-100 text-amber-700",
+    low:      "bg-slate-100 text-slate-500",
+  };
+  return map[priority] || map.low;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sub-components
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SectionCard: React.FC<{ title: string; icon: React.ElementType; children: React.ReactNode; className?: string }> =
+  ({ title, icon: Icon, children, className }) => (
+    <div className={cn("bg-white rounded-2xl border border-slate-200 p-6 space-y-4", className)}>
+      <div className="flex items-center gap-2">
+        <Icon size={15} className="text-indigo-500" />
+        <h3 className="text-xs font-black uppercase tracking-widest text-slate-700">{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
+
+const TextInput: React.FC<{
+  label: string; value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  multiline?: boolean;
+  rows?: number;
+}> = ({ label, value, onChange, placeholder, multiline, rows = 3 }) => (
+  <div className="space-y-1">
+    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</label>
+    {multiline ? (
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={rows}
+        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 resize-none"
+      />
+    ) : (
+      <input
+        type="text"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
+      />
+    )}
+  </div>
+);
+
+const TagInput: React.FC<{
+  label: string; tags: string[];
+  onChange: (tags: string[]) => void;
+}> = ({ label, tags, onChange }) => {
+  const [input, setInput] = useState("");
+
+  const addTag = () => {
+    const trimmed = input.trim();
+    if (trimmed && !tags.includes(trimmed)) {
+      onChange([...tags, trimmed]);
+    }
+    setInput("");
+  };
+
+  return (
+    <div className="space-y-1">
+      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</label>
+      <div className="flex flex-wrap gap-1.5 min-h-[36px] px-3 py-2 rounded-xl border border-slate-200 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-50">
+        {tags.map(tag => (
+          <span key={tag} className="flex items-center gap-1 bg-indigo-50 text-indigo-700 text-[11px] font-bold px-2 py-0.5 rounded-lg">
+            {tag}
+            <button onClick={() => onChange(tags.filter(t => t !== tag))} className="hover:text-rose-500">
+              <X size={10} />
+            </button>
+          </span>
+        ))}
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTag(); } }}
+          onBlur={addTag}
+          placeholder="Type and press Enter"
+          className="flex-1 min-w-[120px] text-sm text-slate-800 placeholder-slate-400 focus:outline-none bg-transparent"
+        />
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ATS Score Ring
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ScoreRing: React.FC<{ score: number; size?: number }> = ({ score, size = 80 }) => {
+  const r = (size - 10) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (score / 100) * circ;
+  const color = score >= 80 ? "#10b981" : score >= 60 ? "#f59e0b" : "#f43f5e";
+
+  return (
+    <svg width={size} height={size} className="rotate-[-90deg]">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e2e8f0" strokeWidth={8} />
+      <circle
+        cx={size / 2} cy={size / 2} r={r} fill="none"
+        stroke={color} strokeWidth={8}
+        strokeDasharray={circ} strokeDashoffset={offset}
+        strokeLinecap="round"
+        style={{ transition: "stroke-dashoffset 1s ease" }}
+      />
+      <text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle"
+        fill={color} fontSize={size / 5} fontWeight="900"
+        style={{ transform: "rotate(90deg)", transformOrigin: "center" }}
+      >
+        {score}
+      </text>
+    </svg>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Upload zone
+// ─────────────────────────────────────────────────────────────────────────────
+
+const UploadZone: React.FC<{
+  onFile: (file: File) => void;
+  isLoading: boolean;
+}> = ({ onFile, isLoading }) => {
+  const ref = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) onFile(file);
+  };
+
+  return (
+    <div
+      onDragOver={e => { e.preventDefault(); setDragging(true); }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={handleDrop}
+      onClick={() => ref.current?.click()}
+      className={cn(
+        "relative border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all",
+        dragging ? "border-indigo-400 bg-indigo-50/60" : "border-slate-300 hover:border-indigo-300 hover:bg-slate-50/50"
+      )}
+    >
+      <input
+        ref={ref}
+        type="file"
+        accept=".pdf,.docx,.txt"
+        className="hidden"
+        onChange={e => e.target.files?.[0] && onFile(e.target.files[0])}
+      />
+      {isLoading ? (
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 size={32} className="text-indigo-500 animate-spin" />
+          <p className="text-sm font-bold text-indigo-600 uppercase tracking-widest">Extracting &amp; Structuring…</p>
+          <p className="text-xs text-slate-500">AI is reading your resume — this takes ~20 s</p>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center">
+            <Upload size={22} className="text-indigo-500" />
+          </div>
+          <div>
+            <p className="text-sm font-black text-slate-800">Drop resume here or click to browse</p>
+            <p className="text-xs text-slate-500 mt-1">PDF, DOCX, or TXT — max 10 MB</p>
+          </div>
+          <div className="flex gap-2 mt-2">
+            {["PDF", "DOCX", "TXT"].map(fmt => (
+              <span key={fmt} className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-black text-slate-600 uppercase tracking-widest">{fmt}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Component
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
+  const [activeTab, setActiveTab] = useState<Tab>("editor");
+  const [content, setContent] = useState<ResumeContent>(emptyContent());
+  const [atsReport, setAtsReport] = useState<ATSReport | null>(null);
+  const [versions, setVersions] = useState<ResumeVersion[]>([]);
+  const [currentVersionId, setCurrentVersionId] = useState<string>("");
+  const [portfolioProjects, setPortfolioProjects] = useState<PortfolioProject[]>([]);
+  const [targetRole, setTargetRole] = useState(profile.targetCareerId?.replace(/-/g, " ") || "");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isAtsLoading, setIsAtsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestionSection, setSuggestionSection] = useState("");
+  const [isSuggLoading, setIsSuggLoading] = useState(false);
+  const [hasResume, setHasResume] = useState(false);
+  const [expandedExp, setExpandedExp] = useState<string | null>(null);
+  const [expandedEdu, setExpandedEdu] = useState<string | null>(null);
+
+  // Portfolio state
+  const [showPortfolioForm, setShowPortfolioForm] = useState(false);
+  const [editingProject, setEditingProject] = useState<PortfolioProject | null>(null);
+  const [projectForm, setProjectForm] = useState<PortfolioProjectInput>({
+    title: "", description: "", techStack: [], role: "", isOngoing: false,
+    startDate: "", endDate: "", projectUrl: "", repoUrl: "", imageUrl: "", tags: [], featured: false,
+  });
+
+  // ── Load existing resume on mount ──
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      try {
+        setIsLoading(true);
+        const [resume, projects] = await Promise.all([
+          getResume(userId),
+          getPortfolioProjects(userId),
+        ]);
+        if (resume?.content) {
+          setContent(resume.content);
+          setHasResume(true);
+        }
+        if (resume?.atsReport) setAtsReport(resume.atsReport);
+        setPortfolioProjects(projects);
+      } catch {
+        // Silent — no resume yet
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, [userId]);
+
+  // ── Load versions when tab opens ──
+  useEffect(() => {
+    if (activeTab !== "versions" || !userId) return;
+    (async () => {
+      try {
+        const result = await getResumeVersions(userId);
+        setVersions(result.versions);
+        setCurrentVersionId(result.currentVersionId);
+      } catch {
+        // ignore
+      }
+    })();
+  }, [activeTab, userId]);
+
+  const showSuccess = (msg: string) => {
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(null), 3500);
+  };
+
+  // ── File upload ──
+  const handleFileUpload = async (file: File) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await uploadAndParseResume(file, userId, targetRole);
+      setContent(result.content);
+      if (result.atsReport) setAtsReport(result.atsReport);
+      setHasResume(true);
+      const info = result.content?.personalInfo;
+      const isEmpty = !info?.name && !info?.email && !info?.summary;
+      if (isEmpty) {
+        setError("Resume uploaded but we couldn't auto-extract your details — please fill in the fields manually.");
+      } else {
+        showSuccess(`Resume parsed (v${result.versionNumber}) — run ATS Check to score it`);
+      }
+      setActiveTab("editor");
+    } catch (e: any) {
+      setError(e.message || "Upload failed");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ── Save edits ──
+  const handleSave = async () => {
+    setIsSaving(true);
+    setError(null);
+    try {
+      const result = await saveResumeContent(userId, content, "Manual edit", targetRole);
+      setAtsReport(result.atsReport);
+      setHasResume(true);
+      showSuccess(`Saved as v${result.versionNumber} · ATS score: ${result.atsReport.score}/100`);
+    } catch (e: any) {
+      setError(e.message || "Save failed");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ── Run ATS check ──
+  const handleATSCheck = async () => {
+    setIsAtsLoading(true);
+    setError(null);
+    try {
+      const report = await runATSCheck(content, targetRole);
+      setAtsReport(report);
+    } catch (e: any) {
+      setError(e.message || "ATS check failed");
+    } finally {
+      setIsAtsLoading(false);
+    }
+  };
+
+  // ── AI suggestions ──
+  const handleGetSuggestions = async (section: string, text: string) => {
+    setSuggestionSection(section);
+    setIsSuggLoading(true);
+    setSuggestions([]);
+    try {
+      const s = await getResumeSuggestions(section, text, targetRole);
+      setSuggestions(s);
+    } catch {
+      setSuggestions(["Could not load suggestions. Please try again."]);
+    } finally {
+      setIsSuggLoading(false);
+    }
+  };
+
+  // ── Restore version ──
+  const handleRestoreVersion = async (versionId: string) => {
+    try {
+      const result = await restoreResumeVersion(userId, versionId);
+      showSuccess(`Restored as v${result.versionNumber}`);
+      const resume = await getResume(userId);
+      if (resume?.content) setContent(resume.content);
+      if (resume?.atsReport) setAtsReport(resume.atsReport);
+      const versionsResult = await getResumeVersions(userId);
+      setVersions(versionsResult.versions);
+      setCurrentVersionId(versionsResult.currentVersionId);
+    } catch (e: any) {
+      setError(e.message || "Restore failed");
+    }
+  };
+
+  // ── Portfolio CRUD ──
+  const openCreateProject = () => {
+    setEditingProject(null);
+    setProjectForm({
+      title: "", description: "", techStack: [], role: "", isOngoing: false,
+      startDate: "", endDate: "", projectUrl: "", repoUrl: "", imageUrl: "", tags: [], featured: false,
+    });
+    setShowPortfolioForm(true);
+  };
+
+  const openEditProject = (p: PortfolioProject) => {
+    setEditingProject(p);
+    setProjectForm({
+      title: p.title, description: p.description || "", techStack: p.techStack,
+      role: p.role || "", isOngoing: p.isOngoing, startDate: p.startDate || "",
+      endDate: p.endDate || "", projectUrl: p.projectUrl || "", repoUrl: p.repoUrl || "",
+      imageUrl: p.imageUrl || "", tags: p.tags, featured: p.featured,
+    });
+    setShowPortfolioForm(true);
+  };
+
+  const handleSaveProject = async () => {
+    if (!projectForm.title.trim()) return setError("Project title is required");
+    setIsSaving(true);
+    setError(null);
+    try {
+      if (editingProject) {
+        const updated = await updatePortfolioProject(userId, editingProject.id, projectForm);
+        setPortfolioProjects(prev => prev.map(p => p.id === updated.id ? updated : p));
+      } else {
+        const created = await createPortfolioProject(userId, projectForm);
+        setPortfolioProjects(prev => [created, ...prev]);
+      }
+      setShowPortfolioForm(false);
+      showSuccess(editingProject ? "Project updated" : "Project added");
+    } catch (e: any) {
+      setError(e.message || "Failed to save project");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteProject = async (projectId: string) => {
+    try {
+      await deletePortfolioProject(userId, projectId);
+      setPortfolioProjects(prev => prev.filter(p => p.id !== projectId));
+      showSuccess("Project deleted");
+    } catch (e: any) {
+      setError(e.message || "Failed to delete project");
+    }
+  };
+
+  // ── Content updaters ──
+  const updatePersonal = (key: keyof ResumeContent["personalInfo"], value: string) =>
+    setContent(c => ({ ...c, personalInfo: { ...c.personalInfo, [key]: value } }));
+
+  const updateSkills = (key: keyof ResumeContent["skills"], tags: string[]) =>
+    setContent(c => ({ ...c, skills: { ...c.skills, [key]: tags } }));
+
+  const addExperience = () => setContent(c => ({
+    ...c,
+    experience: [...c.experience, {
+      id: crypto.randomUUID(), company: "", position: "", startDate: "", endDate: "",
+      isCurrentRole: false, description: "", achievements: [],
+    }],
+  }));
+
+  const updateExp = (id: string, key: string, value: any) =>
+    setContent(c => ({ ...c, experience: c.experience.map(e => e.id === id ? { ...e, [key]: value } : e) }));
+
+  const removeExp = (id: string) =>
+    setContent(c => ({ ...c, experience: c.experience.filter(e => e.id !== id) }));
+
+  const addEducation = () => setContent(c => ({
+    ...c,
+    education: [...c.education, {
+      id: crypto.randomUUID(), institution: "", degree: "", fieldOfStudy: "",
+      startDate: "", endDate: "", gpa: "", achievements: [],
+    }],
+  }));
+
+  const updateEdu = (id: string, key: string, value: any) =>
+    setContent(c => ({ ...c, education: c.education.map(e => e.id === id ? { ...e, [key]: value } : e) }));
+
+  const removeEdu = (id: string) =>
+    setContent(c => ({ ...c, education: c.education.filter(e => e.id !== id) }));
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render tabs
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
+    { id: "editor",    label: "Resume Editor", icon: Edit3 },
+    { id: "ats",       label: "ATS Checker",   icon: Shield },
+    { id: "versions",  label: "Versions",      icon: Clock },
+    { id: "portfolio", label: "Portfolio",     icon: FolderGit2 },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Resume & Profile</h1>
+          <p className="text-[10px] text-indigo-500 font-black uppercase tracking-[0.2em] mt-1">
+            Multi-format parsing · ATS compliance · Version control · Portfolio
+          </p>
+        </div>
+        {hasResume && atsReport && (
+          <div className={cn("flex items-center gap-3 px-4 py-2 rounded-2xl border", scoreBg(atsReport.score))}>
+            <ScoreRing score={atsReport.score} size={52} />
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">ATS Score</p>
+              <p className={cn("text-lg font-black", scoreColor(atsReport.score))}>{atsReport.score}/100</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Toast messages */}
+      <AnimatePresence>
+        {(error || successMsg) && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className={cn(
+              "flex items-center gap-3 px-5 py-3 rounded-2xl text-sm font-bold",
+              error ? "bg-rose-50 border border-rose-200 text-rose-700" : "bg-emerald-50 border border-emerald-200 text-emerald-700"
+            )}
+          >
+            {error ? <AlertCircle size={16} /> : <CheckCircle size={16} />}
+            <span>{error || successMsg}</span>
+            <button className="ml-auto" onClick={() => { setError(null); setSuccessMsg(null); }}>
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Target role input */}
+      <div className="flex items-center gap-3 bg-white rounded-2xl border border-slate-200 px-5 py-3">
+        <Target size={14} className="text-indigo-500 shrink-0" />
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">Target Role</label>
+        <input
+          type="text"
+          value={targetRole}
+          onChange={e => setTargetRole(e.target.value)}
+          placeholder="e.g. Senior Software Engineer"
+          className="flex-1 text-sm text-slate-800 placeholder-slate-400 focus:outline-none bg-transparent"
+        />
+      </div>
+
+      {/* Tab navigation */}
+      <div className="flex gap-1 bg-slate-100/80 rounded-2xl p-1">
+        {tabs.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setActiveTab(t.id)}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+              activeTab === t.id
+                ? "bg-white text-indigo-600 shadow-sm"
+                : "text-slate-500 hover:text-slate-700"
+            )}
+          >
+            <t.icon size={12} />
+            <span className="hidden sm:inline">{t.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* ── TAB: EDITOR ── */}
+      <AnimatePresence mode="wait">
+        {activeTab === "editor" && (
+          <motion.div key="editor" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+            {/* Upload zone always visible at top */}
+            <SectionCard title="Upload Resume" icon={Upload}>
+              <UploadZone onFile={handleFileUpload} isLoading={isLoading} />
+              {hasResume && (
+                <p className="text-xs text-slate-500 text-center">Uploading a new file will create a new version. Your edits below are preserved.</p>
+              )}
+            </SectionCard>
+
+            {/* Personal Info */}
+            <SectionCard title="Personal Information" icon={User}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <TextInput label="Full Name" value={content.personalInfo.name} onChange={v => updatePersonal("name", v)} placeholder="Jane Doe" />
+                <TextInput label="Email" value={content.personalInfo.email} onChange={v => updatePersonal("email", v)} placeholder="jane@example.com" />
+                <TextInput label="Phone" value={content.personalInfo.phone} onChange={v => updatePersonal("phone", v)} placeholder="+1 555 0100" />
+                <TextInput label="Location" value={content.personalInfo.location} onChange={v => updatePersonal("location", v)} placeholder="San Francisco, CA" />
+                <TextInput label="LinkedIn URL" value={content.personalInfo.linkedin} onChange={v => updatePersonal("linkedin", v)} placeholder="linkedin.com/in/jane" />
+                <TextInput label="Website / Portfolio" value={content.personalInfo.website} onChange={v => updatePersonal("website", v)} placeholder="janesmith.dev" />
+              </div>
+              <div className="flex items-start gap-2 mt-2">
+                <TextInput label="Professional Summary" value={content.personalInfo.summary} onChange={v => updatePersonal("summary", v)} placeholder="2-3 sentence professional summary…" multiline rows={4} />
+                <button
+                  onClick={() => handleGetSuggestions("summary", content.personalInfo.summary)}
+                  className="mt-6 shrink-0 flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                >
+                  <Sparkles size={11} /> AI
+                </button>
+              </div>
+            </SectionCard>
+
+            {/* Experience */}
+            <SectionCard title="Work Experience" icon={Briefcase}>
+              <div className="space-y-3">
+                {content.experience.map(exp => (
+                  <div key={exp.id} className="border border-slate-200 rounded-xl overflow-hidden">
+                    <button
+                      onClick={() => setExpandedExp(expandedExp === exp.id ? null : exp.id)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-black text-slate-800 truncate">{exp.position || "New Position"}</p>
+                        <p className="text-xs text-slate-500 truncate">{exp.company || "Company"} {exp.startDate && `· ${exp.startDate}`}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button onClick={e => { e.stopPropagation(); removeExp(exp.id); }} className="p-1 text-slate-400 hover:text-rose-500"><Trash2 size={13} /></button>
+                        {expandedExp === exp.id ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
+                      </div>
+                    </button>
+                    {expandedExp === exp.id && (
+                      <div className="p-4 space-y-4 border-t border-slate-200">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <TextInput label="Position" value={exp.position} onChange={v => updateExp(exp.id, "position", v)} />
+                          <TextInput label="Company" value={exp.company} onChange={v => updateExp(exp.id, "company", v)} />
+                          <TextInput label="Start Date" value={exp.startDate} onChange={v => updateExp(exp.id, "startDate", v)} placeholder="2022-01" />
+                          <TextInput label="End Date" value={exp.endDate} onChange={v => updateExp(exp.id, "endDate", v)} placeholder="2024-06 or present" />
+                        </div>
+                        <label className="flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer">
+                          <input type="checkbox" checked={exp.isCurrentRole} onChange={e => updateExp(exp.id, "isCurrentRole", e.target.checked)} className="rounded" />
+                          Currently working here
+                        </label>
+                        <div className="flex items-start gap-2">
+                          <TextInput label="Description" value={exp.description} onChange={v => updateExp(exp.id, "description", v)} multiline rows={3} />
+                          <button
+                            onClick={() => handleGetSuggestions("experience", `${exp.position} at ${exp.company}: ${exp.description}`)}
+                            className="mt-6 shrink-0 flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                          >
+                            <Sparkles size={11} /> AI
+                          </button>
+                        </div>
+                        <TagInput label="Key Achievements" tags={exp.achievements} onChange={v => updateExp(exp.id, "achievements", v)} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button onClick={addExperience} className="flex items-center gap-2 text-indigo-600 text-xs font-black uppercase tracking-widest hover:text-indigo-500 transition-colors">
+                <Plus size={14} /> Add Experience
+              </button>
+            </SectionCard>
+
+            {/* Education */}
+            <SectionCard title="Education" icon={GraduationCap}>
+              <div className="space-y-3">
+                {content.education.map(edu => (
+                  <div key={edu.id} className="border border-slate-200 rounded-xl overflow-hidden">
+                    <button
+                      onClick={() => setExpandedEdu(expandedEdu === edu.id ? null : edu.id)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-black text-slate-800 truncate">{edu.degree || "Degree"} {edu.fieldOfStudy && `in ${edu.fieldOfStudy}`}</p>
+                        <p className="text-xs text-slate-500 truncate">{edu.institution || "Institution"}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button onClick={e => { e.stopPropagation(); removeEdu(edu.id); }} className="p-1 text-slate-400 hover:text-rose-500"><Trash2 size={13} /></button>
+                        {expandedEdu === edu.id ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
+                      </div>
+                    </button>
+                    {expandedEdu === edu.id && (
+                      <div className="p-4 space-y-4 border-t border-slate-200">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <TextInput label="Institution" value={edu.institution} onChange={v => updateEdu(edu.id, "institution", v)} />
+                          <TextInput label="Degree" value={edu.degree} onChange={v => updateEdu(edu.id, "degree", v)} placeholder="Bachelor of Science" />
+                          <TextInput label="Field of Study" value={edu.fieldOfStudy} onChange={v => updateEdu(edu.id, "fieldOfStudy", v)} />
+                          <TextInput label="GPA" value={edu.gpa} onChange={v => updateEdu(edu.id, "gpa", v)} placeholder="3.8 / 4.0" />
+                          <TextInput label="Start Date" value={edu.startDate} onChange={v => updateEdu(edu.id, "startDate", v)} placeholder="2018-09" />
+                          <TextInput label="End Date" value={edu.endDate} onChange={v => updateEdu(edu.id, "endDate", v)} placeholder="2022-05" />
+                        </div>
+                        <TagInput label="Achievements / Honours" tags={edu.achievements} onChange={v => updateEdu(edu.id, "achievements", v)} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button onClick={addEducation} className="flex items-center gap-2 text-indigo-600 text-xs font-black uppercase tracking-widest hover:text-indigo-500 transition-colors">
+                <Plus size={14} /> Add Education
+              </button>
+            </SectionCard>
+
+            {/* Skills */}
+            <SectionCard title="Skills" icon={Code}>
+              <div className="space-y-4">
+                <TagInput label="Technical Skills" tags={content.skills.technical} onChange={v => updateSkills("technical", v)} />
+                <TagInput label="Soft Skills" tags={content.skills.soft} onChange={v => updateSkills("soft", v)} />
+                <TagInput label="Languages" tags={content.skills.languages} onChange={v => updateSkills("languages", v)} />
+                <TagInput label="Certifications" tags={content.skills.certifications} onChange={v => updateSkills("certifications", v)} />
+              </div>
+              <div className="flex justify-end mt-2">
+                <button
+                  onClick={() => handleGetSuggestions("skills", content.skills.technical.join(", "))}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                >
+                  <Sparkles size={11} /> Suggest Missing Skills
+                </button>
+              </div>
+            </SectionCard>
+
+            {/* Awards */}
+            <SectionCard title="Awards & Honours" icon={Award}>
+              <TagInput label="Awards" tags={content.awards} onChange={v => setContent(c => ({ ...c, awards: v }))} />
+            </SectionCard>
+
+            {/* AI Suggestions Panel */}
+            <AnimatePresence>
+              {(isSuggLoading || suggestions.length > 0) && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                  className="bg-indigo-50 rounded-2xl border border-indigo-200 p-5 space-y-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <Lightbulb size={14} className="text-indigo-500" />
+                    <p className="text-xs font-black uppercase tracking-widest text-indigo-700">
+                      AI Suggestions — {suggestionSection}
+                    </p>
+                    <button onClick={() => setSuggestions([])} className="ml-auto text-slate-400 hover:text-slate-600"><X size={13} /></button>
+                  </div>
+                  {isSuggLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-indigo-600"><Loader2 size={14} className="animate-spin" /> Generating…</div>
+                  ) : (
+                    <ul className="space-y-2">
+                      {suggestions.map((s, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
+                          <span className="shrink-0 w-5 h-5 rounded-full bg-indigo-200 text-indigo-700 flex items-center justify-center text-[10px] font-black mt-0.5">{i + 1}</span>
+                          {s}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Save button */}
+            <div className="flex justify-end">
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-200"
+              >
+                {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                {isSaving ? "Saving…" : "Save & Run ATS Check"}
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── TAB: ATS CHECKER ── */}
+        {activeTab === "ats" && (
+          <motion.div key="ats" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-slate-600">Analyse your resume against ATS systems and get actionable improvements.</p>
+              <button
+                onClick={handleATSCheck}
+                disabled={isAtsLoading}
+                className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+              >
+                {isAtsLoading ? <Loader2 size={13} className="animate-spin" /> : <Shield size={13} />}
+                {isAtsLoading ? "Analysing…" : "Run ATS Check"}
+              </button>
+            </div>
+
+            {!atsReport && !isAtsLoading && (
+              <div className="text-center py-20 text-slate-400">
+                <Shield size={40} className="mx-auto mb-4 opacity-30" />
+                <p className="font-bold">No ATS report yet</p>
+                <p className="text-xs mt-1">Upload a resume or run a check above</p>
+              </div>
+            )}
+
+            {isAtsLoading && (
+              <div className="flex flex-col items-center py-20 gap-4 text-slate-500">
+                <Loader2 size={36} className="text-indigo-500 animate-spin" />
+                <p className="font-bold text-sm">Running ATS analysis…</p>
+              </div>
+            )}
+
+            {atsReport && !isAtsLoading && (
+              <div className="space-y-5">
+                {/* Score overview */}
+                <div className="bg-white rounded-2xl border border-slate-200 p-6">
+                  <div className="flex items-center gap-8">
+                    <ScoreRing score={atsReport.score} size={96} />
+                    <div className="flex-1">
+                      <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-1">Overall ATS Score</p>
+                      <p className={cn("text-4xl font-black mb-2", scoreColor(atsReport.score))}>{atsReport.score}/100</p>
+                      <p className="text-sm text-slate-600">{atsReport.summary}</p>
+                    </div>
+                  </div>
+                  {/* Section scores */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
+                    {(["keywords", "formatting", "content", "structure"] as const).map(sec => (
+                      <div key={sec} className={cn("rounded-xl border px-4 py-3 text-center", scoreBg(atsReport.sections[sec].score))}>
+                        <p className={cn("text-2xl font-black", scoreColor(atsReport.sections[sec].score))}>{atsReport.sections[sec].score}</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-0.5">{sec}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Keywords */}
+                <SectionCard title="Keywords Analysis" icon={TrendingUp}>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-2">Found Keywords</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {atsReport.sections.keywords.found.map(k => (
+                          <span key={k} className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[11px] font-bold rounded-lg">{k}</span>
+                        ))}
+                        {atsReport.sections.keywords.found.length === 0 && <span className="text-xs text-slate-400">None detected</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-rose-600 mb-2">Missing Keywords</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {atsReport.sections.keywords.missing.map(k => (
+                          <span key={k} className="px-2 py-0.5 bg-rose-50 text-rose-700 text-[11px] font-bold rounded-lg">{k}</span>
+                        ))}
+                        {atsReport.sections.keywords.missing.length === 0 && <span className="text-xs text-slate-400">All key terms present</span>}
+                      </div>
+                    </div>
+                  </div>
+                </SectionCard>
+
+                {/* Suggestions */}
+                <SectionCard title="Actionable Suggestions" icon={Lightbulb}>
+                  <div className="space-y-3">
+                    {atsReport.suggestions.map((s, i) => (
+                      <div key={i} className="flex items-start gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                        <span className={cn("shrink-0 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest", priorityBadge(s.priority))}>
+                          {s.priority}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-800">{s.issue}</p>
+                          <p className="text-xs text-indigo-600 mt-1 font-medium">→ {s.fix}</p>
+                        </div>
+                        <span className="shrink-0 text-[10px] text-slate-400 uppercase tracking-widest">{s.category}</span>
+                      </div>
+                    ))}
+                    {atsReport.suggestions.length === 0 && (
+                      <p className="text-sm text-emerald-600 font-bold text-center py-4">No suggestions — excellent resume!</p>
+                    )}
+                  </div>
+                </SectionCard>
+
+                {/* Formatting & structure issues */}
+                {(atsReport.sections.formatting.issues.length > 0 || atsReport.sections.structure.issues.length > 0) && (
+                  <SectionCard title="Formatting & Structure Issues" icon={AlertCircle}>
+                    <div className="space-y-2">
+                      {[...atsReport.sections.formatting.issues, ...atsReport.sections.structure.issues].map((issue, i) => (
+                        <div key={i} className="flex items-start gap-2 text-sm text-slate-700">
+                          <AlertCircle size={13} className="text-amber-500 shrink-0 mt-0.5" />
+                          {issue}
+                        </div>
+                      ))}
+                    </div>
+                  </SectionCard>
+                )}
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* ── TAB: VERSIONS ── */}
+        {activeTab === "versions" && (
+          <motion.div key="versions" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+            <p className="text-sm text-slate-600">Every save and upload creates a snapshot. Restore any past version instantly.</p>
+            {versions.length === 0 ? (
+              <div className="text-center py-20 text-slate-400">
+                <Clock size={40} className="mx-auto mb-4 opacity-30" />
+                <p className="font-bold">No versions yet</p>
+                <p className="text-xs mt-1">Upload or save your resume to start version history</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {versions.map(v => (
+                  <div
+                    key={v.id}
+                    className={cn(
+                      "flex items-center gap-4 bg-white rounded-2xl border px-5 py-4 transition-all",
+                      v.id === currentVersionId ? "border-indigo-300 shadow-sm shadow-indigo-100" : "border-slate-200 hover:border-slate-300"
+                    )}
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                      <FileText size={14} className="text-slate-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-black text-slate-800">v{v.versionNumber}</span>
+                        {v.id === currentVersionId && (
+                          <span className="px-2 py-0.5 bg-indigo-100 text-indigo-600 text-[9px] font-black rounded-lg uppercase tracking-widest">Current</span>
+                        )}
+                        {v.fileFormat && (
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[9px] font-black rounded-lg uppercase">{v.fileFormat}</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 truncate">{v.changeSummary || "—"}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">{new Date(v.createdAt).toLocaleString()}</p>
+                    </div>
+                    {v.atsScore !== undefined && v.atsScore !== null && (
+                      <div className={cn("text-center px-3 py-1.5 rounded-xl border", scoreBg(v.atsScore))}>
+                        <p className={cn("text-lg font-black leading-none", scoreColor(v.atsScore))}>{v.atsScore}</p>
+                        <p className="text-[9px] text-slate-400 uppercase tracking-widest">ATS</p>
+                      </div>
+                    )}
+                    {v.id !== currentVersionId && (
+                      <button
+                        onClick={() => handleRestoreVersion(v.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                      >
+                        <RotateCcw size={11} /> Restore
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* ── TAB: PORTFOLIO ── */}
+        {activeTab === "portfolio" && (
+          <motion.div key="portfolio" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-5">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-slate-600">Showcase your projects, open source contributions, and side work.</p>
+              <button
+                onClick={openCreateProject}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+              >
+                <Plus size={13} /> Add Project
+              </button>
+            </div>
+
+            {portfolioProjects.length === 0 && !showPortfolioForm && (
+              <div className="text-center py-20 text-slate-400">
+                <FolderGit2 size={40} className="mx-auto mb-4 opacity-30" />
+                <p className="font-bold">No projects yet</p>
+                <p className="text-xs mt-1">Add your first project to build your portfolio</p>
+              </div>
+            )}
+
+            {/* Project cards grid */}
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {portfolioProjects.map(p => (
+                <div key={p.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
+                  {p.imageUrl && (
+                    <img src={p.imageUrl} alt={p.title} className="w-full h-32 object-cover" />
+                  )}
+                  <div className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          {p.featured && <Star size={11} className="text-amber-400 fill-amber-400" />}
+                          <h3 className="text-sm font-black text-slate-900">{p.title}</h3>
+                        </div>
+                        {p.role && <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">{p.role}</p>}
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <button onClick={() => openEditProject(p)} className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50"><Edit3 size={12} /></button>
+                        <button onClick={() => handleDeleteProject(p.id)} className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50"><Trash2 size={12} /></button>
+                      </div>
+                    </div>
+
+                    {p.description && <p className="text-xs text-slate-600 line-clamp-2">{p.description}</p>}
+
+                    {p.techStack.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {p.techStack.slice(0, 5).map(t => (
+                          <span key={t} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded-md">{t}</span>
+                        ))}
+                        {p.techStack.length > 5 && <span className="text-[10px] text-slate-400">+{p.techStack.length - 5}</span>}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                      {p.projectUrl && (
+                        <a href={p.projectUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[10px] text-indigo-600 hover:text-indigo-500 font-bold">
+                          <ExternalLink size={10} /> Live
+                        </a>
+                      )}
+                      {p.repoUrl && (
+                        <a href={p.repoUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-700 font-bold">
+                          <Github size={10} /> Repo
+                        </a>
+                      )}
+                      {p.startDate && (
+                        <span className="ml-auto text-[10px] text-slate-400">{p.startDate} {p.isOngoing ? "– Present" : p.endDate ? `– ${p.endDate}` : ""}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Portfolio form modal */}
+            <AnimatePresence>
+              {showPortfolioForm && (
+                <motion.div
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                  onClick={e => { if (e.target === e.currentTarget) setShowPortfolioForm(false); }}
+                >
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+                    className="bg-white rounded-3xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto"
+                  >
+                    <div className="sticky top-0 bg-white/95 backdrop-blur-sm flex items-center justify-between px-6 py-4 border-b border-slate-100 z-10">
+                      <h2 className="text-sm font-black uppercase tracking-widest text-slate-800">
+                        {editingProject ? "Edit Project" : "New Project"}
+                      </h2>
+                      <button onClick={() => setShowPortfolioForm(false)} className="p-1.5 text-slate-400 hover:text-slate-700"><X size={16} /></button>
+                    </div>
+                    <div className="p-6 space-y-4">
+                      <TextInput label="Project Title *" value={projectForm.title} onChange={v => setProjectForm(f => ({ ...f, title: v }))} placeholder="CareerVision AI" />
+                      <TextInput label="Your Role" value={projectForm.role || ""} onChange={v => setProjectForm(f => ({ ...f, role: v }))} placeholder="Lead Developer" />
+                      <TextInput label="Description" value={projectForm.description || ""} onChange={v => setProjectForm(f => ({ ...f, description: v }))} multiline rows={3} placeholder="Describe what the project does and your contributions…" />
+                      <TagInput label="Tech Stack" tags={projectForm.techStack} onChange={v => setProjectForm(f => ({ ...f, techStack: v }))} />
+                      <div className="grid grid-cols-2 gap-4">
+                        <TextInput label="Start Date" value={projectForm.startDate || ""} onChange={v => setProjectForm(f => ({ ...f, startDate: v }))} placeholder="2023-01" />
+                        <TextInput label="End Date" value={projectForm.endDate || ""} onChange={v => setProjectForm(f => ({ ...f, endDate: v }))} placeholder="2024-06" />
+                      </div>
+                      <label className="flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer">
+                        <input type="checkbox" checked={projectForm.isOngoing} onChange={e => setProjectForm(f => ({ ...f, isOngoing: e.target.checked }))} className="rounded" />
+                        Ongoing project
+                      </label>
+                      <TextInput label="Live URL" value={projectForm.projectUrl || ""} onChange={v => setProjectForm(f => ({ ...f, projectUrl: v }))} placeholder="https://careervision.ai" />
+                      <TextInput label="Repository URL" value={projectForm.repoUrl || ""} onChange={v => setProjectForm(f => ({ ...f, repoUrl: v }))} placeholder="https://github.com/..." />
+                      <TextInput label="Cover Image URL" value={projectForm.imageUrl || ""} onChange={v => setProjectForm(f => ({ ...f, imageUrl: v }))} placeholder="https://..." />
+                      <TagInput label="Tags" tags={projectForm.tags} onChange={v => setProjectForm(f => ({ ...f, tags: v }))} />
+                      <label className="flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer">
+                        <input type="checkbox" checked={projectForm.featured} onChange={e => setProjectForm(f => ({ ...f, featured: e.target.checked }))} className="rounded" />
+                        Featured project
+                      </label>
+                    </div>
+                    <div className="px-6 pb-6 flex gap-3 justify-end">
+                      <button onClick={() => setShowPortfolioForm(false)} className="px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-600 hover:text-slate-800 rounded-xl bg-slate-100 hover:bg-slate-200 transition-all">Cancel</button>
+                      <button
+                        onClick={handleSaveProject}
+                        disabled={isSaving}
+                        className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                      >
+                        {isSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                        {isSaving ? "Saving…" : "Save Project"}
+                      </button>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default ResumeManager;
