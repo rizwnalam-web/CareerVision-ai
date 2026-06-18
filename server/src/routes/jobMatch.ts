@@ -5,10 +5,10 @@ import {
   predictSalary,
   assessCultureFit,
   buildLearningPath,
+  type ResumeContent,
   type JobListingRow,
   type JobMatchAnalysis,
 } from "../services/jobMatchService.js";
-import type { ResumeContent } from "../types/career.js";
 
 const router = Router();
 

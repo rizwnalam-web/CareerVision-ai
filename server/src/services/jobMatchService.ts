@@ -1,5 +1,16 @@
 import { generateDeepSeekResponse } from "./deepseekService.js";
-import type { ResumeContent } from "../types/career.js";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ResumeContent — defined here so all consumers import from this module
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ResumeContent {
+  personalInfo: { name?: string; email?: string; phone?: string; location?: string; summary?: string };
+  experience?: Array<{ position: string; company: string; startDate?: string; endDate?: string; description?: string }>;
+  education?: Array<{ degree: string; fieldOfStudy: string; institution: string; graduationYear?: string }>;
+  skills?: { technical?: string[]; soft?: string[]; certifications?: string[] };
+  awards?: string[];
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared types
@@ -102,7 +113,7 @@ function resumeToText(c: ResumeContent): string {
 
   if (c.experience?.length) {
     parts.push("Experience:");
-    c.experience.forEach(e =>
+    c.experience.forEach((e: { position: string; company: string; startDate?: string; endDate?: string }) =>
       parts.push(`  ${e.position} at ${e.company} (${e.startDate}–${e.endDate || "present"})`)
     );
   }
@@ -116,7 +127,7 @@ function resumeToText(c: ResumeContent): string {
   }
   if (c.education?.length) {
     parts.push("Education:");
-    c.education.forEach(e =>
+    c.education.forEach((e: { degree: string; fieldOfStudy: string; institution: string }) =>
       parts.push(`  ${e.degree} in ${e.fieldOfStudy} from ${e.institution}`)
     );
   }
