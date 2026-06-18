@@ -936,7 +936,15 @@ const COUNTRY_FILTERS: { flag: string; label: string; query: string | null }[] =
   { flag: '🇳🇱', label: 'Netherlands', query: 'top 10 most in-demand jobs in Netherlands 2026' },
 ];
 
-const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading, onInitInterview, onAiCareerSearch, isAiCareerLoading, aiCareerSearchMessage, onNavigate, dashboardIntel, isDashboardIntelLoading, onResetToGlobal }: { profile: UserProfile, onSelectPath: (id: string) => void, onSelectByTitle: (title: string) => void, careers: CareerPath[], isLoading: boolean, onInitInterview: (role: string, company?: string) => void, onAiCareerSearch: (query: string) => Promise<void>, isAiCareerLoading: boolean, aiCareerSearchMessage: string, onNavigate: (view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs') => void, dashboardIntel: DashboardIntelligence | null, isDashboardIntelLoading: boolean, onResetToGlobal: () => Promise<void> }) => {
+// Static preview tiles shown when no personalised sector data is available yet
+const SECTOR_PLACEHOLDERS = [
+  { name: 'Technology',      status: 'Hot'      as const, color: '#818cf8', trend: '+8.4% hiring velocity',  spark: [{v:70},{v:75},{v:72},{v:80},{v:85},{v:88},{v:92}] },
+  { name: 'Healthcare',      status: 'Rising'   as const, color: '#34d399', trend: '+6.2% demand surge',     spark: [{v:60},{v:65},{v:68},{v:72},{v:75},{v:80},{v:87}] },
+  { name: 'Finance',         status: 'Stable'   as const, color: '#60a5fa', trend: 'Steady market signals',  spark: [{v:74},{v:76},{v:75},{v:78},{v:77},{v:79},{v:78}] },
+  { name: "Gov't & Defence", status: 'Emerging' as const, color: '#fbbf24', trend: '+12% new openings',      spark: [{v:40},{v:45},{v:50},{v:55},{v:58},{v:62},{v:65}] },
+];
+
+const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading, onInitInterview, onAiCareerSearch, isAiCareerLoading, aiCareerSearchMessage, onNavigate, dashboardIntel, isDashboardIntelLoading, onResetToGlobal }: { profile: UserProfile, onSelectPath: (id: string) => void, onSelectByTitle: (title: string) => void, careers: CareerPath[], isLoading: boolean, onInitInterview: (role: string, company?: string) => void, onAiCareerSearch: (query: string) => Promise<void>, isAiCareerLoading: boolean, aiCareerSearchMessage: string, onNavigate: (view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'resume' | 'interview') => void, dashboardIntel: DashboardIntelligence | null, isDashboardIntelLoading: boolean, onResetToGlobal: () => Promise<void> }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedPath, setExpandedPath] = useState<string | null>(null);
   const [skillGapCache, setSkillGapCache] = useState<Record<string, CareerSkillGap[]>>({});
@@ -1057,6 +1065,19 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
   const openActionCount = nextActions.length;
   const openActionValue = openActionCount > 0 ? `${openActionCount} pending` : 'Ready';
 
+  // Profile setup milestones (gamified)
+  const profileMilestones: Array<{ label: string; xp: number; done: boolean; nav: Parameters<typeof onNavigate>[0] | null }> = [
+    { label: 'Set Target Career',       xp: 15, done: !!profile.targetCareerId,                    nav: null },
+    { label: 'Set Target Location',     xp: 10, done: !!profile.targetLocation,                    nav: null },
+    { label: 'Build Financial Profile', xp: 20, done: !!(profile.financialProfile?.monthlyBudget), nav: 'expenses' },
+    { label: 'Upload Your Resume',      xp: 20, done: false,                                        nav: 'resume' },
+    { label: 'Run a Mock Interview',    xp: 25, done: false,                                        nav: 'interview' },
+    { label: 'Explore Career Maps',     xp: 10, done: false,                                        nav: 'roadmap' },
+  ];
+  const milestonesDone = profileMilestones.filter(m => m.done).length;
+  const milestonesProgress = Math.round((milestonesDone / profileMilestones.length) * 100);
+  const firstPendingMilestoneIdx = profileMilestones.findIndex(m => !m.done);
+
   const sectorData = dashboardIntel?.sectors ?? [];
   const [activeSector, setActiveSector] = useState<string>('');
   const [showAllPaths, setShowAllPaths] = useState(false);
@@ -1077,6 +1098,7 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
   type ExecSyncItem = {
     label: string;
     sublabel: string;
+    kpi: string;
     icon: React.ElementType;
     view: 'institutions' | 'heatmap' | 'expenses' | 'jobs';
     iconBg: string;
@@ -1097,6 +1119,7 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
     {
       label: 'Visa Hub',
       sublabel: profile.targetVisaType ? `${profile.targetVisaType}` : 'Review Required',
+      kpi: !profile.targetVisaType ? '2 Pending' : docsCompleted > 0 ? `${docsCompleted} Docs` : 'Visa Set',
       icon: Globe,
       view: 'institutions',
       iconBg: 'bg-indigo-100',
@@ -1110,6 +1133,7 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
     {
       label: 'Markets',
       sublabel: `${targetLoc}: Live`,
+      kpi: profile.targetLocation ? 'Live' : 'Offline',
       icon: BarChart3,
       view: 'heatmap',
       iconBg: 'bg-emerald-100',
@@ -1123,6 +1147,7 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
     {
       label: 'Budget',
       sublabel: hasExpenses ? `$${monthlyExpenseTotal.toLocaleString()}/mo` : 'Not set',
+      kpi: hasExpenses ? `$${monthlyExpenseTotal >= 1000 ? (monthlyExpenseTotal / 1000).toFixed(1) + 'K' : monthlyExpenseTotal}` : 'Not Set',
       icon: PiggyBank,
       view: 'expenses',
       iconBg: 'bg-amber-100',
@@ -1136,6 +1161,7 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
     {
       label: 'Network',
       sublabel: careers.length > 0 ? `${careers.length} paths active` : 'Explore Listings',
+      kpi: careers.length > 0 ? `${careers.length} Active` : 'Explore',
       icon: Briefcase,
       view: 'jobs',
       iconBg: 'bg-purple-100',
@@ -1264,20 +1290,87 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
           {/* Next Actions panel */}
           <div className="border-t border-slate-100 pt-5">
             <div className="flex items-center justify-between mb-4">
-              <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Next Actions</h5>
+              <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                {nextActions.length === 0 && !isDashboardIntelLoading ? 'Setup Guide' : 'Next Actions'}
+              </h5>
               {isDashboardIntelLoading ? (
                 <div className="w-14 h-4 bg-slate-100 rounded-full animate-pulse" />
+              ) : nextActions.length === 0 ? (
+                <span className="text-[7px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">{milestonesProgress}% setup</span>
               ) : (
                 <span className="text-[7px] font-black text-indigo-500 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">{nextActions.length} pending</span>
               )}
             </div>
             <div className="space-y-2">
               {isDashboardIntelLoading ? (
-                [0,1,2].map(i => (
-                  <div key={i} className="h-14 bg-slate-50 rounded-2xl border border-slate-100 animate-pulse" />
+                [0, 1, 2].map(i => (
+                  <div key={i} className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                    <div className="w-7 h-7 rounded-xl bg-slate-200 animate-pulse shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-2 rounded-full bg-slate-200 animate-pulse" style={{ width: ['75%','60%','50%'][i] }} />
+                      <div className="h-1.5 w-14 rounded-full bg-slate-100 animate-pulse" />
+                    </div>
+                    <div className="w-9 h-3.5 rounded-full bg-slate-200 animate-pulse" />
+                  </div>
                 ))
               ) : nextActions.length === 0 ? (
-                <p className="text-[10px] text-slate-400 text-center py-3">No actions yet — AI is analyzing your profile.</p>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 py-1">
+                    <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${milestonesProgress}%` }}
+                        transition={{ duration: 1, ease: 'easeOut' }}
+                        className="h-full bg-gradient-to-r from-indigo-400 to-indigo-600 rounded-full"
+                      />
+                    </div>
+                    <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest shrink-0">{milestonesDone}/{profileMilestones.length}</span>
+                  </div>
+                  {profileMilestones.map((m, i) => {
+                    const isNext = i === firstPendingMilestoneIdx;
+                    return (
+                      <motion.button
+                        key={i}
+                        whileHover={!m.done ? { x: 2 } : {}}
+                        onClick={() => m.nav && onNavigate(m.nav)}
+                        disabled={!m.nav && !m.done}
+                        className={cn(
+                          'w-full flex items-center gap-3 p-3 rounded-2xl border text-left transition-all',
+                          m.done
+                            ? 'bg-emerald-50/60 border-emerald-100'
+                            : isNext
+                              ? 'bg-indigo-50 border-indigo-200 cursor-pointer'
+                              : 'bg-slate-50 border-slate-100 cursor-pointer hover:border-slate-200'
+                        )}
+                      >
+                        <div className={cn(
+                          'w-7 h-7 rounded-xl flex items-center justify-center shrink-0',
+                          m.done ? 'bg-emerald-500' : isNext ? 'bg-indigo-600' : 'bg-slate-200'
+                        )}>
+                          {m.done
+                            ? <Check size={11} className="text-white" />
+                            : <span className={cn('text-[9px] font-black', isNext ? 'text-white' : 'text-slate-400')}>{i + 1}</span>}
+                        </div>
+                        <p className={cn(
+                          'flex-1 text-[9px] font-black uppercase tracking-widest truncate',
+                          m.done ? 'text-emerald-700' : isNext ? 'text-indigo-900' : 'text-slate-400'
+                        )}>
+                          {m.label}
+                        </p>
+                        <span className={cn(
+                          'text-[8px] font-black px-2 py-0.5 rounded-full shrink-0 uppercase tracking-widest',
+                          m.done
+                            ? 'bg-emerald-100 text-emerald-600'
+                            : isNext
+                              ? 'bg-indigo-100 text-indigo-600 border border-indigo-200'
+                              : 'bg-slate-100 text-slate-400'
+                        )}>
+                          +{m.xp}%
+                        </span>
+                      </motion.button>
+                    );
+                  })}
+                </div>
               ) : nextActions.map((action, i) => (
                 <motion.div
                   key={i}
@@ -1394,10 +1487,10 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
               {/* Live mini-stats */}
               <div className="flex flex-wrap gap-2.5 mb-7">
                 {[
-                  { label: 'Market', value: 'Hot 🔥', bg: 'bg-rose-500/15 border-rose-500/25', text: 'text-rose-300' },
-                  { label: 'Profile Fit', value: `${READINESS}%`, bg: 'bg-indigo-500/15 border-indigo-500/25', text: 'text-indigo-300' },
-                  { label: 'Top Sector', value: activeSectorObj.name || 'TBD', bg: 'bg-emerald-500/15 border-emerald-500/25', text: 'text-emerald-300' },
-                  { label: 'Open Actions', value: openActionValue, bg: 'bg-purple-500/15 border-purple-500/25', text: 'text-purple-300' },
+                  { label: 'Market',       value: 'Hot 🔥',                       bg: 'bg-amber-500/15 border-amber-500/25',                                                                                         text: 'text-amber-300'   },
+                  { label: 'Profile Fit',  value: `${READINESS}%`,                bg: 'bg-blue-500/15 border-blue-500/25',                                                                                           text: 'text-blue-300'    },
+                  { label: 'Top Sector',   value: activeSectorObj.name || 'TBD',  bg: hasSectorData ? 'bg-emerald-500/15 border-emerald-500/25' : 'bg-blue-500/15 border-blue-500/25',     text: hasSectorData ? 'text-emerald-300' : 'text-blue-300' },
+                  { label: 'Open Actions', value: openActionValue,                 bg: openActionCount > 0 ? 'bg-amber-500/15 border-amber-500/25' : 'bg-emerald-500/15 border-emerald-500/25', text: openActionCount > 0 ? 'text-amber-300' : 'text-emerald-300' },
                 ].map(stat => (
                   <div key={stat.label} className={`flex flex-col px-3.5 py-2 rounded-xl border ${stat.bg}`}>
                     <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest leading-none">{stat.label}</span>
@@ -1469,8 +1562,23 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
 
           {/* Directory content */}
           {isJobDirLoading ? (
-            <div className="space-y-3">
-              {[...Array(5)].map((_, i) => <div key={i} className="h-14 bg-slate-100 rounded-2xl animate-pulse" />)}
+            <div className="space-y-2">
+              {[
+                { w1: '42%', w2: '65%' },
+                { w1: '58%', w2: '48%' },
+                { w1: '35%', w2: '72%' },
+                { w1: '63%', w2: '52%' },
+                { w1: '47%', w2: '80%' },
+              ].map((ws, i) => (
+                <div key={i} className="flex items-center gap-3.5 px-5 py-3.5 rounded-2xl bg-white border border-slate-100 shadow-sm">
+                  <div className="w-9 h-9 rounded-xl bg-slate-100 animate-pulse shrink-0" />
+                  <div className="flex-1 space-y-2 min-w-0">
+                    <div className="h-2.5 rounded-full bg-slate-200 animate-pulse" style={{ width: ws.w1 }} />
+                    <div className="h-1.5 rounded-full bg-slate-100 animate-pulse" style={{ width: ws.w2 }} />
+                  </div>
+                  <div className="h-5 w-10 rounded-full bg-slate-100 animate-pulse shrink-0" />
+                </div>
+              ))}
             </div>
           ) : jobDirError ? (
             <div className="py-12 bg-rose-50 rounded-3xl border border-rose-100 flex flex-col items-center gap-3">
@@ -1558,12 +1666,46 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
             <div className="space-y-2">
               {isDashboardIntelLoading ? (
                 [0,1,2,3].map(i => (
-                  <div key={i} className="h-14 rounded-2xl bg-white/10 animate-pulse" />
+                  <div key={i} className="p-3 rounded-2xl border border-white/10 bg-white/[0.04]">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <div className="h-2.5 rounded-full bg-white/20 animate-pulse" style={{ width: ['55%','42%','62%','48%'][i] }} />
+                          <div className="h-3.5 w-9 rounded-md bg-white/10 animate-pulse" />
+                        </div>
+                        <div className="h-1.5 w-24 rounded-full bg-white/10 animate-pulse" />
+                      </div>
+                      <div className="w-20 h-9 shrink-0 flex items-end gap-0.5 px-1">
+                        {[40,55,48,62,58,70,65].map((h, j) => (
+                          <div key={j} className="flex-1 rounded-sm bg-white/20 animate-pulse" style={{ height: `${h}%`, animationDelay: `${j * 80}ms` }} />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 ))
               ) : !hasSectorData ? (
-                <div className="text-[10px] text-white/70 text-center py-6">
-                  <p className="font-black uppercase tracking-widest mb-2">Sector insights locked</p>
-                  <p className="text-[9px] text-white/60">Complete your profile or pick a target career to unlock market health signals.</p>
+                <div className="space-y-2">
+                  {SECTOR_PLACEHOLDERS.map(sector => (
+                    <div key={sector.name} className="p-3 rounded-2xl border border-white/10 bg-white/[0.04] opacity-60">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="text-[10px] font-black uppercase tracking-tight truncate text-white/70">{sector.name}</span>
+                            <span className={`text-[6px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-widest shrink-0 ${sector.status === 'Hot' ? 'bg-amber-500/30 text-amber-300' : sector.status === 'Rising' ? 'bg-emerald-500/30 text-emerald-300' : sector.status === 'Stable' ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-500/30 text-blue-300'}`}>{sector.status}</span>
+                          </div>
+                          <span className="text-[8px] font-black" style={{ color: sector.color }}>{sector.trend}</span>
+                        </div>
+                        <div className="w-20 h-9 shrink-0">
+                          <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                            <LineChart data={sector.spark}>
+                              <Line type="monotone" dataKey="v" stroke={sector.color} strokeWidth={1.5} dot={false} activeDot={false} strokeOpacity={0.5} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <p className="text-[8px] text-white/30 text-center font-black uppercase tracking-widest pt-1">Set your career to unlock live sectors</p>
                 </div>
               ) : sectorData.map(sector => (
                 <div
@@ -1575,7 +1717,7 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-0.5">
                         <span className="text-[10px] font-black uppercase tracking-tight truncate">{sector.name}</span>
-                        <span className={`text-[6px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-widest shrink-0 ${sector.status === 'Hot' ? 'bg-rose-500/30 text-rose-300' : sector.status === 'Rising' ? 'bg-emerald-500/30 text-emerald-300' : sector.status === 'Stable' ? 'bg-blue-500/30 text-blue-300' : 'bg-amber-500/30 text-amber-300'}`}>{sector.status}</span>
+                        <span className={`text-[6px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-widest shrink-0 ${sector.status === 'Hot' ? 'bg-amber-500/30 text-amber-300' : sector.status === 'Rising' ? 'bg-emerald-500/30 text-emerald-300' : sector.status === 'Stable' ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-500/30 text-blue-300'}`}>{sector.status}</span>
                       </div>
                       <span className="text-[8px] font-black" style={{ color: sector.color }}>{sector.trend}</span>
                     </div>
@@ -1651,16 +1793,18 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
                       <button
                         key={item.label}
                         onClick={() => onNavigate(item.view)}
-                        className={`p-3.5 rounded-[1.5rem] border ${item.border} ${item.bg} flex flex-col items-start gap-2 transition-all group active:scale-95 hover:shadow-md text-left`}
+                        className={`p-3.5 rounded-[1.5rem] border ${item.border} ${item.bg} flex flex-col items-start gap-1.5 transition-all group active:scale-95 hover:shadow-md text-left`}
                       >
                         <div className="flex items-start justify-between w-full">
-                          <div className={`w-9 h-9 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                            <Icon size={16} className={item.iconColor} />
+                          <div className={`w-8 h-8 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform shrink-0`}>
+                            <Icon size={14} className={item.iconColor} />
                           </div>
+                          {item.urgent && <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse shrink-0 mt-1" />}
                         </div>
-                        <div>
+                        <div className="w-full min-w-0">
+                          <p className={`text-[13px] font-black leading-none mb-1 ${item.statusColor}`}>{item.kpi}</p>
                           <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest leading-none">{item.label}</p>
-                          <p className={`text-[7px] font-bold mt-0.5 leading-none ${item.statusColor}`}>{item.sublabel}</p>
+                          <p className={`text-[7px] font-medium mt-0.5 leading-snug ${item.statusColor} opacity-80`}>{item.sublabel}</p>
                         </div>
                       </button>
                     );
@@ -1677,16 +1821,17 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
                     <button
                       key={item.label}
                       onClick={() => onNavigate(item.view)}
-                      className={`p-3.5 rounded-[1.5rem] border ${item.border} ${item.bg} flex flex-col items-start gap-2 transition-all group active:scale-95 hover:shadow-md text-left`}
+                      className={`p-3.5 rounded-[1.5rem] border ${item.border} ${item.bg} flex flex-col items-start gap-1.5 transition-all group active:scale-95 hover:shadow-md text-left`}
                     >
                       <div className="flex items-start justify-between w-full">
-                        <div className={`w-9 h-9 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                          <Icon size={16} className={item.iconColor} />
+                        <div className={`w-8 h-8 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform shrink-0`}>
+                          <Icon size={14} className={item.iconColor} />
                         </div>
                       </div>
-                      <div>
+                      <div className="w-full min-w-0">
+                        <p className={`text-[13px] font-black leading-none mb-1 ${item.statusColor}`}>{item.kpi}</p>
                         <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest leading-none">{item.label}</p>
-                        <p className={`text-[7px] font-bold mt-0.5 leading-none ${item.statusColor}`}>{item.sublabel}</p>
+                        <p className={`text-[7px] font-medium mt-0.5 leading-snug ${item.statusColor} opacity-80`}>{item.sublabel}</p>
                       </div>
                     </button>
                   );
@@ -5146,6 +5291,39 @@ export default function App() {
 function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   type AppView = 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'resume' | 'job-match' | 'interview';
   const VALID_VIEWS: AppView[] = ['dashboard', 'roadmap', 'institutions', 'materials', 'expenses', 'advisor', 'parent', 'heatmap', 'jobs', 'resume', 'job-match', 'interview'];
+  // ── Pillar Definitions ──
+  type PillarSub = { label: string; view: AppView; icon: React.ElementType; desc: string };
+  type Pillar = { id: string; label: string; icon: React.ElementType; primaryView: AppView; views: AppView[]; accent: { bg: string; text: string }; subs: PillarSub[] };
+  const PILLAR_DEFS: Pillar[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, primaryView: 'dashboard', views: ['dashboard'], accent: { bg: 'bg-slate-950', text: 'text-white' }, subs: [] },
+    {
+      id: 'explore', label: 'Explore', icon: Layers, primaryView: 'roadmap', views: ['roadmap', 'institutions', 'materials'],
+      accent: { bg: 'bg-violet-600', text: 'text-white' },
+      subs: [
+        { label: 'Career Maps',  view: 'roadmap',      icon: Map,      desc: 'Visual nodes & trajectory mapping' },
+        { label: 'Institutions', view: 'institutions', icon: School,   desc: 'Global universities & bootcamps' },
+        { label: 'Academy',      view: 'materials',    icon: BookOpen, desc: 'Study materials & guides' },
+      ],
+    },
+    {
+      id: 'ai-coach', label: 'AI Coach', icon: BrainCircuit, primaryView: 'interview', views: ['interview', 'resume', 'job-match'],
+      accent: { bg: 'bg-purple-600', text: 'text-white' },
+      subs: [
+        { label: 'Interview Prep', view: 'interview', icon: Mic,      desc: 'AI mock interview simulator' },
+        { label: 'Resume',         view: 'resume',    icon: FileText, desc: 'Build & score your resume' },
+        { label: 'AI Match',       view: 'job-match', icon: Zap,      desc: 'Smart job-fit scoring' },
+      ],
+    },
+    {
+      id: 'mobility', label: 'Mobility', icon: Globe, primaryView: 'expenses', views: ['expenses', 'heatmap', 'jobs'],
+      accent: { bg: 'bg-teal-600', text: 'text-white' },
+      subs: [
+        { label: 'Finance & Budget', view: 'expenses', icon: CircleDollarSign, desc: 'Cost-of-living, ROI & budget' },
+        { label: 'Market Hubs',      view: 'heatmap',  icon: TrendingUp,       desc: 'Global career market intel' },
+        { label: 'Jobs Board',       view: 'jobs',     icon: Briefcase,        desc: 'Live listings & opportunities' },
+      ],
+    },
+  ];
   const persistedView = sessionStorage.getItem('cv_activeView') as AppView | null;
   const [activeView, setActiveViewState] = useState<AppView>(
     persistedView && VALID_VIEWS.includes(persistedView) ? persistedView : 'dashboard'
@@ -5154,6 +5332,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
     sessionStorage.setItem('cv_activeView', view);
     setActiveViewState(view);
   };
+  const activePillar = PILLAR_DEFS.find(p => p.views.includes(activeView)) || PILLAR_DEFS[0];
   const [showMoreNav, setShowMoreNav] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [selectedPathId, setSelectedPathId] = useState<string>("ai-engineer");
@@ -5470,42 +5649,26 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
           <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-950 font-black text-white shadow-xl shadow-indigo-200 group-hover:scale-110 transition-transform text-sm">CV</div>
           <span className="text-xl font-black tracking-tighter text-slate-900 hidden sm:block">CareerVision<span className="text-indigo-600 italic">AI</span></span>
         </div>
-        <nav className="hidden md:flex items-center gap-0.5 relative bg-slate-100/70 rounded-2xl p-1">
-          {/* Group 1: Core */}
-          <div className="flex items-center gap-0.5">
-            {([
-              { label: 'Control',  view: 'dashboard',    icon: LayoutDashboard },
-              { label: 'Roadmap',  view: 'roadmap',      icon: Map },
-              { label: 'Global',   view: 'institutions', icon: School },
-              { label: 'Academy',  view: 'materials',    icon: BookOpen },
-            ] as { label: string; view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'jobs' | 'heatmap' | 'expenses' | 'resume' | 'job-match'; icon: React.ElementType }[]).map(item => (
-              <NavItem key={item.view} view={item.view} label={item.label} icon={item.icon} active={activeView === item.view} onClick={() => handleNavigate(item.view)} />
-            ))}
-          </div>
-          {/* Divider */}
-          <div className="w-px h-5 bg-slate-300/60 mx-1" />
-          {/* Group 2: Market */}
-          <div className="flex items-center gap-0.5">
-            {([
-              { label: 'Jobs',    view: 'jobs',         icon: Briefcase },
-              { label: 'Markets', view: 'heatmap',      icon: Globe },
-              { label: 'Finance', view: 'expenses',     icon: CircleDollarSign },
-            ] as { label: string; view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'jobs' | 'heatmap' | 'expenses' | 'resume' | 'job-match'; icon: React.ElementType }[]).map(item => (
-              <NavItem key={item.view} view={item.view} label={item.label} icon={item.icon} active={activeView === item.view} onClick={() => handleNavigate(item.view)} />
-            ))}
-          </div>
-          {/* Divider */}
-          <div className="w-px h-5 bg-slate-300/60 mx-1" />
-          {/* Group 3: AI Tools */}
-          <div className="flex items-center gap-0.5">
-            {([
-              { label: 'Resume',    view: 'resume',     icon: FileText },
-              { label: 'AI Match',  view: 'job-match',  icon: BrainCircuit },
-              { label: 'Interview', view: 'interview',  icon: Mic },
-            ] as { label: string; view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'jobs' | 'heatmap' | 'expenses' | 'resume' | 'job-match' | 'interview'; icon: React.ElementType }[]).map(item => (
-              <NavItem key={item.view} view={item.view} label={item.label} icon={item.icon} active={activeView === item.view} onClick={() => handleNavigate(item.view)} />
-            ))}
-          </div>
+        <nav className="hidden md:flex items-center gap-1 relative bg-slate-100/70 rounded-2xl p-1">
+          {PILLAR_DEFS.map(pillar => {
+            const isPillarActive = activePillar.id === pillar.id;
+            const PillarIcon = pillar.icon;
+            return (
+              <button
+                key={pillar.id}
+                onClick={() => handleNavigate(pillar.primaryView)}
+                className={cn(
+                  'flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all duration-150',
+                  isPillarActive
+                    ? cn(pillar.accent.bg, pillar.accent.text, 'shadow-md shadow-black/10')
+                    : 'text-slate-500 hover:bg-slate-200/70 hover:text-slate-800'
+                )}
+              >
+                <PillarIcon size={13} />
+                {pillar.label}
+              </button>
+            );
+          })}
         </nav>
         <div className="flex items-center gap-2">
           {/* Hamburger – mobile only (nav shows at md+) */}
@@ -5582,6 +5745,33 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
         </div>
       </div>
 
+      {/* ── SUB-NAV STRIP ── */}
+      {activePillar.subs.length > 0 && (
+        <div className="hidden md:flex items-center gap-1 border-b border-slate-200/50 bg-white/80 backdrop-blur-sm px-5 py-2 z-20 shrink-0">
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 mr-2">{activePillar.label}</span>
+          <div className="w-px h-3.5 bg-slate-200 mr-1.5" />
+          {activePillar.subs.map(sub => {
+            const SubIcon = sub.icon;
+            const isSubActive = activeView === sub.view;
+            return (
+              <button
+                key={sub.view}
+                onClick={() => handleNavigate(sub.view)}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all',
+                  isSubActive
+                    ? cn(activePillar.accent.bg, activePillar.accent.text, 'shadow-sm')
+                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                )}
+              >
+                <SubIcon size={11} />
+                {sub.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* ── MOBILE DRAWER ── */}
       <AnimatePresence>
         {showMobileNav && (
@@ -5619,97 +5809,65 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                 </button>
               </div>
               {/* Nav items */}
-              <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
-                {/* Group 1 */}
-                <div>
-                  <p className="px-3 mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400">Explore</p>
-                  <div className="space-y-0.5">
-                    {([
-                      { label: 'Control',  view: 'dashboard',    icon: LayoutDashboard, color: 'text-slate-700',   bg: 'bg-slate-100' },
-                      { label: 'Roadmap',  view: 'roadmap',      icon: Map,             color: 'text-violet-600',  bg: 'bg-violet-50' },
-                      { label: 'Global',   view: 'institutions', icon: School,          color: 'text-sky-600',     bg: 'bg-sky-50' },
-                      { label: 'Academy',  view: 'materials',    icon: BookOpen,        color: 'text-amber-600',   bg: 'bg-amber-50' },
-                    ] as { label: string; view: typeof activeView; icon: React.ElementType; color: string; bg: string }[]).map(item => {
-                      const isActive = activeView === item.view;
-                      const accent = NAV_ACCENTS[item.view as string];
-                      return (
-                        <button
-                          key={item.view}
-                          onClick={() => { handleNavigate(item.view); setShowMobileNav(false); }}
-                          className={cn(
-                            'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all',
-                            isActive ? cn(accent.bg, accent.text) : 'text-slate-600 hover:bg-slate-50'
+              <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+                {PILLAR_DEFS.map(pillar => {
+                  const isPillarActive = activePillar.id === pillar.id;
+                  const PillarIcon = pillar.icon;
+                  return (
+                    <div key={pillar.id}>
+                      <button
+                        onClick={() => {
+                          handleNavigate(pillar.primaryView);
+                          if (pillar.subs.length === 0) setShowMobileNav(false);
+                        }}
+                        className={cn(
+                          'w-full flex items-center gap-3 px-3 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all',
+                          isPillarActive ? cn(pillar.accent.bg, pillar.accent.text) : 'text-slate-600 hover:bg-slate-50'
+                        )}
+                      >
+                        <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center shrink-0', isPillarActive ? 'bg-white/20' : 'bg-slate-100')}>
+                          <PillarIcon size={15} className={isPillarActive ? 'text-white' : 'text-slate-600'} />
+                        </div>
+                        <div className="text-left flex-1 min-w-0">
+                          <p>{pillar.label}</p>
+                          {pillar.subs.length > 0 && (
+                            <p className={cn('text-[9px] font-medium normal-case tracking-normal mt-0.5 truncate', isPillarActive ? 'text-white/60' : 'text-slate-400')}>
+                              {pillar.subs.map(s => s.label).join(' · ')}
+                            </p>
                           )}
-                        >
-                          <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', isActive ? 'bg-white/20' : item.bg)}>
-                            {(() => { const Icon = item.icon; return <Icon size={14} className={isActive ? 'text-white' : item.color} />; })()}
-                          </div>
-                          {item.label}
-                          {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white/70" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                {/* Group 2 */}
-                <div>
-                  <p className="px-3 mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400">Market</p>
-                  <div className="space-y-0.5">
-                    {([
-                      { label: 'Jobs Board',   view: 'jobs',      icon: Briefcase,       color: 'text-indigo-600',  bg: 'bg-indigo-50' },
-                      { label: 'Market Hubs',  view: 'heatmap',   icon: Globe,           color: 'text-teal-600',    bg: 'bg-teal-50' },
-                      { label: 'Finance',      view: 'expenses',  icon: CircleDollarSign,color: 'text-emerald-600', bg: 'bg-emerald-50' },
-                    ] as { label: string; view: typeof activeView; icon: React.ElementType; color: string; bg: string }[]).map(item => {
-                      const isActive = activeView === item.view;
-                      const accent = NAV_ACCENTS[item.view as string];
-                      return (
-                        <button
-                          key={item.view}
-                          onClick={() => { handleNavigate(item.view); setShowMobileNav(false); }}
-                          className={cn(
-                            'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all',
-                            isActive ? cn(accent.bg, accent.text) : 'text-slate-600 hover:bg-slate-50'
-                          )}
-                        >
-                          <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', isActive ? 'bg-white/20' : item.bg)}>
-                            {(() => { const Icon = item.icon; return <Icon size={14} className={isActive ? 'text-white' : item.color} />; })()}
-                          </div>
-                          {item.label}
-                          {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white/70" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                {/* Group 3 */}
-                <div>
-                  <p className="px-3 mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400">AI Tools</p>
-                  <div className="space-y-0.5">
-                    {([
-                      { label: 'Resume',    view: 'resume',     icon: FileText,    color: 'text-rose-500',    bg: 'bg-rose-50' },
-                      { label: 'AI Match',  view: 'job-match',  icon: BrainCircuit,color: 'text-purple-600',  bg: 'bg-purple-50' },
-                    ] as { label: string; view: typeof activeView; icon: React.ElementType; color: string; bg: string }[]).map(item => {
-                      const isActive = activeView === item.view;
-                      const accent = NAV_ACCENTS[item.view as string];
-                      return (
-                        <button
-                          key={item.view}
-                          onClick={() => { handleNavigate(item.view); setShowMobileNav(false); }}
-                          className={cn(
-                            'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all',
-                            isActive ? cn(accent.bg, accent.text) : 'text-slate-600 hover:bg-slate-50'
-                          )}
-                        >
-                          <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', isActive ? 'bg-white/20' : item.bg)}>
-                            {(() => { const Icon = item.icon; return <Icon size={14} className={isActive ? 'text-white' : item.color} />; })()}
-                          </div>
-                          {item.label}
-                          {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white/70" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                        </div>
+                        {pillar.subs.length > 0 && (
+                          <ChevronRight size={12} className={cn('shrink-0 transition-transform', isPillarActive && 'rotate-90')} />
+                        )}
+                      </button>
+                      {isPillarActive && pillar.subs.length > 0 && (
+                        <div className="ml-4 pl-4 border-l border-slate-200 mt-0.5 mb-1 space-y-0.5">
+                          {pillar.subs.map(sub => {
+                            const SubIcon = sub.icon;
+                            const isSubActive = activeView === sub.view;
+                            return (
+                              <button
+                                key={sub.view}
+                                onClick={() => { handleNavigate(sub.view); setShowMobileNav(false); }}
+                                className={cn(
+                                  'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all',
+                                  isSubActive ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                                )}
+                              >
+                                <SubIcon size={12} />
+                                <div className="text-left flex-1 min-w-0">
+                                  <p>{sub.label}</p>
+                                  <p className="text-[9px] font-medium normal-case tracking-normal mt-0.5 text-slate-400 truncate">{sub.desc}</p>
+                                </div>
+                                {isSubActive && <div className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </nav>
               {/* Drawer footer */}
               <div className="px-6 py-5 border-t border-slate-100 space-y-3">
@@ -5733,7 +5891,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       </AnimatePresence>
       
       {/* Main Content Viewport */}
-      <main className="flex-1 overflow-y-auto scrollbar-hide relative z-10 px-4 lg:px-10 py-6 pb-24 lg:pb-8">
+      <main className="flex-1 overflow-y-auto scrollbar-hide relative z-10 px-4 lg:px-10 py-6 pb-24 lg:pb-32">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeView}
@@ -5783,35 +5941,28 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
 
       {/* ── MOBILE BOTTOM TAB BAR ── */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-slate-200 shadow-2xl shadow-slate-200/60">
-        <div className="grid grid-cols-5 h-16">
-          {([
-            { label: 'Home', view: 'dashboard', icon: LayoutDashboard },
-            { label: 'Roadmap', view: 'roadmap', icon: Map },
-            { label: 'Global', view: 'institutions', icon: School },
-            { label: 'Academy', view: 'materials', icon: BookOpen },
-            { label: 'More', view: '__more__', icon: ChevronDown },
-          ] as { label: string; view: typeof activeView | '__more__'; icon: React.ElementType }[]).map(item => {
-            const isMore = item.view === '__more__';
-            const isMoreActive = isMore && ['jobs', 'heatmap', 'expenses'].includes(activeView);
-            const isActive = !isMore && activeView === item.view;
+        <div className="grid grid-cols-4 h-16">
+          {PILLAR_DEFS.map(pillar => {
+            const isPillarActive = activePillar.id === pillar.id;
+            const PillarIcon = pillar.icon;
             return (
               <button
-                key={item.view}
-                onClick={() => isMore ? setShowMobileNav(true) : handleNavigate(item.view as typeof activeView)}
+                key={pillar.id}
+                onClick={() => handleNavigate(pillar.primaryView)}
                 className={cn(
                   'flex flex-col items-center justify-center gap-1 transition-all relative',
-                  (isActive || isMoreActive) ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-700'
+                  isPillarActive ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-700'
                 )}
               >
-                {(isActive || isMoreActive) && (
+                {isPillarActive && (
                   <motion.div
                     layoutId="bottomNavIndicator"
                     className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-indigo-500 rounded-full"
                     transition={{ type: 'spring', bounce: 0.3, duration: 0.5 }}
                   />
                 )}
-                {(() => { const Icon = item.icon; return <Icon size={18} strokeWidth={(isActive || isMoreActive) ? 2.5 : 1.8} />; })()}
-                <span className="text-[9px] font-black uppercase tracking-widest">{item.label}</span>
+                <PillarIcon size={18} strokeWidth={isPillarActive ? 2.5 : 1.8} />
+                <span className="text-[9px] font-black uppercase tracking-widest">{pillar.label}</span>
               </button>
             );
           })}
@@ -5838,7 +5989,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       />
 
       {/* Spark.E Floating Bubble */}
-      <div className={`fixed bottom-20 lg:bottom-6 ${sparkEPosition === 'bottom-right' ? 'right-6 items-end' : 'left-6 items-start'} z-50 flex flex-col gap-3`}> 
+      <div className={`fixed bottom-24 lg:bottom-8 ${sparkEPosition === 'bottom-right' ? 'right-6 items-end' : 'left-6 items-start'} z-50 flex flex-col gap-2`}>
         {/* Tooltip label */}
         <AnimatePresence>
           {!sparkEOpen && (
@@ -5852,29 +6003,31 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
             </motion.div>
           )}
         </AnimatePresence>
-        {/* Bubble button */}
-        <motion.button
-          onClick={() => setSparkEOpen(o => !o)}
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.94 }}
-          className="relative w-14 h-14 rounded-2xl bg-indigo-600 shadow-2xl shadow-indigo-500/40 flex items-center justify-center text-white overflow-hidden"
-        >
-          <AnimatePresence mode="wait">
-            {sparkEOpen ? (
-              <motion.span key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.2 }}>
-                <X size={22} />
-              </motion.span>
-            ) : (
-              <motion.span key="open" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.2 }}>
-                <Sparkles size={22} />
-              </motion.span>
+        {/* Bubble button — explicit container boundary */}
+        <div className="p-2 bg-white/80 backdrop-blur-md rounded-[22px] shadow-xl shadow-slate-300/50 border border-slate-200/70">
+          <motion.button
+            onClick={() => setSparkEOpen(o => !o)}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.94 }}
+            className="relative w-14 h-14 rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-500/40 flex items-center justify-center text-white overflow-hidden"
+          >
+            <AnimatePresence mode="wait">
+              {sparkEOpen ? (
+                <motion.span key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.2 }}>
+                  <X size={22} />
+                </motion.span>
+              ) : (
+                <motion.span key="open" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.2 }}>
+                  <Sparkles size={22} />
+                </motion.span>
+              )}
+            </AnimatePresence>
+            {/* Pulse ring */}
+            {!sparkEOpen && (
+              <span className="absolute inset-0 rounded-2xl border-2 border-indigo-400 animate-ping opacity-30 pointer-events-none" />
             )}
-          </AnimatePresence>
-          {/* Pulse ring */}
-          {!sparkEOpen && (
-            <span className="absolute inset-0 rounded-2xl border-2 border-indigo-400 animate-ping opacity-30 pointer-events-none" />
-          )}
-        </motion.button>
+          </motion.button>
+        </div>
       </div>
 
       {/* Spark.E Slide-in Drawer */}
