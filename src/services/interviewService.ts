@@ -44,7 +44,8 @@ export async function getLocalizedEtiquette(location: string, role: string): Pro
       }
     });
 
-    return JSON.parse(response.text);
+    const parsed = JSON.parse(response.text);
+    return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
     console.error("Etiquette Error:", error);
     return [
@@ -95,7 +96,8 @@ export async function generateInterviewQuestions(role: string, company?: string)
       }
     });
 
-    return JSON.parse(response.text);
+    const parsed = JSON.parse(response.text);
+    return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
     console.error("Question Generation Error:", error);
     return [

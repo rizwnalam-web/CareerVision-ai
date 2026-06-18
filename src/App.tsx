@@ -1065,12 +1065,18 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
   const openActionCount = nextActions.length;
   const openActionValue = openActionCount > 0 ? `${openActionCount} pending` : 'Ready';
 
+  // Contextual goal detection — personalises Next Actions
+  const _goalStr       = (profile.targetCareerId || '').toLowerCase();
+  const _isTechGoal    = /software|engineer|developer|data|devops|cloud|backend|frontend|fullstack/.test(_goalStr);
+  const _isDesignGoal  = /design|ux\b|ui\b|product|visual|creative|motion|graphic/.test(_goalStr);
+  const _isFinanceGoal = /finance|banking|invest|account|trading|economist/.test(_goalStr);
+
   // Profile setup milestones (gamified)
   const profileMilestones: Array<{ label: string; xp: number; done: boolean; nav: Parameters<typeof onNavigate>[0] | null }> = [
     { label: 'Set Target Career',       xp: 15, done: !!profile.targetCareerId,                    nav: null },
     { label: 'Set Target Location',     xp: 10, done: !!profile.targetLocation,                    nav: null },
     { label: 'Build Financial Profile', xp: 20, done: !!(profile.financialProfile?.monthlyBudget), nav: 'expenses' },
-    { label: 'Upload Your Resume',      xp: 20, done: false,                                        nav: 'resume' },
+    { label: _isTechGoal ? 'Upload Technical Resume' : _isDesignGoal ? 'Upload Portfolio Resume' : _isFinanceGoal ? 'Upload Finance Resume' : 'Upload Your Resume', xp: 20, done: false, nav: 'resume' },
     { label: 'Run a Mock Interview',    xp: 25, done: false,                                        nav: 'interview' },
     { label: 'Explore Career Maps',     xp: 10, done: false,                                        nav: 'roadmap' },
   ];
@@ -1123,10 +1129,10 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
       icon: Globe,
       view: 'institutions',
       iconBg: 'bg-indigo-100',
-      iconColor: profile.targetVisaType ? 'text-indigo-600' : 'text-rose-500',
+      iconColor: profile.targetVisaType ? 'text-indigo-600' : 'text-amber-500',
       bg: 'bg-indigo-50',
       border: 'border-indigo-100',
-      statusColor: profile.targetVisaType ? 'text-emerald-500' : 'text-rose-500',
+      statusColor: profile.targetVisaType ? 'text-emerald-500' : 'text-amber-500',
       checklist: docsCompleted > 0 ? `${docsCompleted} docs` : null,
       urgent: !profile.targetVisaType || docsCompleted === 0,
     },
@@ -1151,10 +1157,10 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
       icon: PiggyBank,
       view: 'expenses',
       iconBg: 'bg-amber-100',
-      iconColor: hasExpenses ? 'text-amber-600' : 'text-rose-500',
+      iconColor: hasExpenses ? 'text-amber-600' : 'text-amber-500',
       bg: 'bg-amber-50',
       border: 'border-amber-100',
-      statusColor: hasExpenses ? 'text-emerald-500' : 'text-rose-500',
+      statusColor: hasExpenses ? 'text-emerald-500' : 'text-amber-500',
       checklist: null,
       urgent: !hasExpenses,
     },
@@ -1235,9 +1241,14 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
       {/* ── LEFT SIDEBAR ── */}
       <div className="xl:col-span-3 space-y-5">
 
-        {/* Profile card with circular progress ring */}
-        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
-          <div className="flex items-start gap-4 mb-6">
+        {/* Profile card — Hero Arc */}
+        <div className="bg-gradient-to-b from-indigo-50/70 to-white p-6 rounded-[2.5rem] border border-indigo-100/50 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-300/10 rounded-full blur-3xl -mt-12 -mr-12 pointer-events-none" />
+          <div className="flex items-center justify-between mb-3 relative z-10">
+            <span className="text-[7px] font-black text-indigo-400 uppercase tracking-[0.2em]">Career Journey</span>
+            {profile.country && <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">{profile.country}</span>}
+          </div>
+          <div className="flex items-start gap-4 mb-6 relative z-10">
             {/* Circular progress */}
             <div className="relative shrink-0">
               <svg width={88} height={88} className="-rotate-90">
@@ -1298,7 +1309,7 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
               ) : nextActions.length === 0 ? (
                 <span className="text-[7px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">{milestonesProgress}% setup</span>
               ) : (
-                <span className="text-[7px] font-black text-indigo-500 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">{nextActions.length} pending</span>
+                <span className="text-[7px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">{nextActions.length} pending</span>
               )}
             </div>
             <div className="space-y-2">
@@ -1339,13 +1350,13 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
                           m.done
                             ? 'bg-emerald-50/60 border-emerald-100'
                             : isNext
-                              ? 'bg-indigo-50 border-indigo-200 cursor-pointer'
+                              ? 'bg-amber-50 border-amber-300/60 cursor-pointer ring-1 ring-amber-200/50'
                               : 'bg-slate-50 border-slate-100 cursor-pointer hover:border-slate-200'
                         )}
                       >
                         <div className={cn(
                           'w-7 h-7 rounded-xl flex items-center justify-center shrink-0',
-                          m.done ? 'bg-emerald-500' : isNext ? 'bg-indigo-600' : 'bg-slate-200'
+                          m.done ? 'bg-emerald-500' : isNext ? 'bg-amber-500' : 'bg-slate-200'
                         )}>
                           {m.done
                             ? <Check size={11} className="text-white" />
@@ -1353,7 +1364,7 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
                         </div>
                         <p className={cn(
                           'flex-1 text-[9px] font-black uppercase tracking-widest truncate',
-                          m.done ? 'text-emerald-700' : isNext ? 'text-indigo-900' : 'text-slate-400'
+                          m.done ? 'text-emerald-700' : isNext ? 'text-amber-900' : 'text-slate-400'
                         )}>
                           {m.label}
                         </p>
@@ -1362,7 +1373,7 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
                           m.done
                             ? 'bg-emerald-100 text-emerald-600'
                             : isNext
-                              ? 'bg-indigo-100 text-indigo-600 border border-indigo-200'
+                              ? 'bg-amber-100 text-amber-700 border border-amber-200'
                               : 'bg-slate-100 text-slate-400'
                         )}>
                           +{m.xp}%
@@ -1376,16 +1387,16 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
                   key={i}
                   whileHover={{ x: 2 }}
                   onClick={action.type === 'practice' ? () => onInitInterview(profile.targetCareerId || careers[0]?.id) : undefined}
-                  className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border ${action.urgent ? 'bg-indigo-50/90 border-indigo-100' : 'bg-slate-50 border-slate-100 hover:border-indigo-100 hover:bg-indigo-50/50'}`}
+                  className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border ${action.urgent ? 'bg-amber-50/90 border-amber-200' : 'bg-slate-50 border-slate-100 hover:border-amber-100 hover:bg-amber-50/50'}`}
                 >
-                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${action.urgent ? 'bg-indigo-600' : 'bg-white border border-slate-200'}`}>
+                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${action.urgent ? 'bg-amber-500' : 'bg-white border border-slate-200'}`}>
                     {action.type === 'learn' && <BookOpen size={11} className={action.urgent ? 'text-white' : 'text-slate-400'} />}
                     {action.type === 'build' && <Pencil size={11} className={action.urgent ? 'text-white' : 'text-slate-400'} />}
                     {action.type === 'practice' && <Mic size={11} className={action.urgent ? 'text-white' : 'text-slate-400'} />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-[9px] font-bold leading-snug truncate ${action.urgent ? 'text-indigo-900' : 'text-slate-700'}`}>{action.title}</p>
-                    <p className={`text-[7px] font-black uppercase tracking-widest mt-0.5 ${action.urgent ? 'text-indigo-600' : 'text-emerald-600'}`}>{action.impact}</p>
+                    <p className={`text-[9px] font-bold leading-snug truncate ${action.urgent ? 'text-amber-900' : 'text-slate-700'}`}>{action.title}</p>
+                    <p className={`text-[7px] font-black uppercase tracking-widest mt-0.5 ${action.urgent ? 'text-amber-600' : 'text-emerald-600'}`}>{action.impact}</p>
                   </div>
                   <ChevronRight size={11} className="text-slate-300 shrink-0" />
                 </motion.div>
@@ -1601,47 +1612,131 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
                 ↻ Retry Now
               </button>
             </div>
-          ) : (
-            <div className="space-y-2">
-              {(jobDirectory.sectors.find(s => s.sector === activeDirSector)?.categories ?? []).map(cat => {
-                const isOpen = expandedDirCategory === cat.category;
-                return (
-                  <div key={cat.category} className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
-                    <button
-                      className="w-full flex items-center justify-between px-5 py-3.5 text-left"
-                      onClick={() => setExpandedDirCategory(isOpen ? null : cat.category)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-2 h-2 rounded-full ${activeDirSector === 'Government' ? 'bg-indigo-500' : 'bg-slate-800'}`} />
-                        <span className="text-[11px] font-black text-slate-900 uppercase tracking-wider">{cat.category}</span>
-                        <span className="text-[8px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{cat.jobs.length} roles</span>
-                      </div>
-                      <ChevronDown size={14} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                    </button>
-                    {isOpen && (
-                      <div className="px-5 pb-4 border-t border-slate-50">
-                        <div className="flex flex-wrap gap-1.5 pt-3">
-                          {cat.jobs.map(job => (
-                            <button
-                              key={job}
-                              onClick={() => onSelectByTitle(job)}
-                              className={`text-[9px] font-black px-3 py-1.5 rounded-xl uppercase tracking-wide border transition-all cursor-pointer ${
-                                activeDirSector === 'Government'
-                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-600 hover:text-white hover:border-indigo-600'
-                                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-900 hover:text-white hover:border-slate-900'
-                              }`}
-                            >
-                              {job} →
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+          ) : (() => {
+            // ── Interest-matching engine ──────────────────────────────────────
+            const _ints: string[] = Array.isArray(profile.interests)
+              ? (profile.interests as string[]).map(i => i.toLowerCase().trim()).filter(i => i.length > 2)
+              : typeof profile.interests === 'string'
+                ? (profile.interests as string).split(/[,;\s]+/).map(i => i.toLowerCase().trim()).filter(i => i.length > 2)
+                : [];
+            const _getMatches = (catName: string, jobs: string[]): string[] => {
+              if (_ints.length === 0) return [];
+              const text = `${catName} ${jobs.join(' ')}`.toLowerCase();
+              return _ints.filter(kw => text.includes(kw));
+            };
+            const _allCats = jobDirectory.sectors.find(s => s.sector === activeDirSector)?.categories ?? [];
+            const _totalMatches = _allCats.filter(c => _getMatches(c.category, c.jobs).length > 0).length;
+            // Sort matched categories to top
+            const _sorted = [..._allCats].sort((a, b) =>
+              _getMatches(b.category, b.jobs).length - _getMatches(a.category, a.jobs).length
+            );
+            return (
+              <div className="space-y-2.5">
+                {/* ── Personalized for You banner ── */}
+                {_totalMatches > 0 && _ints.length > 0 && (
+                  <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200/70 rounded-2xl">
+                    <span className="text-xl shrink-0">✦</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[9px] font-black text-amber-800 uppercase tracking-widest leading-none mb-1">Personalized for You</p>
+                      <p className="text-[8px] text-amber-600 font-medium">{_totalMatches} {_totalMatches === 1 ? 'category' : 'categories'} match your interests · Sorted to top</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1 justify-end max-w-[130px]">
+                      {_ints.slice(0, 3).map(kw => (
+                        <span key={kw} className="text-[7px] font-black px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full capitalize">{kw}</span>
+                      ))}
+                    </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                )}
+
+                {_sorted.map(cat => {
+                  const isOpen = expandedDirCategory === cat.category;
+                  const _cl = cat.category.toLowerCase();
+                  const catEmoji = _cl.includes('civil') ? '📋' : _cl.includes('defen') || _cl.includes('secur') ? '🛡️' : _cl.includes('financ') || _cl.includes('bank') ? '🏦' : _cl.includes('health') || _cl.includes('medic') ? '⚕️' : _cl.includes('nurs') ? '🩺' : _cl.includes('educ') || _cl.includes('research') ? '🎓' : _cl.includes('judic') || _cl.includes('legal') ? '⚖️' : _cl.includes('infra') || _cl.includes('environ') ? '🏗️' : _cl.includes('tech') ? '💻' : _cl.includes('engin') ? '⚙️' : _cl.includes('media') || _cl.includes('comm') ? '📡' : _cl.includes('corp') || _cl.includes('manage') ? '📊' : _cl.includes('arts') || _cl.includes('creat') ? '🎨' : '📁';
+                  const _matches = _getMatches(cat.category, cat.jobs);
+                  const _isMatch = _matches.length > 0;
+                  return (
+                    <div key={cat.category} className={`rounded-[1.5rem] overflow-hidden transition-all group ${
+                      _isMatch
+                        ? 'bg-gradient-to-br from-amber-50/70 to-white border border-amber-200/60 shadow-sm hover:shadow-md hover:shadow-amber-100/70 ring-1 ring-amber-100/40'
+                        : activeDirSector === 'Government'
+                          ? 'bg-white border border-indigo-100/70 shadow-sm hover:shadow-md hover:shadow-indigo-100/60'
+                          : 'bg-white border border-slate-100 shadow-sm hover:shadow-md hover:shadow-slate-200/60'
+                    }`}>
+                      <button
+                        className="w-full text-left"
+                        onClick={() => setExpandedDirCategory(isOpen ? null : cat.category)}
+                      >
+                        <div className="flex items-center gap-4 px-5 py-4">
+                          {/* Category icon tile */}
+                          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 text-lg ${
+                            _isMatch ? 'bg-amber-100' : activeDirSector === 'Government' ? 'bg-indigo-50' : 'bg-slate-100'
+                          }`}>
+                            {catEmoji}
+                          </div>
+                          {/* Name + badges + preview chips */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                              <span className="text-[11px] font-black text-slate-900 uppercase tracking-wider leading-none">{cat.category}</span>
+                              <span className={`text-[7px] font-black px-2 py-0.5 rounded-full shrink-0 ${
+                                activeDirSector === 'Government'
+                                  ? 'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                                  : 'bg-slate-100 text-slate-500'
+                              }`}>{cat.jobs.length} roles</span>
+                              {_isMatch && (
+                                <span className="text-[7px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 flex items-center gap-0.5 shrink-0">
+                                  ✦ Your Interest
+                                </span>
+                              )}
+                            </div>
+                            {/* Role preview chips — amber-tinted when they match an interest */}
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {cat.jobs.slice(0, 3).map(job => {
+                                const isJobMatch = _ints.some(kw => kw.length > 2 && job.toLowerCase().includes(kw));
+                                return (
+                                  <span key={job} className={`text-[8px] border px-2 py-0.5 rounded-lg font-medium leading-none ${
+                                    isJobMatch
+                                      ? 'text-amber-700 bg-amber-50 border-amber-200'
+                                      : 'text-slate-400 bg-slate-50 border-slate-100'
+                                  }`}>{job}</span>
+                                );
+                              })}
+                              {cat.jobs.length > 3 && <span className="text-[8px] text-slate-400 font-bold">+{cat.jobs.length - 3}</span>}
+                            </div>
+                          </div>
+                          {/* Chevron */}
+                          <ChevronDown size={14} className={`shrink-0 transition-all duration-200 ${isOpen ? 'rotate-180 text-indigo-400' : 'text-slate-300 group-hover:text-slate-500'}`} />
+                        </div>
+                      </button>
+                      {isOpen && (
+                        <div className={`px-5 pb-5 pt-3 border-t ${_isMatch ? 'border-amber-100' : activeDirSector === 'Government' ? 'border-indigo-50' : 'border-slate-50'}`}>
+                          <div className="flex flex-wrap gap-1.5">
+                            {cat.jobs.map(job => {
+                              const isJobMatch = _ints.some(kw => kw.length > 2 && job.toLowerCase().includes(kw));
+                              return (
+                                <button
+                                  key={job}
+                                  onClick={() => onSelectByTitle(job)}
+                                  className={`text-[9px] font-black px-3 py-1.5 rounded-xl uppercase tracking-wide border transition-all cursor-pointer ${
+                                    isJobMatch
+                                      ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-500 hover:text-white hover:border-amber-500'
+                                      : activeDirSector === 'Government'
+                                        ? 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-600 hover:text-white hover:border-indigo-600'
+                                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-900 hover:text-white hover:border-slate-900'
+                                  }`}
+                                >
+                                  {job}{isJobMatch ? ' ✦' : ' →'}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -1785,7 +1880,7 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
           <div className="space-y-3">
             {execSync.some(item => item.urgent) && (
               <div>
-                <p className="text-[8px] font-black uppercase tracking-[0.25em] text-rose-500 mb-2">Needs attention</p>
+                <p className="text-[8px] font-black uppercase tracking-[0.25em] text-amber-500 mb-2">Needs attention</p>
                 <div className="grid grid-cols-2 gap-2.5">
                   {execSync.filter(item => item.urgent).map(item => {
                     const Icon = item.icon;
@@ -1799,7 +1894,7 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
                           <div className={`w-8 h-8 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform shrink-0`}>
                             <Icon size={14} className={item.iconColor} />
                           </div>
-                          {item.urgent && <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse shrink-0 mt-1" />}
+                          {item.urgent && <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0 mt-1" />}
                         </div>
                         <div className="w-full min-w-0">
                           <p className={`text-[13px] font-black leading-none mb-1 ${item.statusColor}`}>{item.kpi}</p>

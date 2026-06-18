@@ -183,7 +183,7 @@ export const InterviewHotSeat = ({ isOpen, onClose, role, location, company, onS
     setIsLoading(true);
     try {
       const q = await generateInterviewQuestions(role, company);
-      setQuestions(q);
+      setQuestions(Array.isArray(q) ? q : []);
     } catch (error) {
       console.error("Failed to load questions");
     } finally {
@@ -195,7 +195,7 @@ export const InterviewHotSeat = ({ isOpen, onClose, role, location, company, onS
     if (!location) return;
     try {
       const insights = await getLocalizedEtiquette(location, role);
-      setEtiquetteInsights(insights);
+      setEtiquetteInsights(Array.isArray(insights) ? insights : []);
     } catch (error) {
       console.error("Failed to load etiquette");
     }
