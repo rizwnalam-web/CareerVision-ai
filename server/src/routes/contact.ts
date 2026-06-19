@@ -1,10 +1,9 @@
 import { Router, Request, Response } from "express";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
 const router = Router();
 
 // ─── Simple in-memory rate limiter ─────────────────────────────────────────
-// Max 3 contact submissions per IP per 10 minutes
 const RATE_WINDOW_MS = 10 * 60 * 1000;
 const RATE_MAX = 3;
 const ipMap = new Map<string, { count: number; resetAt: number }>();
@@ -21,23 +20,6 @@ function isRateLimited(ip: string): boolean {
   return false;
 }
 
-// ─── Mailer factory ─────────────────────────────────────────────────────────
-function createTransporter() {
-  const user = process.env.GMAIL_USER;
-  const pass = process.env.GMAIL_APP_PASSWORD;
-
-  if (!user || !pass) {
-    throw new Error("GMAIL_USER and GMAIL_APP_PASSWORD environment variables are required");
-  }
-
-  return nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false, // STARTTLS
-    auth: { user, pass },
-  });
-}
-
 // ─── POST /api/contact/send ──────────────────────────────────────────────────
 router.post("/send", async (req: Request, res: Response) => {
   const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
@@ -48,32 +30,38 @@ router.post("/send", async (req: Request, res: Response) => {
 
   const { name, email, subject, message } = req.body;
 
-  // Validate required fields
   if (!name?.trim() || !email?.trim() || !message?.trim()) {
     return res.status(400).json({ error: "Name, email, and message are required." });
   }
 
-  // Basic email format validation
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
     return res.status(400).json({ error: "Please provide a valid email address." });
   }
 
-  // Sanitise inputs (trim, limit length)
   const safeName    = name.trim().slice(0, 100);
   const safeEmail   = email.trim().slice(0, 200);
   const safeSubject = (subject || "Contact Form Enquiry").trim().slice(0, 200);
   const safeMessage = message.trim().slice(0, 5000);
 
-  try {
-    const transporter = createTransporter();
-    const toAddress    = process.env.GMAIL_USER!; // cviinfo79@gmail.com
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.error("[Contact] RESEND_API_KEY is not set");
+    return res.status(500).json({ error: "Email service is not configured. Please email us directly at cviinfo79@gmail.com" });
+  }
 
-    // Email to the team inbox
-    await transporter.sendMail({
-      from: `"CareerVision AI Contact" <${toAddress}>`,
+  try {
+    const resend = new Resend(apiKey);
+    const toAddress = "cviinfo79@gmail.com";
+    // Sender: must be a verified domain in Resend. Use onboarding@resend.dev for testing,
+    // or noreply@decodflow.com once decodflow.com is verified in Resend dashboard.
+    const fromAddress = process.env.RESEND_FROM || "CareerVision AI <onboarding@resend.dev>";
+
+    // Notification email to inbox
+    await resend.emails.send({
+      from: fromAddress,
       to: toAddress,
-      replyTo: safeEmail,
+      reply_to: safeEmail,
       subject: `[CareerVision Contact] ${safeSubject}`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; background: #f8fafc; padding: 32px; border-radius: 12px;">
@@ -106,9 +94,9 @@ router.post("/send", async (req: Request, res: Response) => {
       `,
     });
 
-    // Auto-reply to the sender
-    await transporter.sendMail({
-      from: `"CareerVision AI" <${toAddress}>`,
+    // Auto-reply to sender
+    await resend.emails.send({
+      from: fromAddress,
       to: safeEmail,
       subject: "We received your message — CareerVision AI",
       html: `
@@ -129,7 +117,7 @@ router.post("/send", async (req: Request, res: Response) => {
           </div>
           <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 16px; margin-top: 20px;">
             <p style="color: #1e40af; font-size: 13px; margin: 0;">
-              In the meantime, explore your career roadmap at 
+              In the meantime, explore your career roadmap at
               <a href="https://easycareer-ai.decodflow.com" style="color: #4f46e5; font-weight: 700;">easycareer-ai.decodflow.com</a>
             </p>
           </div>
@@ -141,12 +129,11 @@ router.post("/send", async (req: Request, res: Response) => {
       `,
     });
 
-    console.log(`[Contact] Message from ${safeName} <${safeEmail}> sent successfully`);
+    console.log(`[Contact] Message from ${safeName} <${safeEmail}> sent via Resend`);
     res.json({ success: true, message: "Your message has been sent. We'll be in touch soon!" });
 
   } catch (error) {
     console.error("[Contact] Email send error:", error);
-    // Don't expose internal errors to client
     res.status(500).json({ error: "Failed to send message. Please email us directly at cviinfo79@gmail.com" });
   }
 });
