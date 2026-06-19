@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import net from "net";
 import { testConnection, closeConnection } from "./db/database.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
@@ -21,12 +23,19 @@ import feedbackRouter from "./routes/feedback.js";
 import resumeRouter from "./routes/resume.js";
 import jobMatchRouter from "./routes/jobMatch.js";
 import interviewPrepRouter from "./routes/interviewPrep.js";
+import contactRouter from "./routes/contact.js";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env from server/ first, then fall back to the repo root .env
+dotenv.config({ path: path.resolve(__dirname, "../../.env") }); // root .env
+dotenv.config(); // server/.env (overrides root if present)
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "3001");
-const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
+const CORS_ORIGIN_RAW = process.env.CORS_ORIGIN || "http://localhost:3000";
+const CORS_ORIGINS = CORS_ORIGIN_RAW.split(",").map((o) => o.trim());
 
 function isPortAvailable(port: number, host = "0.0.0.0"): Promise<boolean> {
   return new Promise((resolve, reject) => {
@@ -60,7 +69,10 @@ function isPortAvailable(port: number, host = "0.0.0.0"): Promise<boolean> {
 app.use(express.json());
 app.use(
   cors({
-    origin: CORS_ORIGIN,
+    origin: (origin, callback) => {
+      if (!origin || CORS_ORIGINS.includes(origin)) return callback(null, true);
+      callback(new Error(`CORS: origin ${origin} not allowed`));
+    },
     credentials: true,
   })
 );
@@ -96,6 +108,7 @@ app.use("/api/feedbacks", feedbackRouter);
 app.use("/api/resume", resumeRouter);
 app.use("/api/job-match", jobMatchRouter);
 app.use("/api/interview-prep", interviewPrepRouter);
+app.use("/api/contact", contactRouter);
 
 // 404 handler
 app.use(notFoundHandler);
@@ -124,7 +137,7 @@ async function startServer() {
 
     const server = app.listen(PORT, "0.0.0.0", () => {
       console.log(`\n✓ CareerVision API Server running on http://localhost:${PORT}`);
-      console.log(`✓ CORS enabled for: ${CORS_ORIGIN}`);
+      console.log(`✓ CORS enabled for: ${CORS_ORIGINS.join(", ")}`);
       console.log(`✓ Available endpoints:`);
       console.log(`  - GET  /health`);
       console.log(`  - POST /api/careers`);
