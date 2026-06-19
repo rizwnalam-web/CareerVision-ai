@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { getGlobalContextInsights, GlobalInsight } from '../services/geminiService';
 
-const COLOR_MAP: Record<GlobalInsight['color'], { pill: string }> = {
-  emerald: { pill: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25' },
-  indigo:  { pill: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/25' },
-  amber:   { pill: 'bg-amber-500/15 text-amber-300 border-amber-500/25' },
-  rose:    { pill: 'bg-rose-500/15 text-rose-300 border-rose-500/25' },
-  purple:  { pill: 'bg-purple-500/15 text-purple-300 border-purple-500/25' },
+const COLOR_MAP: Record<GlobalInsight['color'], { pill: string; dot: string }> = {
+  emerald: { pill: 'bg-emerald-500 text-white',  dot: 'bg-emerald-400' },
+  indigo:  { pill: 'bg-indigo-500 text-white',   dot: 'bg-indigo-400' },
+  amber:   { pill: 'bg-amber-500 text-white',    dot: 'bg-amber-400' },
+  rose:    { pill: 'bg-rose-500 text-white',     dot: 'bg-rose-400' },
+  purple:  { pill: 'bg-purple-500 text-white',   dot: 'bg-purple-400' },
 };
 
 const FALLBACK: GlobalInsight[] = [
@@ -64,15 +64,16 @@ export const NewsFlash = ({ country }: { country: string }) => {
   const visible = insights.slice(activeIdx, activeIdx + 4);
 
   return (
-    <div className="bg-slate-950 border-b border-white/[0.06] shrink-0 z-30 overflow-hidden">
-      <div className="px-6 py-2 flex items-center justify-between gap-4">
+    <div className="bg-slate-800 border-b border-slate-700 shrink-0 z-30 overflow-hidden">
+      <div className="px-6 py-2.5 flex items-center justify-between gap-4">
 
         {/* Label */}
         <div className="flex items-center gap-2 shrink-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.25em] hidden sm:block">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-[11px] font-black text-white uppercase tracking-[0.2em] hidden sm:block">
             Global Intel
           </span>
+          <span className="w-px h-4 bg-slate-600 hidden sm:block" />
         </div>
 
         {/* Cycling pills */}
@@ -92,13 +93,13 @@ export const NewsFlash = ({ country }: { country: string }) => {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -24 }}
                     transition={{ duration: 0.35, ease: 'easeInOut' }}
-                    className="flex items-center gap-1.5 shrink-0 max-w-[220px]"
+                    className="flex items-center gap-2 shrink-0"
                   >
-                    <span className="text-base leading-none select-none">{item.flag}</span>
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider hidden md:block truncate" title={item.city}>
-                      {item.city}:
+                    <span className="text-sm leading-none select-none">{item.flag}</span>
+                    <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wide hidden md:block">
+                      {item.city}
                     </span>
-                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider whitespace-nowrap truncate ${c.pill}`} title={item.stat}>
+                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wide whitespace-nowrap ${c.pill}`}>
                       {item.stat}
                     </span>
                   </motion.div>
@@ -109,13 +110,13 @@ export const NewsFlash = ({ country }: { country: string }) => {
         </div>
 
         {/* Timestamp + Live badge */}
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[9px] text-slate-600 font-medium hidden lg:block tabular-nums">
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="text-[11px] text-slate-400 font-medium hidden lg:block tabular-nums">
             {now} UTC
           </span>
-          <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest">Live</span>
+          <div className="flex items-center gap-1.5 bg-emerald-500 rounded-full px-2.5 py-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+            <span className="text-[10px] font-black text-white uppercase tracking-widest">Live</span>
           </div>
         </div>
       </div>

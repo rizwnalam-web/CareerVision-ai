@@ -1754,7 +1754,15 @@ Make milestones progressive, realistic, and specific to "${careerTitle}" in ${co
 Respond with ONLY the JSON array.`;
 
   try {
-    const raw = await callLLM(prompt, systemInstruction, { temperature: 0.3, maxTokens: 2000 });
+    // Race the LLM call against a timeout — if all providers are cooling down the
+    // call will fail fast (< 1 s) but guard with 10 s just in case the queue is long.
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('LLM timeout for milestones')), 10_000)
+    );
+    const raw = await Promise.race([
+      callLLM(prompt, systemInstruction, { temperature: 0.3, maxTokens: 2000 }),
+      timeoutPromise,
+    ]);
     const parsed = parseAIJson<CachedMilestone[]>(raw);
     if (!parsed || !Array.isArray(parsed) || parsed.length === 0) {
       throw new Error("Invalid milestone response");

@@ -100,6 +100,9 @@ import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobal
 import ReactMarkdown from 'react-markdown';
 
 import { LandingPage } from './components/LandingPage';
+import { PrivacyPolicy } from './components/PrivacyPolicy';
+import { TermsConditions } from './components/TermsConditions';
+import { FAQPage } from './components/FAQPage';
 import { InterviewHotSeat } from './components/InterviewHotSeat';
 import MaterialsView from './components/MaterialsView';
 import { RegisterScreen } from './components/RegisterScreen';
@@ -5297,7 +5300,7 @@ Return a concise finance-first recommendation with:
 // --- Main App ---
 
 export default function App() {
-  const [globalView, setGlobalView] = useState<'landing' | 'app'>('landing');
+  const [globalView, setGlobalView] = useState<'landing' | 'app' | 'privacy' | 'terms' | 'faq'>('landing');
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
 
   // Restore email/password session from localStorage on page load
@@ -5344,8 +5347,20 @@ export default function App() {
           return <AuthenticatedApp user={activeUser} onExit={() => { setLocalUser(null); setGlobalView('landing'); }} />;
         }
 
+        if (globalView === 'privacy') {
+          return <PrivacyPolicy onBack={() => setGlobalView('landing')} />;
+        }
+
+        if (globalView === 'terms') {
+          return <TermsConditions onBack={() => setGlobalView('landing')} />;
+        }
+
+        if (globalView === 'faq') {
+          return <FAQPage onBack={() => setGlobalView('landing')} onStart={() => setGlobalView('app')} />;
+        }
+
         if (globalView === 'landing') {
-          return <LandingPage onStart={() => setGlobalView('app')} />;
+          return <LandingPage onStart={() => setGlobalView('app')} onShowPrivacy={() => setGlobalView('privacy')} onShowTerms={() => setGlobalView('terms')} onShowFaq={() => setGlobalView('faq')} />;
         }
 
         if (!activeUser) {

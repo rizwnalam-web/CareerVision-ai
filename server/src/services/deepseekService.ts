@@ -340,31 +340,36 @@ async function generateResponse(prompt: string, options: DeepSeekRequestOptions 
     }
   }
 
-  // All providers failed first pass. If some were rate-limited, wait for the
-  // shortest cooldown and retry once.
+  // All providers failed first pass. If some were rate-limited, only retry
+  // if the shortest cooldown is brief (≤ 5 s). Longer cooldowns mean the
+  // provider won't be ready anyway — fail fast so callers can use their own
+  // hardcoded fallback immediately instead of blocking the request for 30 s.
   if (rateLimitedProviders.length > 0) {
     const shortest = rateLimitedProviders.reduce((a, b) => a.retryAfterMs < b.retryAfterMs ? a : b);
-    const waitMs = Math.min(shortest.retryAfterMs, 30_000); // cap retry wait at 30s
-    console.log(`[LLM] All providers rate-limited. Waiting ${Math.round(waitMs / 1000)}s then retrying ${shortest.provider.label}...`);
-    await new Promise(r => setTimeout(r, waitMs));
-
-    try {
-      const opts = { ...normalizedOptions, model: shortest.provider.model };
-      const result = await callProvider(shortest.provider, prompt, opts);
-      providerCooldowns.delete(shortest.provider.name); // clear cooldown on success
-      const response: DeepSeekResult = {
-        prompt,
-        text: result.text,
-        tokens: result.tokens,
-        costUsd: result.costUsd,
-        source: "fallback",
-        provider: shortest.provider.name,
-      };
-      cache.set(cacheKey, response, CACHE_TTL_SECONDS);
-      return response;
-    } catch (retryErr) {
-      const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
-      errors.push(`Retry ${shortest.provider.label}: ${retryMsg.slice(0, 200)}`);
+    const waitMs = shortest.retryAfterMs;
+    if (waitMs <= 5_000) {
+      console.log(`[LLM] Short cooldown (${Math.round(waitMs / 1000)}s). Retrying ${shortest.provider.label}...`);
+      await new Promise(r => setTimeout(r, waitMs));
+      try {
+        const opts = { ...normalizedOptions, model: shortest.provider.model };
+        const result = await callProvider(shortest.provider, prompt, opts);
+        providerCooldowns.delete(shortest.provider.name);
+        const response: DeepSeekResult = {
+          prompt,
+          text: result.text,
+          tokens: result.tokens,
+          costUsd: result.costUsd,
+          source: "fallback",
+          provider: shortest.provider.name,
+        };
+        cache.set(cacheKey, response, CACHE_TTL_SECONDS);
+        return response;
+      } catch (retryErr) {
+        const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+        errors.push(`Retry ${shortest.provider.label}: ${retryMsg.slice(0, 200)}`);
+      }
+    } else {
+      console.warn(`[LLM] All providers on cooldown (shortest: ${Math.round(waitMs / 1000)}s). Failing fast — caller should use fallback data.`);
     }
   }
 

@@ -25,19 +25,31 @@ import {
   CircleDot,
   Star,
   Quote,
+  Users,
+  ChevronDown,
+  CheckCircle2,
+  ArrowRight,
+  Building2,
+  Lightbulb,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getTopFeedbacks, Feedback } from '../services/feedbackService';
+import { ContactModal } from './ContactModal';
 
 interface LandingPageProps {
   onStart: () => void;
+  onShowPrivacy?: () => void;
+  onShowTerms?: () => void;
+  onShowFaq?: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onStart, onShowPrivacy, onShowTerms, onShowFaq }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-indigo-100 italic-selection">
+      {contactOpen && <ContactModal onClose={() => setContactOpen(false)} />}
       <NewsFlash country="Global" />
 
       {/* Navigation */}
@@ -52,6 +64,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
           <a href="#demo"     style={{color:'#94a3b8',textDecoration:'none'}} className="text-xs font-bold uppercase tracking-widest hover:text-slate-900 transition-colors">Demo</a>
           <a href="#roadmap"  style={{color:'#94a3b8',textDecoration:'none'}} className="text-xs font-bold uppercase tracking-widest hover:text-slate-900 transition-colors">Roadmaps</a>
           <a href="#global"   style={{color:'#94a3b8',textDecoration:'none'}} className="text-xs font-bold uppercase tracking-widest hover:text-slate-900 transition-colors">Global Demand</a>
+          <button onClick={onShowFaq} style={{color:'#94a3b8',background:'none',border:'none',cursor:'pointer',padding:0}} className="text-xs font-bold uppercase tracking-widest hover:text-slate-900 transition-colors">FAQ</button>
+          <button onClick={() => setContactOpen(true)} style={{color:'#94a3b8',background:'none',border:'none',cursor:'pointer',padding:0}} className="text-xs font-bold uppercase tracking-widest hover:text-slate-900 transition-colors">Contact</button>
           <button 
             onClick={onStart}
             className="bg-slate-900 text-white px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-xl hover:shadow-indigo-200"
@@ -97,6 +111,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
                 {link.label}
               </a>
             ))}
+            <button
+              onClick={() => { setMobileMenuOpen(false); onShowFaq?.(); }}
+              className="flex w-full items-center px-5 py-3 text-xs font-black uppercase tracking-widest text-indigo-600 hover:bg-indigo-50 transition-colors bg-transparent border-none cursor-pointer"
+            >
+              FAQ
+            </button>
+            <button
+              onClick={() => { setMobileMenuOpen(false); setContactOpen(true); }}
+              className="flex w-full items-center px-5 py-3 text-xs font-black uppercase tracking-widest text-emerald-600 hover:bg-emerald-50 transition-colors bg-transparent border-none cursor-pointer"
+            >
+              Contact
+            </button>
           </div>
         )}
       </nav>
@@ -212,8 +238,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
         </motion.div>
       </main>
 
+      {/* Stats Bar */}
+      <StatsBar />
+
       {/* Product Demo Section */}
       <DemoSection onStart={onStart} />
+
+      {/* How It Works */}
+      <HowItWorksSection onStart={onStart} />
 
       {/* Testimonials Section */}
       <TestimonialsSection />
@@ -252,6 +284,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
         </div>
       </section>
 
+      {/* FAQ Section */}
+      <FAQSection onShowFaq={onShowFaq} />
+
       {/* CTA Footer */}
       <section id="global" className="py-24 bg-slate-900 text-white overflow-hidden relative">
         <div className="max-w-4xl mx-auto px-8 text-center relative z-10">
@@ -273,25 +308,300 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
         </div>
       </section>
 
-      {/* Minimal Footer */}
-      <footer className="py-12 border-t border-slate-100 bg-white px-8">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
-          <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded bg-slate-900 font-bold text-white text-[10px]">CV</div>
-            <span className="text-sm font-bold tracking-tight text-slate-800">CareerVision AI</span>
+      {/* Footer */}
+      <footer className="bg-slate-950 text-white pt-16 pb-8 px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-10 mb-12">
+            {/* Brand */}
+            <div className="col-span-2 md:col-span-1">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 font-bold text-white text-sm shadow-lg">CV</div>
+                <span className="text-lg font-black tracking-tight">CareerVision<span className="text-indigo-400 italic">AI</span></span>
+              </div>
+              <p className="text-slate-400 text-xs font-medium leading-relaxed max-w-[200px]">
+                AI-powered global career intelligence for the next generation of professionals.
+              </p>
+            </div>
+            {/* Product */}
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-4">Product</p>
+              <ul className="space-y-3">
+                {['Intelligence', 'Demo', 'Roadmaps', 'Global Demand'].map(l => (
+                  <li key={l}><a href={`#${l.toLowerCase().replace(' ', '')}`} className="text-xs text-slate-400 hover:text-white transition-colors font-medium" style={{textDecoration:'none'}}>{l}</a></li>
+                ))}
+              </ul>
+            </div>
+            {/* Company */}
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-4">Company</p>
+              <ul className="space-y-3">
+                <li><a href="#" className="text-xs text-slate-400 hover:text-white transition-colors font-medium" style={{textDecoration:'none'}}>About</a></li>
+                <li><a href="#" className="text-xs text-slate-400 hover:text-white transition-colors font-medium" style={{textDecoration:'none'}}>Blog</a></li>
+                <li><a href="#" className="text-xs text-slate-400 hover:text-white transition-colors font-medium" style={{textDecoration:'none'}}>Careers</a></li>
+                <li>
+                  <button onClick={() => setContactOpen(true)} className="text-xs text-slate-400 hover:text-white transition-colors font-medium bg-transparent border-none cursor-pointer p-0">
+                    Contact
+                  </button>
+                </li>
+              </ul>
+            </div>
+            {/* Legal */}
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-4">Legal</p>
+              <ul className="space-y-3">
+                <li>
+                  <button onClick={onShowFaq} className="text-xs text-slate-400 hover:text-white transition-colors font-medium bg-transparent border-none cursor-pointer p-0">
+                    FAQ / Help Centre
+                  </button>
+                </li>
+                <li>
+                  <button onClick={onShowPrivacy} className="text-xs text-slate-400 hover:text-white transition-colors font-medium bg-transparent border-none cursor-pointer p-0">
+                    Privacy Policy
+                  </button>
+                </li>
+                <li>
+                  <button onClick={onShowTerms} className="text-xs text-slate-400 hover:text-white transition-colors font-medium bg-transparent border-none cursor-pointer p-0">
+                    Terms &amp; Conditions
+                  </button>
+                </li>
+                <li><a href="#" className="text-xs text-slate-400 hover:text-white transition-colors font-medium" style={{textDecoration:'none'}}>Cookie Policy</a></li>
+              </ul>
+            </div>
           </div>
-          <div className="flex gap-8">
-            <a href="#" className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-indigo-600">Privacy</a>
-            <a href="#" className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-indigo-600">Protocol</a>
-            <a href="#" className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-indigo-600">Sync Log</a>
+          <div className="border-t border-slate-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+            <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">© 2026 CareerVision AI · decodflow.com · All Rights Reserved</p>
+            <div className="flex items-center gap-1 text-[10px] text-slate-600 font-bold uppercase tracking-widest">
+              <ShieldCheck size={12} className="text-indigo-500" />
+              <span>Data Secure · GDPR Compliant · End-to-End Encrypted</span>
+            </div>
           </div>
-          <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">© 2026 Future Systems Laboratory</p>
         </div>
       </footer>
     </div>
   );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Stats Bar
+// ─────────────────────────────────────────────────────────────────────────────
+const STATS = [
+  { value: '12,000+', label: 'Global Students', icon: Users },
+  { value: '150+', label: 'Career Paths', icon: Target },
+  { value: '12', label: 'Countries Tracked', icon: Globe },
+  { value: '4,000+', label: 'Live Data Points', icon: BarChart3 },
+];
+
+const StatsBar = () => (
+  <section className="border-y border-slate-100 bg-slate-50 py-10">
+    <div className="max-w-7xl mx-auto px-8 grid grid-cols-2 md:grid-cols-4 gap-8">
+      {STATS.map(({ value, label, icon: Icon }) => (
+        <motion.div
+          key={label}
+          initial={{ opacity: 0, y: 10 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="flex flex-col items-center text-center gap-2"
+        >
+          <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mb-1">
+            <Icon size={18} className="text-indigo-600" />
+          </div>
+          <span className="text-3xl font-black tracking-tighter text-slate-900">{value}</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
+        </motion.div>
+      ))}
+    </div>
+  </section>
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// How It Works
+// ─────────────────────────────────────────────────────────────────────────────
+const HOW_STEPS = [
+  {
+    step: '01',
+    icon: Brain,
+    color: 'indigo',
+    title: 'Build Your Profile',
+    desc: 'Tell us your background, goals, and preferred country. Takes less than 2 minutes.',
+  },
+  {
+    step: '02',
+    icon: Lightbulb,
+    color: 'amber',
+    title: 'AI Analyses Global Demand',
+    desc: 'Spark.E cross-references 4,000+ live data points from O*NET, IPEDS, and job boards.',
+  },
+  {
+    step: '03',
+    icon: ArrowRight,
+    color: 'emerald',
+    title: 'Get Your Executable Roadmap',
+    desc: 'Receive a personalised step-by-step career plan with institution recommendations, skill gaps, and salary projections.',
+  },
+];
+
+const HowItWorksSection: React.FC<{ onStart: () => void }> = ({ onStart }) => (
+  <section className="py-24 bg-white">
+    <div className="max-w-7xl mx-auto px-8">
+      <div className="text-center mb-16">
+        <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em] mb-4">Simple Process</p>
+        <h2 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight">
+          From Zero to Roadmap <span className="text-indigo-600 italic">in Minutes.</span>
+        </h2>
+        <p className="text-slate-400 font-medium max-w-md mx-auto mt-4 text-sm">
+          No career counsellor. No guesswork. Just AI-driven clarity.
+        </p>
+      </div>
+
+      <div className="relative grid md:grid-cols-3 gap-8">
+        {/* Connecting line on desktop */}
+        <div className="hidden md:block absolute top-[3.5rem] left-[calc(16.67%+2rem)] right-[calc(16.67%+2rem)] h-px bg-gradient-to-r from-indigo-200 via-amber-200 to-emerald-200" />
+
+        {HOW_STEPS.map(({ step, icon: Icon, color, title, desc }, i) => (
+          <motion.div
+            key={step}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: i * 0.15 }}
+            className="flex flex-col items-center text-center"
+          >
+            <div className={cn(
+              'relative w-14 h-14 rounded-2xl flex items-center justify-center mb-6 shadow-lg z-10',
+              color === 'indigo' && 'bg-indigo-600',
+              color === 'amber' && 'bg-amber-500',
+              color === 'emerald' && 'bg-emerald-600',
+            )}>
+              <Icon size={24} className="text-white" />
+              <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-white border-2 border-slate-100 flex items-center justify-center text-[9px] font-black text-slate-700">{step}</span>
+            </div>
+            <h3 className="text-lg font-black text-slate-900 mb-3">{title}</h3>
+            <p className="text-sm text-slate-500 font-medium leading-relaxed max-w-xs">{desc}</p>
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="mt-14 text-center">
+        <button
+          onClick={onStart}
+          className="inline-flex items-center gap-3 bg-slate-900 text-white px-8 py-4 rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-xl hover:shadow-indigo-200 group"
+        >
+          Start for Free <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
+        </button>
+        <p className="mt-3 text-[10px] text-slate-400 font-bold uppercase tracking-widest">No credit card required</p>
+      </div>
+    </div>
+  </section>
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FAQ
+// ─────────────────────────────────────────────────────────────────────────────
+const FAQS = [
+  {
+    q: 'What is CareerVision AI?',
+    a: 'CareerVision AI is an AI-powered platform that analyses global job market data to create personalised career roadmaps, skill gap analyses, and institution recommendations — all tailored to your goals, background, and target country.',
+  },
+  {
+    q: 'Is my data safe and private?',
+    a: 'Yes. We are fully GDPR compliant. All data is encrypted at rest and in transit using industry-standard AES-256 and TLS 1.3. We never sell your personal data to third parties. See our Privacy Policy for full details.',
+  },
+  {
+    q: 'How accurate is the career data?',
+    a: 'Our AI engine pulls daily updates from authoritative sources including O*NET, IPEDS, LinkedIn Labour Insights, and government labour statistics from 12 countries. Data is validated and refreshed every 24 hours.',
+  },
+  {
+    q: 'Does it support international careers and migration?',
+    a: 'Absolutely. We cover 12 countries — USA, UK, Canada, Australia, Germany, Singapore, UAE, India, and more — with visa pathway guidance (H-1B, Skilled Worker Visa, PR routes) integrated into each roadmap.',
+  },
+  {
+    q: 'Is CareerVision AI free to use?',
+    a: 'You can sign up and access core features for free. Premium features including advanced AI roadmaps, unlimited career comparisons, and interview simulation are available on our paid plans.',
+  },
+  {
+    q: 'What AI technology powers the platform?',
+    a: 'CareerVision AI is built on Google Gemini for natural language intelligence, combined with proprietary matching algorithms trained on millions of career data points. The AI assistant, Spark.E, handles all personalised recommendations.',
+  },
+];
+
+const FAQSection = ({ onShowFaq }: { onShowFaq?: () => void }) => {
+  const [openIdx, setOpenIdx] = useState<number | null>(null);
+  // Show only first 4 questions as a teaser
+  const preview = FAQS.slice(0, 4);
+  return (
+    <section className="py-24 bg-slate-50">
+      <div className="max-w-3xl mx-auto px-8">
+        <div className="text-center mb-14">
+          <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em] mb-4">FAQ</p>
+          <h2 className="text-4xl font-black text-slate-900 tracking-tight">
+            Common Questions <span className="text-indigo-600 italic">Answered.</span>
+          </h2>
+          <p className="text-slate-400 text-sm font-medium mt-3">Quick answers below — or browse our full Help Centre for all topics.</p>
+        </div>
+        <div className="space-y-3">
+          {preview.map((item, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 10 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.05 }}
+              className="bg-white border border-slate-200 rounded-2xl overflow-hidden"
+            >
+              <button
+                onClick={() => setOpenIdx(openIdx === i ? null : i)}
+                className="w-full flex items-center justify-between px-6 py-5 text-left hover:bg-slate-50 transition-colors"
+              >
+                <span className="text-sm font-black text-slate-900 pr-4">{item.q}</span>
+                <motion.span
+                  animate={{ rotate: openIdx === i ? 180 : 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="shrink-0 text-slate-400"
+                >
+                  <ChevronDown size={18} />
+                </motion.span>
+              </button>
+              <AnimatePresence initial={false}>
+                {openIdx === i && (
+                  <motion.div
+                    key="answer"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-6 pb-5 border-t border-slate-100">
+                      <p className="text-sm text-slate-500 font-medium leading-relaxed pt-4">{item.a}</p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* View All FAQs CTA */}
+        <div className="mt-10 flex flex-col sm:flex-row items-center justify-between gap-4 p-6 bg-white border border-slate-200 rounded-3xl">
+          <div>
+            <p className="text-sm font-black text-slate-900">Still have questions?</p>
+            <p className="text-xs text-slate-400 font-medium mt-0.5">Browse 25+ answers across 6 categories in our full Help Centre.</p>
+          </div>
+          <button
+            onClick={onShowFaq}
+            className="shrink-0 flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-lg shadow-indigo-100 group"
+          >
+            View All FAQs <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Demo Section (existing)
+// ─────────────────────────────────────────────────────────────────────────────
 const DEMO_FEATURES = [
   {
     id: 'trajectories',
