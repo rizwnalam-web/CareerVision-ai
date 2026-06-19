@@ -61,7 +61,7 @@ router.post("/send", async (req: Request, res: Response) => {
     await resend.emails.send({
       from: fromAddress,
       to: toAddress,
-      reply_to: safeEmail,
+      replyTo: safeEmail,
       subject: `[CareerVision Contact] ${safeSubject}`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; background: #f8fafc; padding: 32px; border-radius: 12px;">
