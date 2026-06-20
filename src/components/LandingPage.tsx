@@ -373,7 +373,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, onShowPrivacy
             <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">© 2026 CareerVision AI · decodflow.com · All Rights Reserved</p>
             <div className="flex items-center gap-1 text-[10px] text-slate-600 font-bold uppercase tracking-widest">
               <ShieldCheck size={12} className="text-indigo-500" />
-              <span>Data Secure · GDPR Compliant · End-to-End Encrypted</span>
+              <span>Data Secure · End-to-End Encrypted</span>
             </div>
           </div>
         </div>
@@ -505,7 +505,7 @@ const FAQS = [
   },
   {
     q: 'Is my data safe and private?',
-    a: 'Yes. We are fully GDPR compliant. All data is encrypted at rest and in transit using industry-standard AES-256 and TLS 1.3. We never sell your personal data to third parties. See our Privacy Policy for full details.',
+    a: 'Yes. All data is encrypted. We never sell your personal data to third parties. See our Privacy Policy for full details.',
   },
   {
     q: 'How accurate is the career data?',

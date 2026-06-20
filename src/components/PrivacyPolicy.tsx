@@ -118,7 +118,7 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
           <p className="mt-3">Despite our measures, no system is 100% impenetrable. If you suspect a security breach, please contact <a href="mailto:security@decodflow.com" className="text-indigo-600 hover:underline">security@decodflow.com</a> immediately.</p>
         </Section>
 
-        <Section icon={<ShieldCheck size={16} className="text-indigo-600" />} title="5. Your Rights (GDPR & Privacy Laws)" delay={0.25}>
+        {/* <Section icon={<ShieldCheck size={16} className="text-indigo-600" />} title="5. Your Rights (GDPR & Privacy Laws)" delay={0.25}>
           <p>Depending on your jurisdiction, you have the following rights regarding your personal data:</p>
           <div className="grid sm:grid-cols-2 gap-3 mt-3">
             {[
@@ -136,9 +136,9 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
             ))}
           </div>
           <p className="mt-4">To exercise any of these rights, email <a href="mailto:privacy@decodflow.com" className="text-indigo-600 hover:underline">privacy@decodflow.com</a>. We will respond within 30 days.</p>
-        </Section>
+        </Section> */}
 
-        <Section icon={<RefreshCw size={16} className="text-indigo-600" />} title="6. Data Retention" delay={0.3}>
+        <Section icon={<RefreshCw size={16} className="text-indigo-600" />} title="5. Data Retention" delay={0.3}>
           <p>We retain your data for as long as your account is active or as needed to provide services. Specifically:</p>
           <ul className="list-disc pl-5 space-y-2 mt-2">
             <li>Account data is retained for the lifetime of your account plus 90 days after deletion (for recovery purposes).</li>
@@ -147,13 +147,13 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
           </ul>
         </Section>
 
-        <Section icon={<Globe size={16} className="text-indigo-600" />} title="7. International Data Transfers" delay={0.35}>
+        {/* <Section icon={<Globe size={16} className="text-indigo-600" />} title="6. International Data Transfers" delay={0.35}>
           <p>
             Our servers are hosted in the United States (Render, Firebase). By using our service, you consent to the transfer of your data to the US. We rely on Standard Contractual Clauses (SCCs) and Firebase's Data Processing Addendum to ensure GDPR-compliant transfers.
           </p>
-        </Section>
+        </Section> */}
 
-        <Section icon={<Mail size={16} className="text-indigo-600" />} title="8. Cookies" delay={0.4}>
+        <Section icon={<Mail size={16} className="text-indigo-600" />} title="6. Cookies" delay={0.4}>
           <p>We use minimal cookies necessary for operation:</p>
           <ul className="list-disc pl-5 space-y-2 mt-2">
             <li><strong>Session cookies:</strong> Maintain your authenticated session (cleared on browser close).</li>
@@ -162,7 +162,7 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
           <p className="mt-2">We do not use advertising or tracking cookies. You may disable cookies in your browser settings, though this may impair platform functionality.</p>
         </Section>
 
-        <Section icon={<Mail size={16} className="text-indigo-600" />} title="9. Contact Us" delay={0.45}>
+        <Section icon={<Mail size={16} className="text-indigo-600" />} title="7. Contact Us" delay={0.45}>
           <p>For any privacy-related queries, data requests, or concerns:</p>
           <div className="mt-3 p-4 bg-slate-900 text-white rounded-2xl">
             <p className="font-black text-sm mb-1">CareerVision AI — Data Privacy Team</p>

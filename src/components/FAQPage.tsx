@@ -249,11 +249,7 @@ const FAQ_CATEGORIES: FAQCategory[] = [
     label: 'Data, Privacy & Security',
     icon: ShieldCheck,
     color: 'sky',
-    items: [
-      {
-        q: 'Is my personal data safe?',
-        a: 'Yes. All data is encrypted in transit (TLS 1.3) and at rest (AES-256 via Firebase). Firestore Security Rules enforce that users can only access their own data. Passwords are never stored in plain text — Firebase Authentication uses bcrypt hashing. We are fully GDPR compliant.',
-      },
+    items: [     
       {
         q: 'Does CareerVision AI sell my data?',
         a: 'Never. We do not sell, rent, or share your personal data with third-party advertisers or data brokers. Data is only shared with our infrastructure partners (Firebase, Gemini AI, Netlify, Render) strictly for the purpose of delivering the service. See our full Privacy Policy for details.',
