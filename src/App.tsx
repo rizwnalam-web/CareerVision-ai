@@ -100,6 +100,8 @@ import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobal
 import ReactMarkdown from 'react-markdown';
 
 import { LandingPage } from './components/LandingPage';
+import Logo from './components/Logo';
+import { CareerDirectoryView } from './components/CareerDirectoryView';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsConditions } from './components/TermsConditions';
 import { FAQPage } from './components/FAQPage';
@@ -1010,6 +1012,9 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
 
   // ── Job Directory state ──
   const homeCountry = profile.country || defaultCountry;
+  const targetCountry = profile.targetLocation || homeCountry;
+  const [dirCountry, setDirCountry] = useState<string>(targetCountry);
+  const dirManuallyToggled = useRef(false); // true once user clicks the toggle
   const [jobDirectory, setJobDirectory] = useState<JobDirectory | null>(null);
   const [isJobDirLoading, setIsJobDirLoading] = useState(false);
   const [jobDirError, setJobDirError] = useState(false);
@@ -1041,7 +1046,15 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
     }
   };
 
-  useEffect(() => { if (homeCountry) fetchJobDirectory(homeCountry); }, [homeCountry]);
+  // On mount and when profile location changes (async load), fetch for correct country
+  useEffect(() => {
+    if (dirManuallyToggled.current) return;
+    const resolved = profile.targetLocation || profile.country || defaultCountry;
+    if (resolved) {
+      setDirCountry(resolved);
+      fetchJobDirectory(resolved);
+    }
+  }, [profile.targetLocation, profile.country]);
 
   const readinessBreakdown = dashboardIntel ? [
     { label: 'Skills', value: dashboardIntel.readiness.skills, color: '#6366f1' },
@@ -1541,17 +1554,42 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
             <div>
               <h3 className="text-xl font-black text-slate-900 tracking-tight leading-none mb-1">Career Directories</h3>
               <p className="text-[9px] text-indigo-500 font-black uppercase tracking-widest">
-                {homeCountry} · Government &amp; Private Sector · AI-Generated
+                {dirCountry} · Government &amp; Private Sector · AI-Generated
               </p>
             </div>
-            <button
-              onClick={() => fetchJobDirectory(homeCountry)}
-              disabled={isJobDirLoading}
-              className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-40 border border-slate-200 hover:border-emerald-200"
-            >
-              <RotateCcw size={10} className={isJobDirLoading ? 'animate-spin' : ''} />
-              {isJobDirLoading ? 'Loading…' : 'Refresh'}
-            </button>
+            <div className="flex items-center gap-2">
+              {homeCountry !== targetCountry && (
+                <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
+                  {[{ label: homeCountry, value: homeCountry }, { label: targetCountry, value: targetCountry }].map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => {
+                        dirManuallyToggled.current = true;
+                        setDirCountry(opt.value);
+                        setJobDirectory(null);
+                        setActiveDirSector('Government');
+                        fetchJobDirectory(opt.value);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
+                        dirCountry === opt.value
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {opt.value === homeCountry ? '🏠' : '🎯'} {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={() => fetchJobDirectory(dirCountry)}
+                disabled={isJobDirLoading}
+                className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-40 border border-slate-200 hover:border-emerald-200"
+              >
+                <RotateCcw size={10} className={isJobDirLoading ? 'animate-spin' : ''} />
+                {isJobDirLoading ? 'Loading…' : 'Refresh'}
+              </button>
+            </div>
           </div>
 
           {/* Sector tab switcher */}
@@ -1598,7 +1636,7 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
             <div className="py-12 bg-rose-50 rounded-3xl border border-rose-100 flex flex-col items-center gap-3">
               <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest">Failed to load directory</p>
               <button
-                onClick={() => fetchJobDirectory(homeCountry)}
+                onClick={() => fetchJobDirectory(dirCountry)}
                 className="text-[9px] font-black uppercase tracking-widest px-4 py-2 bg-white text-rose-500 border border-rose-200 rounded-xl hover:bg-rose-50 transition-all"
               >
                 ↻ Retry
@@ -1609,7 +1647,7 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI is generating your directory…</p>
               <p className="text-[9px] text-slate-400">This may take a moment on first load</p>
               <button
-                onClick={() => fetchJobDirectory(homeCountry)}
+                onClick={() => fetchJobDirectory(dirCountry)}
                 className="text-[9px] font-black uppercase tracking-widest px-4 py-2 bg-white text-indigo-500 border border-indigo-200 rounded-xl hover:bg-indigo-50 transition-all"
               >
                 ↻ Retry Now
@@ -5399,20 +5437,21 @@ export default function App() {
 }
 
 function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
-  type AppView = 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'resume' | 'job-match' | 'interview';
-  const VALID_VIEWS: AppView[] = ['dashboard', 'roadmap', 'institutions', 'materials', 'expenses', 'advisor', 'parent', 'heatmap', 'jobs', 'resume', 'job-match', 'interview'];
+  type AppView = 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'resume' | 'job-match' | 'interview' | 'directory';
+  const VALID_VIEWS: AppView[] = ['dashboard', 'roadmap', 'institutions', 'materials', 'expenses', 'advisor', 'parent', 'heatmap', 'jobs', 'resume', 'job-match', 'interview', 'directory'];
   // ── Pillar Definitions ──
   type PillarSub = { label: string; view: AppView; icon: React.ElementType; desc: string };
   type Pillar = { id: string; label: string; icon: React.ElementType; primaryView: AppView; views: AppView[]; accent: { bg: string; text: string }; subs: PillarSub[] };
   const PILLAR_DEFS: Pillar[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, primaryView: 'dashboard', views: ['dashboard'], accent: { bg: 'bg-slate-950', text: 'text-white' }, subs: [] },
     {
-      id: 'explore', label: 'Explore', icon: Layers, primaryView: 'roadmap', views: ['roadmap', 'institutions', 'materials'],
+      id: 'explore', label: 'Explore', icon: Layers, primaryView: 'roadmap', views: ['roadmap', 'institutions', 'materials', 'directory'],
       accent: { bg: 'bg-violet-600', text: 'text-white' },
       subs: [
         { label: 'Career Maps',  view: 'roadmap',      icon: Map,      desc: 'Visual nodes & trajectory mapping' },
         { label: 'Institutions', view: 'institutions', icon: School,   desc: 'Global universities & bootcamps' },
         { label: 'Academy',      view: 'materials',    icon: BookOpen, desc: 'Study materials & guides' },
+        { label: 'Directory',    view: 'directory',    icon: Layers,   desc: 'Browse careers by your target location' },
       ],
     },
     {
@@ -5756,7 +5795,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       {/* Header Navigation */}
       <header className="flex items-center justify-between border-b border-slate-200/60 bg-white/70 backdrop-blur-xl px-5 py-3 z-20 shrink-0 sticky top-0">
         <div className="flex items-center gap-2.5 cursor-pointer group shrink-0" onClick={() => onExit()}>
-          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-950 font-black text-white shadow-xl shadow-indigo-200 group-hover:scale-110 transition-transform text-sm">CV</div>
+          <Logo size={36} className="group-hover:scale-110 transition-transform rounded-xl shadow-xl shadow-indigo-200" />
           <span className="text-xl font-black tracking-tighter text-slate-900 hidden sm:block">CareerVision<span className="text-indigo-600 italic">AI</span></span>
         </div>
         <nav className="hidden md:flex items-center gap-1 relative bg-slate-100/70 rounded-2xl p-1">
@@ -5823,29 +5862,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
         </div>
         <div className="flex items-center gap-3">
           <span className="bg-white border border-indigo-100 px-3 py-1 rounded-full text-[10px] text-indigo-600">{authProviderLabel}</span>
-          {/* LLM Model Badge */}
-          {llmHealth && (
-            <button
-              onClick={handleReprobeLLM}
-              disabled={isReprobingLLM}
-              title={llmHealth.available ? `Active AI: ${llmHealth.activeProvider?.model}\nClick to re-probe providers` : 'No AI provider available — click to retry'}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all',
-                llmHealth.available
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                  : 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100'
-              )}
-            >
-              {isReprobingLLM
-                ? <Loader2 size={9} className="animate-spin" />
-                : <BrainCircuit size={9} />}
-              {isReprobingLLM
-                ? 'Probing…'
-                : llmHealth.available
-                  ? llmHealth.activeProvider?.label
-                  : 'AI Unavailable'}
-            </button>
-          )}
+          {/* LLM Model Badge — hidden */}
           <button
             onClick={() => handleNavigate(profile.targetCareerId ? 'roadmap' : 'dashboard')}
             className="px-3 py-1 rounded-full bg-indigo-600 text-white text-[10px] font-black uppercase tracking-[0.18em] hover:bg-indigo-500 transition-colors"
@@ -5907,7 +5924,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
               {/* Drawer header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-950">
                 <div className="flex items-center gap-2.5">
-                  <div className="h-8 w-8 rounded-xl bg-white/10 flex items-center justify-center font-black text-white text-sm">CV</div>
+                  <Logo size={32} className="rounded-xl" />
                   <span className="text-sm font-black text-white tracking-tighter">CareerVision<span className="text-indigo-400 italic">AI</span></span>
                 </div>
                 <button
@@ -6026,6 +6043,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                    {activeView === 'resume' && <ResumeManager profile={profile} userId={user.id || user.uid} />}
                    {activeView === 'job-match' && <JobMatchView userId={user.id || user.uid} resumeContent={null} />}
                    {activeView === 'interview' && <InterviewPrepView userId={user.id || user.uid} defaultRole={profile.targetCareerId?.replace(/-/g,' ') || 'Software Engineer'} />}
+                   {activeView === 'directory' && <CareerDirectoryView profile={profile} />}
                 </section>
 
                 <section className="hidden xl:col-span-3 xl:flex flex-col gap-8 overflow-hidden">

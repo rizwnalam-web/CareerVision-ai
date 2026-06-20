@@ -294,7 +294,7 @@ export const CareerDirectoryView: React.FC<Props> = ({ profile }) => {
   const [data, setData] = useState<CareerDirectoryResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>('top10');
+  const [activeTab, setActiveTab] = useState<Tab>(profile.targetLocation ? 'target' : 'top10');
   const [search, setSearch] = useState('');
   const [countryFilter, setCountryFilter] = useState<string>('All');
   const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'public' | 'private'>('all');

@@ -1826,8 +1826,8 @@ export interface JobDirectoryProfile {
 }
 
 export async function getJobDirectory(country: string, profile?: JobDirectoryProfile): Promise<JobDirectory> {
-  // v2 in cache key busts any old 5-job cached entries
-  const key = `v2:${country.trim().toLowerCase()}`;
+  // v3 in cache key busts entries with hardcoded India-specific titles
+  const key = `v3:${country.trim().toLowerCase()}`;
   const cached = JOB_DIRECTORY_CACHE.get(key);
   if (cached && Date.now() < cached.expiresAt) {
     console.log(`[JobDirectory] Serving ${country} from in-memory cache`);
@@ -1851,16 +1851,18 @@ export async function getJobDirectory(country: string, profile?: JobDirectoryPro
 
   const prompt = `List government and private sector jobs available in ${country} (2026). ${profileHint}
 
+CRITICAL: Every single job title listed MUST be a real, actual job title used in ${country}. Do NOT use job titles from any other country. Do NOT include country-specific civil service titles (e.g. IAS Officer, District Collector) unless they literally exist in ${country}.
+
 Return JSON:
 {
   "country": "${country}",
   "sectors": [
     { "sector": "Government", "icon": "🏛️", "categories": [
-      { "category": "Civil Services & Administration", "jobs": ["Administrative Officer","District Collector","IAS Officer","Policy Analyst","Government Relations Manager","Public Sector Manager","Undersecretary","Municipal Commissioner"] },
+      { "category": "Civil Services & Administration", "jobs": ["<8 real ${country} government administration/civil service job titles — e.g. for USA: City Manager, County Administrator, Federal Program Officer, Policy Analyst, Government Affairs Director, Public Administrator, Budget Analyst, Administrative Judge>"] },
       { "category": "Defence & Security", "jobs": ["<8 real ${country} defence/security job titles>"] },
       { "category": "Public Finance & Banking", "jobs": ["<8 real ${country} public finance/central bank job titles>"] },
-      { "category": "Public Health & Medicine", "jobs": ["Medical Officer","Government Doctor","Public Health Physician","Chief Medical Officer","District Health Officer","Epidemiologist","Public Health Inspector","Health Policy Advisor"] },
-      { "category": "Nursing & Allied Health (Govt)", "jobs": ["<8 real ${country} government nursing and allied-health job titles including Registered Nurse, Pharmacist, Physiotherapist, Lab Technician>"] },
+      { "category": "Public Health & Medicine", "jobs": ["<8 real ${country} government public health/medicine job titles>"] },
+      { "category": "Nursing & Allied Health (Govt)", "jobs": ["<8 real ${country} government nursing and allied-health job titles>"] },
       { "category": "Education & Research", "jobs": ["<8 real ${country} government education/research job titles>"] },
       { "category": "Judiciary & Legal Services", "jobs": ["<8 real ${country} judiciary/legal job titles>"] },
       { "category": "Infrastructure & Environment", "jobs": ["<8 real ${country} infrastructure/environment/utilities job titles>"] }
@@ -1868,7 +1870,7 @@ Return JSON:
     { "sector": "Private", "icon": "🏢", "categories": [
       { "category": "Information Technology", "jobs": ["<8 real ${country} private IT job titles>"] },
       { "category": "Banking & Finance", "jobs": ["<8 real ${country} private banking/finance job titles>"] },
-      { "category": "Clinical Medicine & Specialists", "jobs": ["General Practitioner","Surgeon","Cardiologist","Pediatrician","Psychiatrist","Radiologist","Anesthesiologist","Emergency Medicine Physician"] },
+      { "category": "Clinical Medicine & Specialists", "jobs": ["<8 real ${country} private clinical/specialist physician titles>"] },
       { "category": "Healthcare & Pharmaceuticals", "jobs": ["<8 real ${country} private healthcare/pharma job titles>"] },
       { "category": "Engineering & Manufacturing", "jobs": ["<8 real ${country} engineering/manufacturing job titles>"] },
       { "category": "Consulting & Strategy", "jobs": ["<8 real ${country} consulting/strategy job titles>"] },
@@ -1882,8 +1884,7 @@ Return JSON:
 }
 
 Rules:
-- Replace every placeholder with exactly 8 REAL job titles used in ${country}.
-- The two healthcare categories already seeded (Public Health & Medicine; Clinical Medicine & Specialists) must keep those titles and may add country-specific variants.
+- Replace EVERY placeholder with exactly 8 REAL job titles actually used in ${country}. Not in any other country — only ${country}.
 - Output ONLY valid JSON.`;
 
   const tryLLM = async (maxTokens: number): Promise<JobDirectory | null> => {

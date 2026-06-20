@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import Logo from './Logo';
 import { motion, AnimatePresence } from 'motion/react';
 import { NewsFlash } from './NewsFlash';
 import { 
@@ -55,7 +56,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, onShowPrivacy
       {/* Navigation */}
       <nav className="flex items-center justify-between px-6 md:px-8 py-6 max-w-7xl mx-auto relative">
         <div className="flex items-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 font-bold text-white shadow-lg">CV</div>
+          <Logo size={40} className="shadow-lg rounded-xl" />
           <span className="text-2xl font-black tracking-tighter text-slate-900">CareerVision<span className="text-indigo-600 italic">AI</span></span>
         </div>
         {/* Desktop links */}
@@ -315,7 +316,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, onShowPrivacy
             {/* Brand */}
             <div className="col-span-2 md:col-span-1">
               <div className="flex items-center gap-2 mb-4">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 font-bold text-white text-sm shadow-lg">CV</div>
+                <Logo size={36} className="rounded-xl shadow-lg" />
                 <span className="text-lg font-black tracking-tight">CareerVision<span className="text-indigo-400 italic">AI</span></span>
               </div>
               <p className="text-slate-400 text-xs font-medium leading-relaxed max-w-[200px]">
