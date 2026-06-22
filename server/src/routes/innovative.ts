@@ -30,7 +30,7 @@ User: ${message}
 Respond as a career coach. Be specific, actionable, and warm. Keep replies under 180 words. Do NOT use JSON — respond in plain conversational text.`;
 
     const result = await generateDeepSeekResponse(prompt, { temperature: 0.75 });
-    res.json({ success: true, data: { reply: result.content ?? "I'm here to help — could you rephrase that?" } });
+    res.json({ success: true, data: { reply: result.text ?? "I'm here to help — could you rephrase that?" } });
   } catch (e) {
     console.error("career-coach/chat error:", e);
     res.status(500).json({ error: "Career coach unavailable" });
@@ -64,7 +64,7 @@ Return JSON with this exact structure:
 }`;
 
     const result = await generateDeepSeekResponse(prompt, { temperature: 0.8 });
-    const scenario = JSON.parse(extractJSON(result.content));
+    const scenario = JSON.parse(extractJSON(result.text));
     res.json({ success: true, data: scenario });
   } catch (e) {
     console.error("industry-sim/scenario error:", e);
@@ -95,7 +95,7 @@ Return JSON:
 }`;
 
     const result = await generateDeepSeekResponse(prompt, { temperature: 0.5 });
-    res.json({ success: true, data: JSON.parse(extractJSON(result.content)) });
+    res.json({ success: true, data: JSON.parse(extractJSON(result.text)) });
   } catch (e) {
     console.error("industry-sim/evaluate error:", e);
     res.status(500).json({ error: "Failed to evaluate answer" });
@@ -127,7 +127,7 @@ Return JSON array:
 ]`;
 
     const result = await generateDeepSeekResponse(prompt, { temperature: 0.7 });
-    res.json({ success: true, data: JSON.parse(extractJSON(result.content)) });
+    res.json({ success: true, data: JSON.parse(extractJSON(result.text)) });
   } catch (e) {
     console.error("soft-skills/questions error:", e);
     res.status(500).json({ error: "Failed to generate assessment" });
@@ -155,7 +155,7 @@ Return JSON:
 }`;
 
     const result = await generateDeepSeekResponse(prompt, { temperature: 0.4 });
-    res.json({ success: true, data: JSON.parse(extractJSON(result.content)) });
+    res.json({ success: true, data: JSON.parse(extractJSON(result.text)) });
   } catch (e) {
     console.error("soft-skills/analyze error:", e);
     res.status(500).json({ error: "Failed to analyze soft skills" });
@@ -186,7 +186,7 @@ Return JSON:
 }`;
 
     const result = await generateDeepSeekResponse(prompt, { temperature: 0.6 });
-    res.json({ success: true, data: JSON.parse(extractJSON(result.content)) });
+    res.json({ success: true, data: JSON.parse(extractJSON(result.text)) });
   } catch (e) {
     console.error("salary-coach/scenario error:", e);
     res.status(500).json({ error: "Failed to generate negotiation scenario" });
@@ -215,7 +215,7 @@ Play the HR manager and return JSON:
 }`;
 
     const result = await generateDeepSeekResponse(prompt, { temperature: 0.65 });
-    res.json({ success: true, data: JSON.parse(extractJSON(result.content)) });
+    res.json({ success: true, data: JSON.parse(extractJSON(result.text)) });
   } catch (e) {
     console.error("salary-coach/respond error:", e);
     res.status(500).json({ error: "Failed to process negotiation response" });
@@ -252,7 +252,7 @@ Return JSON array:
 ]`;
 
     const result = await generateDeepSeekResponse(prompt, { temperature: 0.75 });
-    res.json({ success: true, data: JSON.parse(extractJSON(result.content)) });
+    res.json({ success: true, data: JSON.parse(extractJSON(result.text)) });
   } catch (e) {
     console.error("side-hustle/suggest error:", e);
     res.status(500).json({ error: "Failed to suggest side hustles" });
@@ -294,7 +294,7 @@ Return JSON:
 }`;
 
     const result = await generateDeepSeekResponse(prompt, { temperature: 0.4 });
-    res.json({ success: true, data: JSON.parse(extractJSON(result.content)) });
+    res.json({ success: true, data: JSON.parse(extractJSON(result.text)) });
   } catch (e) {
     console.error("burnout/assess error:", e);
     res.status(500).json({ error: "Failed to assess burnout risk" });
