@@ -28,6 +28,11 @@ export {
   getCareerMilestones,
   getJobDirectory,
   getCareerRequirements,
+  getNetworkCommunities,
+  getNetworkMentors,
+  getNetworkResumeReviews,
+  getNetworkReferrals,
+  getNetworkCompanies,
 } from "./careerAiProxy.js";
 
 export type { GlobalInsight, CareerDirectoryEntry, CareerDirectoryResult, CountryCareerEntry, CareerMilestone, JobDirectory, JobDirectorySector, JobDirectoryCategory, CareerRequirements, EligibilityCriterion, SelectionStage, KeyExam, ArtifactItem, ArtifactCategory, PreparationPhase } from "./careerAiProxy.js";

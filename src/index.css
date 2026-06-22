@@ -52,3 +52,93 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #cbd5e1;
 }
+
+/* ── Accessibility: CSS custom property tokens ────────────────────────────── */
+:root {
+  --cv-bg:           #f8fafc;
+  --cv-surface:      #ffffff;
+  --cv-text:         #0f172a;
+  --cv-text-muted:   #64748b;
+  --cv-border:       #e2e8f0;
+  --cv-accent:       #4f46e5;
+  --cv-accent-text:  #ffffff;
+  --cv-interactive:  #6366f1;
+  --cv-focus-ring:   #6366f1;
+  --cv-error:        #ef4444;
+  --cv-success:      #22c55e;
+}
+
+/* ── High-contrast mode (toggled via JS class on <html>) ──────────────────── */
+.high-contrast {
+  --cv-bg:           #000000;
+  --cv-surface:      #0a0a0a;
+  --cv-text:         #ffffff;
+  --cv-text-muted:   #e2e8f0;
+  --cv-border:       #ffffff;
+  --cv-accent:       #ffff00;
+  --cv-accent-text:  #000000;
+  --cv-interactive:  #ffff00;
+  --cv-focus-ring:   #ffff00;
+  --cv-error:        #ff6b6b;
+  --cv-success:      #00ff88;
+}
+
+/* Enforce high-contrast on body when class is active */
+.high-contrast body {
+  background-color: var(--cv-bg) !important;
+  color: var(--cv-text) !important;
+}
+
+/* High-contrast links */
+.high-contrast a {
+  color: var(--cv-interactive) !important;
+  text-decoration: underline !important;
+}
+
+/* High-contrast focus — WCAG 2.4.11 minimum visible focus */
+.high-contrast *:focus-visible {
+  outline: 3px solid var(--cv-focus-ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* Honor OS high-contrast preference automatically */
+@media (prefers-contrast: high) {
+  :root {
+    --cv-bg:           #000000;
+    --cv-surface:      #0a0a0a;
+    --cv-text:         #ffffff;
+    --cv-text-muted:   #e2e8f0;
+    --cv-border:       #ffffff;
+    --cv-accent:       #ffff00;
+    --cv-accent-text:  #000000;
+    --cv-interactive:  #ffff00;
+    --cv-focus-ring:   #ffff00;
+    --cv-error:        #ff6b6b;
+    --cv-success:      #00ff88;
+  }
+}
+
+/* ── Accessibility: Font-size scaling ─────────────────────────────────────── */
+.a11y-font-large  { font-size: 112.5% !important; }
+.a11y-font-xlarge { font-size: 125% !important; }
+
+/* ── Reduced motion: Respect OS preference ────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── RTL layout helpers ───────────────────────────────────────────────────── */
+[dir="rtl"] .rtl-flip {
+  transform: scaleX(-1);
+}
+
+/* Globally visible focus outline for keyboard users (not mouse) */
+:focus-visible {
+  outline: 2px solid var(--cv-focus-ring);
+  outline-offset: 2px;
+}

@@ -275,20 +275,24 @@ const COLOR_STYLES: Record<string, { tab: string; activeTab: string; badge: stri
   sky:     { tab: 'border-sky-200 bg-sky-50',       activeTab: 'bg-sky-600 text-white border-sky-600',       badge: 'bg-sky-100 text-sky-700',       icon: 'text-sky-600',    dot: 'bg-sky-500' },
 };
 
-const AccordionItem: React.FC<{ item: FAQItem; isOpen: boolean; onToggle: () => void; dot: string }> = ({ item, isOpen, onToggle, dot }) => (
+const AccordionItem: React.FC<{ item: FAQItem; isOpen: boolean; onToggle: () => void; dot: string; id: string }> = ({ item, isOpen, onToggle, dot, id }) => (
   <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
     <button
       onClick={onToggle}
+      aria-expanded={isOpen}
+      aria-controls={`faq-answer-${id}`}
+      id={`faq-question-${id}`}
       className="w-full flex items-center justify-between px-6 py-5 text-left hover:bg-slate-50 transition-colors gap-4"
     >
       <div className="flex items-center gap-3">
-        <span className={cn('w-2 h-2 rounded-full shrink-0', dot)} />
+        <span className={cn('w-2 h-2 rounded-full shrink-0', dot)} aria-hidden="true" />
         <span className="text-sm font-black text-slate-900">{item.q}</span>
       </div>
       <motion.span
         animate={{ rotate: isOpen ? 180 : 0 }}
         transition={{ duration: 0.2 }}
         className="shrink-0 text-slate-400"
+        aria-hidden="true"
       >
         <ChevronDown size={18} />
       </motion.span>
@@ -297,6 +301,9 @@ const AccordionItem: React.FC<{ item: FAQItem; isOpen: boolean; onToggle: () => 
       {isOpen && (
         <motion.div
           key="answer"
+          id={`faq-answer-${id}`}
+          role="region"
+          aria-labelledby={`faq-question-${id}`}
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: 'auto', opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
@@ -441,6 +448,7 @@ export const FAQPage: React.FC<FAQPageProps> = ({ onBack, onStart }) => {
                   {category.items.map((item, i) => (
                     <AccordionItem
                       key={i}
+                      id={`${activeCategory}-${i}`}
                       item={item}
                       isOpen={openIdx === i}
                       onToggle={() => setOpenIdx(openIdx === i ? null : i)}

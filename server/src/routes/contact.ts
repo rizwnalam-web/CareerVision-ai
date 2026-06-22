@@ -58,7 +58,7 @@ router.post("/send", async (req: Request, res: Response) => {
     const fromAddress = process.env.RESEND_FROM || "CareerVision AI <onboarding@resend.dev>";
 
     // Notification email to inbox
-    await resend.emails.send({
+    const { error: notifError } = await resend.emails.send({
       from: fromAddress,
       to: toAddress,
       replyTo: safeEmail,
@@ -94,8 +94,13 @@ router.post("/send", async (req: Request, res: Response) => {
       `,
     });
 
+    if (notifError) {
+      console.error("[Contact] Resend notification error:", notifError);
+      return res.status(500).json({ error: "Failed to send message. Please email us directly at cviinfo79@gmail.com" });
+    }
+
     // Auto-reply to sender
-    await resend.emails.send({
+    const { error: replyError } = await resend.emails.send({
       from: fromAddress,
       to: safeEmail,
       subject: "We received your message — CareerVision AI",
@@ -128,6 +133,10 @@ router.post("/send", async (req: Request, res: Response) => {
         </div>
       `,
     });
+
+    if (replyError) {
+      console.warn("[Contact] Auto-reply failed (non-critical):", replyError);
+    }
 
     console.log(`[Contact] Message from ${safeName} <${safeEmail}> sent via Resend`);
     res.json({ success: true, message: "Your message has been sent. We'll be in touch soon!" });

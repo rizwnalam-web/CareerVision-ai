@@ -429,5 +429,67 @@ router.post("/career-requirements", async (req: Request, res: Response) => {
   }
 });
 
+// ─── Network & Community Routes ───────────────────────────────────────────────
+
+router.post("/network-communities", async (req: Request, res: Response) => {
+  try {
+    const { profile } = req.body;
+    if (!profile) return res.status(400).json({ error: "profile is required" });
+    const results = await careerAiService.getNetworkCommunities(profile);
+    res.json({ success: true, data: results });
+  } catch (error) {
+    console.error("Network communities error:", error);
+    res.status(500).json({ error: "Failed to fetch communities" });
+  }
+});
+
+router.post("/network-mentors", async (req: Request, res: Response) => {
+  try {
+    const { profile } = req.body;
+    if (!profile) return res.status(400).json({ error: "profile is required" });
+    const results = await careerAiService.getNetworkMentors(profile);
+    res.json({ success: true, data: results });
+  } catch (error) {
+    console.error("Network mentors error:", error);
+    res.status(500).json({ error: "Failed to fetch mentors" });
+  }
+});
+
+router.post("/network-resume-reviews", async (req: Request, res: Response) => {
+  try {
+    const { profile } = req.body;
+    if (!profile) return res.status(400).json({ error: "profile is required" });
+    const results = await careerAiService.getNetworkResumeReviews(profile);
+    res.json({ success: true, data: results });
+  } catch (error) {
+    console.error("Network resume reviews error:", error);
+    res.status(500).json({ error: "Failed to fetch resume reviews" });
+  }
+});
+
+router.post("/network-referrals", async (req: Request, res: Response) => {
+  try {
+    const { profile } = req.body;
+    if (!profile) return res.status(400).json({ error: "profile is required" });
+    const results = await careerAiService.getNetworkReferrals(profile);
+    res.json({ success: true, data: results });
+  } catch (error) {
+    console.error("Network referrals error:", error);
+    res.status(500).json({ error: "Failed to fetch referrals" });
+  }
+});
+
+router.post("/network-companies", async (req: Request, res: Response) => {
+  try {
+    const { profile } = req.body;
+    if (!profile) return res.status(400).json({ error: "profile is required" });
+    const results = await careerAiService.getNetworkCompanies(profile);
+    res.json({ success: true, data: results });
+  } catch (error) {
+    console.error("Network companies error:", error);
+    res.status(500).json({ error: "Failed to fetch companies" });
+  }
+});
+
 export default router;
 

@@ -219,6 +219,189 @@ export const CAREER_PATHS: CareerPath[] = [
       { ageRange: "15-18", title: "AI Basics", description: "Learn AI fundamentals and Mistral model usage.", requirements: ["Python", "AI Basics"] },
       { ageRange: "22-25", title: "Advanced AI", description: "Master Mistral models and deployment.", requirements: ["Mistral-7B", "Mixtral 8x7B"] }
     ]
+  },
+  // ── Inclusive & Diverse Additions ─────────────────────────────────────────────────
+  {
+    id: "assistive-tech",
+    title: "Assistive Technology Specialist",
+    description: "Design, evaluate, and implement technology solutions that help people with disabilities access education, work, and daily life.",
+    growth: "high",
+    category: "Technology & Digital",
+    subCategory: "Accessibility & Assistive Tech",
+    workType: "Hybrid",
+    tags: ["Disability Inclusive", "Social Impact", "Healthcare Tech"],
+    disabilityFriendly: true,
+    remoteAccessible: true,
+    culturalContext: ["Global", "North America", "Europe"],
+    milestones: [
+      { ageRange: "16-20", title: "Foundation", description: "Study disability studies, human-computer interaction, and assistive device basics.", requirements: ["Disability Studies", "HCI", "Computer Science"] },
+      { ageRange: "20-24", title: "Specialisation", description: "Earn AT certification (ATACP) and work with occupational therapists.", requirements: ["ATACP Cert", "Clinical Placement"] },
+      { ageRange: "24-28", title: "Professional Practice", description: "Work in education, healthcare, or corporate accessibility roles.", requirements: ["Assistive Software", "AAC Devices", "WCAG Compliance"] },
+      { ageRange: "28+", title: "Leadership", description: "Lead accessibility programmes for institutions or tech companies.", requirements: ["Programme Management", "Policy Advocacy"] }
+    ]
+  },
+  {
+    id: "accessible-ux",
+    title: "Accessible UX Designer",
+    description: "Create digital products and interfaces that are inclusive by design, ensuring all users — regardless of ability — can interact effectively.",
+    growth: "high",
+    category: "Arts, Design & Media",
+    subCategory: "UX & Inclusive Design",
+    workType: "Remote",
+    tags: ["Disability Inclusive", "Remote", "WCAG", "Inclusive Design"],
+    disabilityFriendly: true,
+    remoteAccessible: true,
+    culturalContext: ["Global"],
+    milestones: [
+      { ageRange: "16-21", title: "Design Foundations", description: "Study visual design, UX principles, and accessibility standards.", requirements: ["Figma", "WCAG 2.1", "User Research"] },
+      { ageRange: "21-25", title: "Accessibility Specialisation", description: "Deep-dive into screen readers, keyboard navigation, and accessible colour systems.", requirements: ["NVDA", "Axe DevTools", "Colour Contrast Tools"] },
+      { ageRange: "25-30", title: "Senior Designer", description: "Lead accessibility audits and mentor teams on inclusive design.", requirements: ["Accessibility Auditing", "Design Systems", "Team Leadership"] },
+      { ageRange: "30+", title: "Design Principal", description: "Shape product accessibility strategy and contribute to W3C standards.", requirements: ["W3C Participation", "Strategic Vision"] }
+    ]
+  },
+  {
+    id: "climate-policy",
+    title: "Climate Justice Policy Analyst",
+    description: "Develop and advocate for climate policies that address the disproportionate impact of climate change on marginalised and vulnerable communities.",
+    growth: "high",
+    category: "Education, Law & Public Service",
+    subCategory: "Climate Policy",
+    workType: "Hybrid",
+    tags: ["Social Impact", "Climate", "Non-Western Contexts", "Policy"],
+    remoteAccessible: true,
+    culturalContext: ["Global", "Africa", "South Asia", "Pacific Islands", "Latin America"],
+    milestones: [
+      { ageRange: "18-22", title: "Academic Foundation", description: "Study environmental policy, political science, or development economics.", requirements: ["Environmental Studies", "Economics", "Political Science"] },
+      { ageRange: "22-26", title: "Research & Advocacy", description: "Work at NGOs or think tanks on climate equity research.", requirements: ["Quantitative Research", "Stakeholder Engagement", "Report Writing"] },
+      { ageRange: "26-30", title: "Policy Analyst", description: "Advise governments or international bodies on just-transition frameworks.", requirements: ["Policy Analysis", "UN Frameworks", "Community Consultation"] },
+      { ageRange: "30+", title: "Senior Advisor", description: "Lead national or international climate justice programmes.", requirements: ["Programme Leadership", "Multilateral Diplomacy"] }
+    ]
+  },
+  {
+    id: "community-health",
+    title: "Community Health Worker",
+    description: "Bridge the gap between healthcare systems and underserved communities through culturally competent outreach, education, and support.",
+    growth: "high",
+    category: "Healthcare & Life Sciences",
+    subCategory: "Community Health",
+    workType: "Mobile",
+    tags: ["Social Impact", "Non-Western Contexts", "Community", "Healthcare"],
+    disabilityFriendly: true,
+    culturalContext: ["Global", "Sub-Saharan Africa", "South Asia", "Indigenous Communities", "Latin America"],
+    milestones: [
+      { ageRange: "18-22", title: "Foundational Training", description: "Complete CHW certification or public health diploma.", requirements: ["CHW Certificate", "First Aid", "Community Languages"] },
+      { ageRange: "22-27", title: "Field Practice", description: "Deliver health education, referrals, and chronic disease support in community settings.", requirements: ["Motivational Interviewing", "Case Management", "Cultural Humility"] },
+      { ageRange: "27-32", title: "Programme Coordinator", description: "Coordinate outreach programmes across multiple communities.", requirements: ["Programme Management", "Data Collection", "Team Supervision"] },
+      { ageRange: "32+", title: "Health Equity Leader", description: "Drive systemic change in health equity policy and practice.", requirements: ["Health Policy", "Grant Writing", "Advocacy"] }
+    ]
+  },
+  {
+    id: "traditional-medicine",
+    title: "Traditional & Integrative Medicine Practitioner",
+    description: "Integrate traditional healing practices (Ayurveda, TCM, Indigenous medicine) with evidence-based healthcare to serve diverse patient populations.",
+    growth: "medium",
+    category: "Healthcare & Life Sciences",
+    subCategory: "Integrative Medicine",
+    workType: "On-site",
+    tags: ["Non-Western Contexts", "Cultural Heritage", "Holistic Health"],
+    culturalContext: ["South Asia", "East Asia", "Africa", "Indigenous Communities", "Middle East"],
+    milestones: [
+      { ageRange: "16-22", title: "Foundation Training", description: "Formal study in Ayurveda, TCM, or indigenous healing traditions.", requirements: ["Herbal Medicine", "Traditional Diagnostics", "Anatomy"] },
+      { ageRange: "22-27", title: "Clinical Practice", description: "Supervised clinical hours and licensing in your jurisdiction.", requirements: ["Clinical Hours", "Licensing Exam", "Patient Communication"] },
+      { ageRange: "27-33", title: "Integration Practice", description: "Work in integrative health clinics alongside conventional medicine practitioners.", requirements: ["Collaborative Care", "Evidence-Based Practice"] },
+      { ageRange: "33+", title: "Senior Practitioner", description: "Teach, research, or lead integrative health departments.", requirements: ["Research Publication", "Teaching", "Leadership"] }
+    ]
+  },
+  {
+    id: "agri-tech",
+    title: "Agricultural Technology Specialist",
+    description: "Apply precision agriculture, IoT sensors, drone technology, and data analytics to modernise food production and support food security globally.",
+    growth: "high",
+    category: "Engineering, Science & Environment",
+    subCategory: "Agricultural Technology",
+    workType: "Mobile",
+    tags: ["Non-Western Contexts", "Emerging Tech", "Food Security", "Sustainability"],
+    culturalContext: ["Sub-Saharan Africa", "South Asia", "Southeast Asia", "Latin America", "Global"],
+    milestones: [
+      { ageRange: "16-21", title: "Agri-Science Foundation", description: "Study agricultural science, soil science, or environmental engineering.", requirements: ["Agronomy", "Biology", "Data Literacy"] },
+      { ageRange: "21-25", title: "Tech Specialisation", description: "Learn precision farming tools, drone operation, and farm management software.", requirements: ["Drone Piloting", "IoT Systems", "GIS"] },
+      { ageRange: "25-30", title: "Field Implementation", description: "Deploy technology solutions on farms and train local agricultural workers.", requirements: ["Project Management", "Training Delivery", "Data Analysis"] },
+      { ageRange: "30+", title: "Agri-Tech Leader", description: "Lead agri-tech programmes for governments or agribusiness.", requirements: ["Programme Leadership", "Investment Pitching", "Policy Engagement"] }
+    ]
+  },
+  {
+    id: "quantum-computing",
+    title: "Quantum Computing Researcher",
+    description: "Research and develop quantum algorithms, error correction, and hardware that will power the next generation of computing breakthroughs.",
+    growth: "high",
+    category: "Technology & Digital",
+    subCategory: "Emerging Computing",
+    workType: "Hybrid",
+    tags: ["Emerging Tech", "Research", "Deep Tech"],
+    remoteAccessible: true,
+    culturalContext: ["Global", "North America", "Europe", "China"],
+    milestones: [
+      { ageRange: "16-22", title: "STEM Foundation", description: "Degree in physics, mathematics, or computer science with quantum mechanics coursework.", requirements: ["Linear Algebra", "Quantum Mechanics", "Python"] },
+      { ageRange: "22-27", title: "Graduate Research", description: "PhD or Master's research in quantum information science.", requirements: ["Qiskit / Cirq", "Research Publication", "Quantum Hardware"] },
+      { ageRange: "27-32", title: "Industry / Lab Researcher", description: "Work at IBM Q, Google Quantum AI, national labs, or quantum startups.", requirements: ["Quantum Algorithms", "Error Correction", "Team Collaboration"] },
+      { ageRange: "32+", title: "Principal Researcher", description: "Lead quantum research programmes and publish breakthrough findings.", requirements: ["Grant Writing", "Team Leadership", "IP Strategy"] }
+    ]
+  },
+  {
+    id: "spatial-computing",
+    title: "Spatial Computing / AR Designer",
+    description: "Design immersive augmented and mixed-reality experiences for enterprise, education, healthcare, and consumer applications.",
+    growth: "high",
+    category: "Arts, Design & Media",
+    subCategory: "Immersive Design",
+    workType: "Hybrid",
+    tags: ["Emerging Tech", "AR/VR", "Spatial Design"],
+    remoteAccessible: true,
+    culturalContext: ["Global", "North America", "East Asia"],
+    milestones: [
+      { ageRange: "16-21", title: "Design & Dev Foundation", description: "Study 3D design, interaction design, and game development.", requirements: ["Unity / Unreal", "3D Modelling", "UX Design"] },
+      { ageRange: "21-25", title: "AR Specialisation", description: "Build projects using ARKit, ARCore, and Vision Pro SDK.", requirements: ["ARKit / ARCore", "Spatial UX", "Shader Programming"] },
+      { ageRange: "25-30", title: "Senior XR Designer", description: "Lead XR product development for enterprise or consumer markets.", requirements: ["Product Roadmap", "Team Leadership", "Hardware Constraints"] },
+      { ageRange: "30+", title: "XR Creative Director", description: "Direct spatial computing strategy and set the creative vision for immersive products.", requirements: ["Creative Vision", "Business Strategy", "Cross-Disciplinary Leadership"] }
+    ]
+  },
+  {
+    id: "freelance-ux-researcher",
+    title: "Freelance UX Researcher",
+    description: "Conduct user research independently for multiple clients, flexible hours, and fully remote — ideal for self-directed professionals and those with access needs.",
+    growth: "high",
+    category: "Arts, Design & Media",
+    subCategory: "UX Research",
+    workType: "Remote",
+    tags: ["Gig Economy", "Remote", "Disability Inclusive", "Flexible Work"],
+    disabilityFriendly: true,
+    remoteAccessible: true,
+    culturalContext: ["Global"],
+    milestones: [
+      { ageRange: "18-23", title: "Research Foundations", description: "Learn qualitative and quantitative UX research methods.", requirements: ["Usability Testing", "Survey Design", "Interview Techniques"] },
+      { ageRange: "23-26", title: "Portfolio Building", description: "Complete freelance projects and build a research portfolio.", requirements: ["Case Studies", "Client Management", "Research Ops"] },
+      { ageRange: "26-30", title: "Established Freelancer", description: "Manage multiple client engagements and specialise in an industry vertical.", requirements: ["Rate Setting", "Contract Management", "Industry Expertise"] },
+      { ageRange: "30+", title: "Research Consultant", description: "Lead large-scale research programmes and advise on research strategy.", requirements: ["Research Strategy", "Team Facilitation", "Business Development"] }
+    ]
+  },
+  {
+    id: "digital-marketer",
+    title: "Independent Digital Marketer",
+    description: "Build and manage digital marketing campaigns — SEO, social media, paid ads, and content — as an independent practitioner serving a global client base.",
+    growth: "medium",
+    category: "Business, Finance & Management",
+    subCategory: "Digital Marketing",
+    workType: "Remote",
+    tags: ["Gig Economy", "Remote", "Flexible Work", "Entrepreneurship"],
+    disabilityFriendly: true,
+    remoteAccessible: true,
+    culturalContext: ["Global"],
+    milestones: [
+      { ageRange: "18-22", title: "Marketing Foundations", description: "Learn digital marketing fundamentals: SEO, SEM, social media, email.", requirements: ["Google Analytics", "SEO Tools", "Social Media Platforms"] },
+      { ageRange: "22-26", title: "Freelance Launch", description: "Acquire first clients and build a track record of results.", requirements: ["Portfolio", "Client Proposals", "Campaign Reporting"] },
+      { ageRange: "26-30", title: "Specialist Practitioner", description: "Develop deep expertise in one channel (e.g., paid social, SEO, email automation).", requirements: ["Specialisation", "Advanced Analytics", "Budget Management"] },
+      { ageRange: "30+", title: "Marketing Strategist", description: "Lead multi-channel strategy for mid-to-large clients or launch a marketing agency.", requirements: ["Business Strategy", "Team Building", "Agency Operations"] }
+    ]
   }
 ];
 

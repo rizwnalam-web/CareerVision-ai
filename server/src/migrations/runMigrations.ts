@@ -14,6 +14,9 @@ import * as migration011 from "./011_add_resume_tables.js";
 import * as migration012 from "./012_resume_use_text_identifier.js";
 import * as migration013 from "./013_add_job_match_tables.js";
 import * as migration014 from "./014_interview_prep_tables.js";
+import * as migration015 from "./015_analytics_tables.js";
+import * as migration016 from "./016_push_subscriptions.js";
+import * as migration017 from "./017_monetization_tables.js";
 
 const migrations = [
   { name: "001_initial_schema",        module: migration001 },
@@ -31,6 +34,9 @@ const migrations = [
   { name: "012_resume_use_text_identifier",   module: migration012 },
   { name: "013_add_job_match_tables",          module: migration013 },
   { name: "014_interview_prep_tables",          module: migration014 },
+  { name: "015_analytics_tables",               module: migration015 },
+  { name: "016_push_subscriptions",              module: migration016 },
+  { name: "017_monetization_tables",              module: migration017 },
 ];
 
 export async function runMigrations() {

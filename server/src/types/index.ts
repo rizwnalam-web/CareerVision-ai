@@ -74,6 +74,7 @@ export interface FundingOpportunity {
   category: "Merit" | "Need" | "Interest" | "Geographic";
   type: "Scholarship" | "Grant" | "Loan";
   terms?: string;
+  website?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }

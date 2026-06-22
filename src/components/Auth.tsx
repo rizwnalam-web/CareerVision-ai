@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { 
   signInWithPopup, 
   signOut,
@@ -75,6 +76,7 @@ export const AuthProvider = ({ children }: { children: (props: { user: AuthUser 
 };
 
 export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack?: () => void; onShowRegister?: () => void; onLoginSuccess?: (user: any) => void }) => {
+  const { t } = useTranslation();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [authStage, setAuthStage] = useState<'initial' | 'emailLogin' | 'forgotPassword' | 'resetPassword'>('initial');
   const [email, setEmail] = useState('');
@@ -124,11 +126,17 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
     setIsLoading(true);
     try {
       const response = await forgotPassword({ email: trimmedEmail });
-      setMessage(response.message || 'Password reset token generated.');
+      // In development the server returns the token directly as a fallback
+      // when email delivery is unavailable (e.g. sandbox/SMTP restrictions)
       if (response.token) {
         setResetToken(response.token);
-        setAuthStage('resetPassword');
+        setMessage(response.devNote
+          ? `Dev mode: email unavailable. Token pre-filled below.`
+          : (response.message || 'Token sent. Check your email.'));
+      } else {
+        setMessage(response.message || 'If an account exists for that email, a password reset token has been sent. Please check your inbox.');
       }
+      setAuthStage('resetPassword');
     } catch (err: any) {
       setError(err.message || 'Failed to request password reset');
     } finally {
@@ -206,14 +214,17 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
           </button>
 
           <div className="space-y-2 mb-8">
-            <h1 className="text-2xl font-black text-white">Email Login</h1>
-            <p className="text-slate-400">Sign in with your email and password</p>
+            <h1 className="text-2xl font-black text-white">{t('auth.signInTitle')}</h1>
+            <p className="text-slate-400">{t('auth.signIn')} with your email and password</p>
           </div>
 
           {(error || message) && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
+              id="auth-login-msg"
+              role={error ? 'alert' : 'status'}
+              aria-live={error ? 'assertive' : 'polite'}
               className={cn(
                 "mb-6 p-4 rounded-xl text-sm",
                 error ? "bg-red-500/10 border border-red-500/20 text-red-400" : "bg-emerald-500/10 border border-emerald-500/20 text-emerald-200"
@@ -225,29 +236,37 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
 
           <form onSubmit={handleEmailLogin} className="space-y-4">
             <div>
-              <label className="text-xs font-black text-slate-300 uppercase tracking-widest block mb-2">
-                <Mail size={14} className="inline mr-2" />
+              <label htmlFor="login-email" className="text-xs font-black text-slate-300 uppercase tracking-widest block mb-2">
+                <Mail size={14} className="inline mr-2" aria-hidden="true" />
                 Email
               </label>
               <input
+                id="login-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="your@email.com"
+                aria-required="true"
+                aria-invalid={!!error}
+                aria-describedby={error ? 'auth-login-msg' : undefined}
                 className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
               />
             </div>
 
             <div>
-              <label className="text-xs font-black text-slate-300 uppercase tracking-widest block mb-2">
-                <Lock size={14} className="inline mr-2" />
+              <label htmlFor="login-password" className="text-xs font-black text-slate-300 uppercase tracking-widest block mb-2">
+                <Lock size={14} className="inline mr-2" aria-hidden="true" />
                 Password
               </label>
               <input
+                id="login-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••"
+                aria-required="true"
+                aria-invalid={!!error}
+                aria-describedby={error ? 'auth-login-msg' : undefined}
                 className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
               />
             </div>
@@ -270,6 +289,7 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
             <button
               type="submit"
               disabled={isLoading}
+              aria-busy={isLoading}
               className={cn(
                 "w-full py-3 px-6 rounded-xl font-bold uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2",
                 isLoading
@@ -277,7 +297,7 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
                   : "bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-700 hover:to-emerald-700 text-white"
               )}
             >
-              {isLoading && <Loader2 size={18} className="animate-spin" />}
+              {isLoading && <Loader2 size={18} className="animate-spin" aria-hidden="true" />}
               {isLoading ? "Logging in..." : "Sign In"}
             </button>
           </form>
@@ -324,7 +344,7 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
 
           <div className="space-y-2 mb-8">
             <h1 className="text-2xl font-black text-white">Forgot Password</h1>
-            <p className="text-slate-400">Enter the email for your account and we will generate a reset token.</p>
+            <p className="text-slate-400">Enter the email for your account and we will send a reset token to your inbox.</p>
           </div>
 
           {(error || message) && (
@@ -370,19 +390,7 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
             </button>
           </form>
 
-          {resetToken && (
-            <div className="mt-6 p-4 bg-slate-800 border border-slate-700 rounded-2xl text-slate-200 text-sm">
-              <p className="font-semibold text-white mb-2">Reset token generated</p>
-              <p className="break-words">{resetToken}</p>
-              <p className="mt-3 text-slate-400">Use this token on the next screen to reset your password.</p>
-              <button
-                onClick={() => setAuthStage('resetPassword')}
-                className="mt-4 w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold transition-colors"
-              >
-                Reset Password Now
-              </button>
-            </div>
-          )}
+
         </motion.div>
       </div>
     );
@@ -414,7 +422,7 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
 
           <div className="space-y-2 mb-8">
             <h1 className="text-2xl font-black text-white">Reset Password</h1>
-            <p className="text-slate-400">Enter your reset token and choose a new password.</p>
+            <p className="text-slate-400">Check your email for the reset token, then enter it below with your new password.</p>
           </div>
 
           {(error || message) && (

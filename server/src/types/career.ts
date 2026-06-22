@@ -71,6 +71,7 @@ export interface FundingOpportunity {
   terms?: string; // For loans: interest rate, etc.
   matchScore?: number; // AI calculated 0-100
   matchReasoning?: string; // AI explanation
+  website?: string; // Direct application URL
 }
 
 export interface UserProfile {

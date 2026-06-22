@@ -2125,3 +2125,137 @@ Output ONLY the JSON object.`;
     };
   }
 }
+
+// ─── Network & Community LLM Functions ───────────────────────────────────────
+
+export async function getNetworkCommunities(profile: UserProfile): Promise<any[]> {
+  const cacheKey = `network:communities:${profile.country || 'global'}:${profile.targetCareerId || 'any'}`;
+  const cached = await getAiCache<any[]>(cacheKey);
+  if (cached && cached.length > 0) return cached;
+
+  const systemInstruction = `You are a professional network community curator. Return ONLY valid JSON — no markdown, no explanation.`;
+  const prompt = `Generate 5 realistic professional online communities for a ${new Date().getFullYear()} user:
+- Career: ${profile.targetCareerId || profile.interests?.[0] || 'Technology'}
+- Country: ${profile.country || 'Global'}
+
+Return a JSON array of exactly 5 community objects with this schema:
+{"id":"slug","name":"Name","industry":"Industry","members":12000,"description":"One sentence.","color":"indigo","icon":"🤖","joined":false,"private":false,"posts":[{"id":"p1","author":"Full Name","avatar":"FN","role":"Title @ Company","content":"One sentence post.","timestamp":"2h ago","likes":45,"replies":12,"tags":["tag1"],"liked":false,"bookmarked":false}]}
+Rules: first community matches user's career; 1 community is private; each community has exactly 1 post; color must be one of: indigo|emerald|amber|pink|slate|orange|violet|teal.`;
+
+  try {
+    const text = await callLLM(prompt, systemInstruction, { temperature: 0.7, maxTokens: 4000 });
+    const result = parseAIJson<any[]>(text);
+    if (Array.isArray(result) && result.length > 0) {
+      setAiCache(cacheKey, result, 12).catch(() => {});
+      return result;
+    }
+    return [];
+  } catch (error) {
+    console.error('[Network] getNetworkCommunities failed:', error);
+    return [];
+  }
+}
+
+export async function getNetworkMentors(profile: UserProfile): Promise<any[]> {
+  const cacheKey = `network:mentors:${profile.country || 'global'}:${profile.targetCareerId || 'any'}`;
+  const cached = await getAiCache<any[]>(cacheKey);
+  if (cached && cached.length > 0) return cached;
+
+  const systemInstruction = `You are a professional mentorship network engine. Return ONLY valid JSON — no markdown, no explanation.`;
+  const prompt = `Generate 6 realistic senior professional mentors for a ${new Date().getFullYear()} user targeting: ${profile.targetCareerId || 'Technology'} in ${profile.country || 'Global'}.
+
+Return a JSON array of exactly 6 mentor objects with this schema:
+{"id":"slug","name":"Full Name","avatar":"FN","title":"Senior Title","company":"Company","industry":"Industry","expertise":["skill1","skill2","skill3"],"mentees":15,"rating":4.7,"reviews":52,"responseTime":"< 24 hours","availability":"available","bio":"One sentence bio.","country":"Country","yearsExp":10,"requested":false,"linkedin":"#"}
+Rules: availability values are available|limited|full; mix all three; at least 2 mentors aligned with ${profile.targetCareerId || 'Technology'}; diverse names and countries.`;
+
+  try {
+    const text = await callLLM(prompt, systemInstruction, { temperature: 0.6, maxTokens: 3000 });
+    const result = parseAIJson<any[]>(text);
+    if (Array.isArray(result) && result.length > 0) {
+      setAiCache(cacheKey, result, 24).catch(() => {});
+      return result;
+    }
+    return [];
+  } catch (error) {
+    console.error('[Network] getNetworkMentors failed:', error);
+    return [];
+  }
+}
+
+export async function getNetworkResumeReviews(profile: UserProfile): Promise<any[]> {
+  const cacheKey = `network:reviews:${profile.targetCareerId || 'any'}`;
+  const cached = await getAiCache<any[]>(cacheKey);
+  if (cached && cached.length > 0) return cached;
+
+  const systemInstruction = `You are a professional peer resume review coordinator. Return ONLY valid JSON — no markdown, no explanation.`;
+  const prompt = `Generate 5 peer resume review requests for a professional network in ${new Date().getFullYear()}. User's career interest: ${profile.targetCareerId || 'Technology'}.
+
+Return a JSON array of exactly 5 objects with this schema:
+{"id":"rr-1","author":"Full Name","avatar":"FN","role":"3 YOE Engineer","targetRole":"Senior Engineer @ BigCo","submittedAt":"2h ago","reviewsReceived":1,"reviewsNeeded":3,"tags":["SWE","Backend"],"status":"open","reviewed":false}
+Rules: 1 object has status "completed" and reviewed true; at least 2 relate to ${profile.targetCareerId || 'Technology'}; vary career stages.`;
+
+  try {
+    const text = await callLLM(prompt, systemInstruction, { temperature: 0.6, maxTokens: 1500 });
+    const result = parseAIJson<any[]>(text);
+    if (Array.isArray(result) && result.length > 0) {
+      setAiCache(cacheKey, result, 6).catch(() => {});
+      return result;
+    }
+    return [];
+  } catch (error) {
+    console.error('[Network] getNetworkResumeReviews failed:', error);
+    return [];
+  }
+}
+
+export async function getNetworkReferrals(profile: UserProfile): Promise<any[]> {
+  const cacheKey = `network:referrals:${profile.country || 'global'}:${profile.targetCareerId || 'any'}`;
+  const cached = await getAiCache<any[]>(cacheKey);
+  if (cached && cached.length > 0) return cached;
+
+  const systemInstruction = `You are a professional job referral network engine. Return ONLY valid JSON — no markdown, no explanation.`;
+  const prompt = `Generate 6 professional referral connections for someone targeting: ${profile.targetCareerId || 'Technology'} in ${profile.targetLocation || profile.country || 'Global'}.
+
+Return a JSON array of exactly 6 objects with this schema:
+{"id":"ref-1","name":"Full Name","avatar":"FN","title":"Job Title","company":"Company","companyLogo":"CO","connectionStrength":"strong","mutualConnections":5,"openRoles":["Role A","Role B"],"connected":false,"requestSent":false}
+Rules: connectionStrength values are strong|medium|weak; 2 are connected true; 1 has requestSent true; use real companies relevant to ${profile.targetCareerId || 'Technology'}.`;
+
+  try {
+    const text = await callLLM(prompt, systemInstruction, { temperature: 0.6, maxTokens: 2500 });
+    const result = parseAIJson<any[]>(text);
+    if (Array.isArray(result) && result.length > 0) {
+      setAiCache(cacheKey, result, 12).catch(() => {});
+      return result;
+    }
+    return [];
+  } catch (error) {
+    console.error('[Network] getNetworkReferrals failed:', error);
+    return [];
+  }
+}
+
+export async function getNetworkCompanies(profile: UserProfile): Promise<any[]> {
+  const cacheKey = `network:companies:${profile.targetCareerId || 'any'}:${profile.country || 'global'}`;
+  const cached = await getAiCache<any[]>(cacheKey);
+  if (cached && cached.length > 0) return cached;
+
+  const systemInstruction = `You are a company research and alumni network intelligence engine. Return ONLY valid JSON — no markdown, no explanation.`;
+  const prompt = `Generate 5 real company profiles with alumni network data for someone targeting: ${profile.targetCareerId || 'Technology'} in ${profile.targetLocation || profile.country || 'Global'}.
+
+Return a JSON array of exactly 5 objects with this schema:
+{"id":"slug","name":"Company","logo":"CO","industry":"Industry","size":"10,000+","rating":4.2,"reviews":5200,"alumniCount":320,"openRoles":85,"hq":"City, Country","culture":["trait1","trait2","trait3"],"alumni":[{"name":"Full Name","role":"Job Title","avatar":"FN","gradYear":2021},{"name":"Full Name 2","role":"Job Title","avatar":"FN","gradYear":2022}],"followed":false}
+Rules: 2 companies have followed true; each company has exactly 2 alumni; use top companies for ${profile.targetCareerId || 'Technology'}.`;
+
+  try {
+    const text = await callLLM(prompt, systemInstruction, { temperature: 0.5, maxTokens: 2500 });
+    const result = parseAIJson<any[]>(text);
+    if (Array.isArray(result) && result.length > 0) {
+      setAiCache(cacheKey, result, 24).catch(() => {});
+      return result;
+    }
+    return [];
+  } catch (error) {
+    console.error('[Network] getNetworkCompanies failed:', error);
+    return [];
+  }
+}

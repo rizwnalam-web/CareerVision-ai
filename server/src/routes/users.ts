@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { v4 as uuidv4 } from "uuid";
 import bcryptjs from "bcryptjs";
+import { Resend } from "resend";
 import { db } from "../db/database.js";
 import { UserProfile, RegistrationRequest, LoginRequest, PasswordResetRequest, PasswordResetTokenRequest, AuthResponse } from "../types/index.js";
 
@@ -445,13 +446,60 @@ router.post("/auth/password/forgot", async (req, res) => {
       [user.id, token]
     );
 
+    // Send the reset token via email using Resend (HTTPS — not blocked by firewalls)
+    const resendApiKey = process.env.RESEND_API_KEY;
+    let emailSent = false;
+    if (resendApiKey) {
+      try {
+        const resend = new Resend(resendApiKey);
+        const fromAddress = process.env.RESEND_FROM || "CareerVision AI <onboarding@resend.dev>";
+        const { data, error } = await resend.emails.send({
+          from: fromAddress,
+          to: email,
+          subject: "Your CareerVision Password Reset Token",
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8fafc; padding: 32px; border-radius: 12px;">
+              <div style="background: #1e293b; padding: 24px; border-radius: 10px; margin-bottom: 24px;">
+                <h2 style="color: white; margin: 0; font-size: 20px;">Reset Your Password</h2>
+                <p style="color: #94a3b8; margin: 6px 0 0; font-size: 13px;">CareerVision AI</p>
+              </div>
+              <p style="color: #64748b; font-size: 14px; margin-bottom: 24px;">Use the token below to reset your password. It expires in <strong style="color: #1e293b;">1 hour</strong>.</p>
+              <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 24px; text-align: center;">
+                <p style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin: 0 0 12px;">Reset Token</p>
+                <code style="font-size: 15px; color: #4f46e5; font-family: monospace; font-weight: bold; word-break: break-all;">${token}</code>
+              </div>
+              <p style="color: #64748b; font-size: 13px; line-height: 1.6;">Copy this token, return to the app, and paste it into the Reset Password form along with your new password.</p>
+              <p style="color: #94a3b8; font-size: 12px; margin-top: 24px;">If you did not request a password reset, you can safely ignore this email.</p>
+            </div>
+          `
+        });
+        if (error) {
+          console.error("[ForgotPassword] Resend error:", error);
+        } else {
+          emailSent = true;
+          console.log(`[ForgotPassword] Reset token emailed to ${email}, id: ${data?.id}`);
+        }
+      } catch (emailError) {
+        console.error("[ForgotPassword] Failed to send password reset email:", emailError);
+      }
+    } else {
+      console.warn("[ForgotPassword] RESEND_API_KEY not set — reset token not emailed.");
+    }
+
     const response: any = {
       success: true,
-      message: "Password reset token created. Use the token to reset your password."
+      message: emailSent
+        ? "A password reset token has been sent to your email. Please check your inbox."
+        : "If an account exists for that email, a password reset token has been generated."
     };
 
+    // In development, always include the token so the flow can be tested
+    // even when email delivery is unavailable (e.g. sandbox sender restrictions)
     if (process.env.NODE_ENV !== "production") {
       response.token = token;
+      if (!emailSent) {
+        response.devNote = "Email delivery unavailable in this environment. Token returned for development use only.";
+      }
     }
 
     res.json(response);

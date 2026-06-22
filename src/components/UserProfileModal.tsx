@@ -208,6 +208,7 @@ const gpaDisplay = gpaRaw != null && gpaRaw !== ''
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50"
             onClick={onClose}
+            aria-hidden="true"
           />
 
           {/* Modal Panel */}
@@ -220,6 +221,9 @@ const gpaDisplay = gpaRaw != null && gpaRaw !== ''
             className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
           >
             <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="profile-modal-title"
               className="pointer-events-auto w-full max-w-2xl max-h-[90vh] flex flex-col bg-white rounded-3xl shadow-2xl shadow-slate-300/50 overflow-hidden"
               onClick={e => e.stopPropagation()}
             >
@@ -227,6 +231,7 @@ const gpaDisplay = gpaRaw != null && gpaRaw !== ''
               <div className="relative bg-gradient-to-br from-indigo-600 to-indigo-700 px-8 pt-8 pb-16">
                 <button
                   onClick={onClose}
+                  aria-label="Close profile modal"
                   className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
                 >
                   <X size={15} />
@@ -245,7 +250,7 @@ const gpaDisplay = gpaRaw != null && gpaRaw !== ''
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <h2 className="text-xl font-black text-white tracking-tight leading-none">
+                    <h2 id="profile-modal-title" className="text-xl font-black text-white tracking-tight leading-none">
                       {profile.name}
                     </h2>
                     <p className="text-indigo-200 text-[10px] font-bold uppercase tracking-widest mt-1">

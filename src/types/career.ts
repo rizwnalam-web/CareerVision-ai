@@ -8,6 +8,10 @@ export interface CareerPath {
   milestones: Milestone[];
   workType: "Remote" | "On-site" | "Hybrid" | "Mobile";
   tags: string[];
+  // Inclusivity & diversity fields
+  disabilityFriendly?: boolean;
+  remoteAccessible?: boolean;
+  culturalContext?: string[];
 }
 
 export interface Milestone {
@@ -73,6 +77,7 @@ export interface FundingOpportunity {
   terms?: string; // For loans: interest rate, etc.
   matchScore?: number; // AI calculated 0-100
   matchReasoning?: string; // AI explanation
+  website?: string; // Direct application URL
 }
 
 export interface UserProfile {

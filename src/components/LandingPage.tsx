@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import Logo from './Logo';
 import { motion, AnimatePresence } from 'motion/react';
 import { NewsFlash } from './NewsFlash';
@@ -32,6 +33,7 @@ import {
   ArrowRight,
   Building2,
   Lightbulb,
+  Crown,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getTopFeedbacks, Feedback } from '../services/feedbackService';
@@ -45,6 +47,7 @@ interface LandingPageProps {
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onStart, onShowPrivacy, onShowTerms, onShowFaq }) => {
+  const { t } = useTranslation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
 
@@ -61,17 +64,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, onShowPrivacy
         </div>
         {/* Desktop links */}
         <div className="hidden md:flex items-center gap-8">
-          <a href="#features" style={{color:'#94a3b8',textDecoration:'none'}} className="text-xs font-bold uppercase tracking-widest hover:text-slate-900 transition-colors">Intelligence</a>
-          <a href="#demo"     style={{color:'#94a3b8',textDecoration:'none'}} className="text-xs font-bold uppercase tracking-widest hover:text-slate-900 transition-colors">Demo</a>
+          <a href="#features" style={{color:'#94a3b8',textDecoration:'none'}} className="text-xs font-bold uppercase tracking-widest hover:text-slate-900 transition-colors">{t('landing.navFeatures')}</a>
+          <a href="#demo"     style={{color:'#94a3b8',textDecoration:'none'}} className="text-xs font-bold uppercase tracking-widest hover:text-slate-900 transition-colors">{t('landing.navDemo')}</a>
           <a href="#roadmap"  style={{color:'#94a3b8',textDecoration:'none'}} className="text-xs font-bold uppercase tracking-widest hover:text-slate-900 transition-colors">Roadmaps</a>
           <a href="#global"   style={{color:'#94a3b8',textDecoration:'none'}} className="text-xs font-bold uppercase tracking-widest hover:text-slate-900 transition-colors">Global Demand</a>
+          <a href="#pricing"  style={{color:'#4f46e6',textDecoration:'none'}} className="text-xs font-bold uppercase tracking-widest hover:text-slate-900 transition-colors flex items-center gap-1"><Crown size={11} />{t('landing.navPricing')}</a>
           <button onClick={onShowFaq} style={{color:'#94a3b8',background:'none',border:'none',cursor:'pointer',padding:0}} className="text-xs font-bold uppercase tracking-widest hover:text-slate-900 transition-colors">FAQ</button>
           <button onClick={() => setContactOpen(true)} style={{color:'#94a3b8',background:'none',border:'none',cursor:'pointer',padding:0}} className="text-xs font-bold uppercase tracking-widest hover:text-slate-900 transition-colors">Contact</button>
           <button 
             onClick={onStart}
             className="bg-slate-900 text-white px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-xl hover:shadow-indigo-200"
           >
-            Sign Up / Login
+            {t('landing.signUpLogin')}
           </button>
         </div>
         {/* Mobile: Sign-up button + hamburger */}
@@ -287,6 +291,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, onShowPrivacy
 
       {/* FAQ Section */}
       <FAQSection onShowFaq={onShowFaq} />
+
+      {/* Pricing Preview */}
+      <PricingPreviewSection onStart={onStart} />
 
       {/* CTA Footer */}
       <section id="global" className="py-24 bg-slate-900 text-white overflow-hidden relative">
@@ -599,6 +606,131 @@ const FAQSection = ({ onShowFaq }: { onShowFaq?: () => void }) => {
     </section>
   );
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pricing Preview (shown on landing page)
+// ─────────────────────────────────────────────────────────────────────────────
+const LANDING_PLANS = [
+  {
+    name: 'Free',
+    price: '$0',
+    period: 'forever',
+    tagline: 'Start your journey at no cost',
+    color: 'border-slate-200 bg-white',
+    badge: null,
+    accent: 'text-slate-900',
+    cta: 'bg-slate-900 text-white hover:bg-indigo-600',
+    features: ['Career roadmaps', 'Job board access', 'Basic resume builder', '5 AI interview sessions/mo', 'Community access'],
+  },
+  {
+    name: 'Pro',
+    price: '$19',
+    period: '/mo',
+    tagline: 'Full AI power for serious movers',
+    color: 'border-indigo-500 bg-indigo-600 text-white',
+    badge: '⭐ Most Popular',
+    accent: 'text-indigo-100',
+    cta: 'bg-white text-indigo-600 hover:bg-indigo-50',
+    features: ['Everything in Free', 'Unlimited interview practice', '12+ premium resume templates', 'Advanced AI career analysis', 'Market trend reports', 'Priority support'],
+  },
+  {
+    name: 'Team',
+    price: '$49',
+    period: '/mo',
+    tagline: 'For small teams & career coaches',
+    color: 'border-emerald-500 bg-white',
+    badge: null,
+    accent: 'text-slate-900',
+    cta: 'bg-emerald-600 text-white hover:bg-emerald-700',
+    features: ['Everything in Pro', 'Up to 10 team seats', 'Team analytics dashboard', 'Manager reporting', 'Bulk interview sessions'],
+  },
+];
+
+const PricingPreviewSection: React.FC<{ onStart: () => void }> = ({ onStart }) => (
+  <section id="pricing" className="py-24 bg-slate-900 text-white relative overflow-hidden">
+    {/* subtle grid bg */}
+    <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[linear-gradient(rgba(255,255,255,0.5)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.5)_1px,transparent_1px)] [background-size:60px_60px]" />
+
+    <div className="relative max-w-7xl mx-auto px-8">
+      {/* Header */}
+      <div className="text-center mb-14">
+        <div className="inline-flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 rounded-full px-4 py-1.5 mb-5">
+          <Crown size={14} className="text-indigo-400" />
+          <span className="text-indigo-300 text-[10px] font-black uppercase tracking-widest">Pricing</span>
+        </div>
+        <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-4">
+          Simple, <span className="text-indigo-400 italic">transparent</span> pricing
+        </h2>
+        <p className="text-slate-400 max-w-md mx-auto text-sm font-medium">
+          Start for free, upgrade as your career accelerates. No hidden fees.
+        </p>
+      </div>
+
+      {/* Plan cards */}
+      <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto mb-12">
+        {LANDING_PLANS.map((plan, i) => (
+          <motion.div
+            key={plan.name}
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: i * 0.1 }}
+            className={`relative rounded-2xl border-2 p-7 flex flex-col ${plan.color} ${plan.name === 'Pro' ? 'scale-105 shadow-2xl shadow-indigo-900/60 z-10' : 'shadow-lg'}`}
+          >
+            {plan.badge && (
+              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-indigo-400 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full">
+                {plan.badge}
+              </div>
+            )}
+            <div className="mb-5">
+              <div className={`text-lg font-black mb-0.5 ${plan.name === 'Pro' ? 'text-white' : 'text-slate-900'}`}>{plan.name}</div>
+              <div className={`text-xs font-medium ${plan.accent}`}>{plan.tagline}</div>
+            </div>
+            <div className={`flex items-end gap-1 mb-6 pb-5 border-b ${plan.name === 'Pro' ? 'border-white/20' : 'border-slate-100'}`}>
+              <span className={`text-4xl font-black ${plan.name === 'Pro' ? 'text-white' : 'text-slate-900'}`}>{plan.price}</span>
+              <span className={`text-sm mb-1 ${plan.accent}`}>{plan.period}</span>
+            </div>
+            <ul className="space-y-2.5 mb-7 flex-1">
+              {plan.features.map((f, fi) => (
+                <li key={fi} className={`flex items-start gap-2 text-sm ${plan.name === 'Pro' ? 'text-indigo-100' : 'text-slate-600'}`}>
+                  <CheckCircle2 size={15} className={`mt-0.5 shrink-0 ${plan.name === 'Pro' ? 'text-indigo-200' : 'text-indigo-500'}`} />
+                  {f}
+                </li>
+              ))}
+            </ul>
+            <button
+              onClick={onStart}
+              className={`w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 group ${plan.cta}`}
+            >
+              Get Started <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
+            </button>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Enterprise teaser */}
+      <div className="max-w-5xl mx-auto">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6 bg-white/5 border border-white/10 rounded-2xl p-6">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
+              <Building2 size={22} className="text-amber-400" />
+            </div>
+            <div>
+              <div className="font-black text-white text-sm">Enterprise</div>
+              <div className="text-slate-400 text-xs mt-0.5">Custom pricing · Unlimited seats · SSO · Dedicated support</div>
+            </div>
+          </div>
+          <button
+            onClick={onStart}
+            className="shrink-0 flex items-center gap-2 bg-amber-500 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-400 transition-all"
+          >
+            Contact Sales <ArrowRight size={14} />
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Demo Section (existing)

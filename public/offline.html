@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#4f46e5" />
+    <title>CareerVision – Offline</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #0f172a;
+        color: #e2e8f0;
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        text-align: center;
+        gap: 1.5rem;
+      }
+      .icon {
+        width: 80px; height: 80px;
+        background: rgba(99,102,241,0.15);
+        border: 2px solid rgba(99,102,241,0.3);
+        border-radius: 24px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 2rem;
+      }
+      h1 { font-size: 1.5rem; font-weight: 700; }
+      p  { font-size: 0.9rem; color: #94a3b8; max-width: 320px; line-height: 1.6; }
+      .hint { font-size: 0.75rem; color: #64748b; }
+      button {
+        background: #4f46e5; color: #fff;
+        border: none; border-radius: 12px;
+        padding: 0.75rem 1.75rem;
+        font-size: 0.875rem; font-weight: 600;
+        cursor: pointer; transition: background 0.2s;
+      }
+      button:hover { background: #4338ca; }
+      .cached-tip {
+        background: rgba(99,102,241,0.1);
+        border: 1px solid rgba(99,102,241,0.2);
+        border-radius: 12px;
+        padding: 1rem 1.5rem;
+        max-width: 340px;
+      }
+      .cached-tip h2 { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; }
+      .cached-tip ul { list-style: none; font-size: 0.8rem; color: #94a3b8; display: flex; flex-direction: column; gap: 0.3rem; }
+      .cached-tip li::before { content: "✓ "; color: #34d399; }
+    </style>
+  </head>
+  <body>
+    <div class="icon">🌐</div>
+    <h1>You're Offline</h1>
+    <p>No internet connection detected. CareerVision needs connectivity to fetch live data.</p>
+    <button onclick="location.reload()">Try Again</button>
+    <div class="cached-tip">
+      <h2>Still available offline:</h2>
+      <ul>
+        <li>Dashboard (cached data)</li>
+        <li>Previously viewed career paths</li>
+        <li>Saved interview questions</li>
+        <li>Your resume &amp; profile</li>
+      </ul>
+    </div>
+    <p class="hint">Reconnect to access live job listings, AI coaching, and market trends.</p>
+    <script>
+      window.addEventListener("online", () => location.reload());
+    </script>
+  </body>
+</html>

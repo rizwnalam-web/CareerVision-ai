@@ -59,7 +59,9 @@ import {
   ChevronDown,
   DollarSign,
   Users,
-  Layers
+  Layers,
+  Crown,
+  Building2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle } from 'react-leaflet';
@@ -102,6 +104,7 @@ import ReactMarkdown from 'react-markdown';
 import { LandingPage } from './components/LandingPage';
 import Logo from './components/Logo';
 import { CareerDirectoryView } from './components/CareerDirectoryView';
+import NetworkView from './components/NetworkView';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsConditions } from './components/TermsConditions';
 import { FAQPage } from './components/FAQPage';
@@ -110,8 +113,20 @@ import MaterialsView from './components/MaterialsView';
 import { RegisterScreen } from './components/RegisterScreen';
 import { InterviewStats } from './types/interview';
 import { AuthProvider, LoginScreen } from './components/Auth';
+import { useTranslation } from 'react-i18next';
 import { VisaDetails } from './components/VisaDetails';
 import { CareerHubCard } from './components/CareerHubCard';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
+import PricingPage from './components/PricingPage';
+import EnterpriseView from './components/EnterpriseView';
+import CareerCoachChat from './components/CareerCoachChat';
+import IndustrySimulator from './components/IndustrySimulator';
+import SoftSkillsAssessment from './components/SoftSkillsAssessment';
+import SalaryNegotiationCoach from './components/SalaryNegotiationCoach';
+import SideHustleAdvisor from './components/SideHustleAdvisor';
+import BurnoutPrevention from './components/BurnoutPrevention';
+import { trackView } from './services/analyticsService';
+import { prefetchVariants } from './lib/abTesting';
 import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
 import { signOut } from 'firebase/auth';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -193,9 +208,14 @@ import { JobBoardView } from './components/JobBoardView';
 import ResumeManager from './components/ResumeManager';
 import JobMatchView from './components/JobMatchView';
 import InterviewPrepView from './components/InterviewPrepView';
+import MobileInterviewView from './components/MobileInterviewView';
+import OfflineBanner from './components/OfflineBanner';
+import { isMobileDevice } from './lib/pwa';
 import { InstitutionComparator } from './components/InstitutionComparator';
 import { UserProfileModal } from './components/UserProfileModal';
 import { fetchLLMHealth, reprobeLLM, type LLMHealthStatus } from './services/llmHealthService';
+import AccessibilityToolbar from './components/AccessibilityToolbar';
+import AccessibilityChecker from './components/AccessibilityChecker';
 
 const SectionTitle = ({ title, subtitle }: { title: string, subtitle?: string }) => (
   <div className="mb-8">
@@ -4675,9 +4695,14 @@ const FundingOpportunitiesView = ({ profile }: { profile: UserProfile }) => {
                   )}
                 </div>
 
-                <button className="mt-4 w-full py-1.5 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-blue-500 transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20">
-                  <ExternalLink size={12} /> Apply now
-                </button>
+                <a
+                  href={opp.website || `https://www.google.com/search?q=${encodeURIComponent(opp.name + ' ' + opp.provider + ' apply')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 w-full py-1.5 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-blue-500 transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
+                >
+                  <ExternalLink size={12} /> Apply Now
+                </a>
               </motion.div>
             ))}
           </AnimatePresence>
@@ -5363,7 +5388,9 @@ export default function App() {
   };
 
   return (
-    <AuthProvider>
+    <>
+      <OfflineBanner />
+      <AuthProvider>
       {({ user, loading }) => {
         const activeUser = user || localUser;
 
@@ -5433,43 +5460,73 @@ export default function App() {
         return <AuthenticatedApp user={activeUser} onExit={() => { setLocalUser(null); setGlobalView('landing'); }} />;
       }}
     </AuthProvider>
+    </>
   );
 }
 
 function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
-  type AppView = 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'resume' | 'job-match' | 'interview' | 'directory';
-  const VALID_VIEWS: AppView[] = ['dashboard', 'roadmap', 'institutions', 'materials', 'expenses', 'advisor', 'parent', 'heatmap', 'jobs', 'resume', 'job-match', 'interview', 'directory'];
+  const { t } = useTranslation();
+  type AppView = 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'resume' | 'job-match' | 'interview' | 'directory' | 'network' | 'analytics' | 'pricing' | 'enterprise' | 'career-coach' | 'industry-sim' | 'soft-skills' | 'salary-coach' | 'side-hustle' | 'burnout';
+  const VALID_VIEWS: AppView[] = ['dashboard', 'roadmap', 'institutions', 'materials', 'expenses', 'advisor', 'parent', 'heatmap', 'jobs', 'resume', 'job-match', 'interview', 'directory', 'network', 'analytics', 'pricing', 'enterprise', 'career-coach', 'industry-sim', 'soft-skills', 'salary-coach', 'side-hustle', 'burnout'];
   // ── Pillar Definitions ──
   type PillarSub = { label: string; view: AppView; icon: React.ElementType; desc: string };
   type Pillar = { id: string; label: string; icon: React.ElementType; primaryView: AppView; views: AppView[]; accent: { bg: string; text: string }; subs: PillarSub[] };
   const PILLAR_DEFS: Pillar[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, primaryView: 'dashboard', views: ['dashboard'], accent: { bg: 'bg-slate-950', text: 'text-white' }, subs: [] },
+    { id: 'dashboard', label: t('pillars.dashboard'), icon: LayoutDashboard, primaryView: 'dashboard', views: ['dashboard'], accent: { bg: 'bg-slate-950', text: 'text-white' }, subs: [] },
     {
-      id: 'explore', label: 'Explore', icon: Layers, primaryView: 'roadmap', views: ['roadmap', 'institutions', 'materials', 'directory'],
+      id: 'explore', label: t('pillars.explore'), icon: Layers, primaryView: 'roadmap', views: ['roadmap', 'institutions', 'materials', 'directory'],
       accent: { bg: 'bg-violet-600', text: 'text-white' },
       subs: [
-        { label: 'Career Maps',  view: 'roadmap',      icon: Map,      desc: 'Visual nodes & trajectory mapping' },
-        { label: 'Institutions', view: 'institutions', icon: School,   desc: 'Global universities & bootcamps' },
-        { label: 'Academy',      view: 'materials',    icon: BookOpen, desc: 'Study materials & guides' },
-        { label: 'Directory',    view: 'directory',    icon: Layers,   desc: 'Browse careers by your target location' },
+        { label: t('pillars.subs.careerMaps'),  view: 'roadmap',      icon: Map,      desc: 'Visual nodes & trajectory mapping' },
+        { label: t('pillars.subs.institutions'), view: 'institutions', icon: School,   desc: 'Global universities & bootcamps' },
+        { label: t('pillars.subs.academy'),      view: 'materials',    icon: BookOpen, desc: 'Study materials & guides' },
+        { label: t('pillars.subs.directory'),    view: 'directory',    icon: Layers,   desc: 'Browse careers by your target location' },
       ],
     },
     {
-      id: 'ai-coach', label: 'AI Coach', icon: BrainCircuit, primaryView: 'interview', views: ['interview', 'resume', 'job-match'],
+      id: 'ai-coach', label: t('pillars.aiCoach'), icon: BrainCircuit, primaryView: 'interview', views: ['interview', 'resume', 'job-match', 'career-coach', 'industry-sim', 'soft-skills', 'salary-coach'],
       accent: { bg: 'bg-purple-600', text: 'text-white' },
       subs: [
-        { label: 'Interview Prep', view: 'interview', icon: Mic,      desc: 'AI mock interview simulator' },
-        { label: 'Resume',         view: 'resume',    icon: FileText, desc: 'Build & score your resume' },
-        { label: 'AI Match',       view: 'job-match', icon: Zap,      desc: 'Smart job-fit scoring' },
+        { label: t('pillars.subs.interviewPrep'), view: 'interview',    icon: Mic,            desc: 'AI mock interview simulator' },
+        { label: t('pillars.subs.resume'),         view: 'resume',       icon: FileText,       desc: 'Build & score your resume' },
+        { label: t('pillars.subs.aiMatch'),        view: 'job-match',    icon: Zap,            desc: 'Smart job-fit scoring' },
+        { label: t('pillars.subs.careerCoach'),    view: 'career-coach', icon: MessageSquare,  desc: 'AI career coach chatbot' },
+        { label: t('pillars.subs.industrySim'),    view: 'industry-sim', icon: Building2,      desc: 'Role-play industry scenarios' },
+        { label: t('pillars.subs.softSkills'),     view: 'soft-skills',  icon: Users,          desc: 'Personality & communication' },
+        { label: t('pillars.subs.salaryCoach'),    view: 'salary-coach', icon: DollarSign,     desc: 'Salary negotiation training' },
       ],
     },
     {
-      id: 'mobility', label: 'Mobility', icon: Globe, primaryView: 'expenses', views: ['expenses', 'heatmap', 'jobs'],
+      id: 'mobility', label: t('pillars.mobility'), icon: Globe, primaryView: 'expenses', views: ['expenses', 'heatmap', 'jobs', 'side-hustle'],
       accent: { bg: 'bg-teal-600', text: 'text-white' },
       subs: [
-        { label: 'Finance & Budget', view: 'expenses', icon: CircleDollarSign, desc: 'Cost-of-living, ROI & budget' },
-        { label: 'Market Hubs',      view: 'heatmap',  icon: TrendingUp,       desc: 'Global career market intel' },
-        { label: 'Jobs Board',       view: 'jobs',     icon: Briefcase,        desc: 'Live listings & opportunities' },
+        { label: t('pillars.subs.financeBudget'), view: 'expenses',    icon: CircleDollarSign, desc: 'Cost-of-living, ROI & budget' },
+        { label: t('pillars.subs.marketHubs'),    view: 'heatmap',     icon: TrendingUp,       desc: 'Global career market intel' },
+        { label: t('pillars.subs.jobsBoard'),     view: 'jobs',        icon: Briefcase,        desc: 'Live listings & opportunities' },
+        { label: t('pillars.subs.sideHustle'),    view: 'side-hustle', icon: Zap,              desc: 'AI side hustle suggestions' },
+      ],
+    },
+    {
+      id: 'network', label: t('pillars.network'), icon: Users, primaryView: 'network', views: ['network'],
+      accent: { bg: 'bg-rose-600', text: 'text-white' },
+      subs: [
+        { label: t('pillars.subs.communities'),   view: 'network', icon: MessageSquare, desc: 'Industry channels & peer groups' },
+      ],
+    },
+    {
+      id: 'analytics', label: t('pillars.analytics'), icon: BarChart3, primaryView: 'analytics', views: ['analytics', 'burnout'],
+      accent: { bg: 'bg-indigo-600', text: 'text-white' },
+      subs: [
+        { label: t('pillars.subs.marketTrends'),  view: 'analytics', icon: TrendingUp, desc: 'AI-powered job market intelligence' },
+        { label: t('pillars.subs.burnout'),        view: 'burnout',   icon: Heart,      desc: 'Work-life balance & burnout check' },
+      ],
+    },
+    {
+      id: 'plans', label: t('pillars.plans'), icon: Crown, primaryView: 'pricing', views: ['pricing', 'enterprise'],
+      accent: { bg: 'bg-amber-600', text: 'text-white' },
+      subs: [
+        { label: t('pillars.subs.pricing'),    view: 'pricing',    icon: Crown,        desc: 'Plans, upgrades & affiliate partners' },
+        { label: t('pillars.subs.enterprise'), view: 'enterprise', icon: Building2,     desc: 'Team & company-scale solutions' },
       ],
     },
   ];
@@ -5480,6 +5537,9 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   const setActiveView = (view: AppView) => {
     sessionStorage.setItem('cv_activeView', view);
     setActiveViewState(view);
+    if (user?.id || (user as any)?.uid) {
+      trackView((user.id || (user as any).uid) as string, view);
+    }
   };
   const activePillar = PILLAR_DEFS.find(p => p.views.includes(activeView)) || PILLAR_DEFS[0];
   const [showMoreNav, setShowMoreNav] = useState(false);
@@ -5490,6 +5550,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   const [sparkEOpen, setSparkEOpen] = useState(false);
   const [sparkEPosition, setSparkEPosition] = useState<'bottom-right' | 'bottom-left'>('bottom-right');
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showA11yChecker, setShowA11yChecker] = useState(false);
   const [isInterviewOpen, setIsInterviewOpen] = useState(false);
   const [interviewRole, setInterviewRole] = useState("");
   const [interviewCompany, setInterviewCompany] = useState("");
@@ -5787,6 +5848,14 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
 
   return (
     <div className="flex flex-col h-screen bg-[#F8FAFC] font-sans text-slate-900 overflow-hidden relative">
+      {/* Skip-to-content link for keyboard/screen-reader users */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[9999] focus:px-4 focus:py-2 focus:bg-indigo-600 focus:text-white focus:rounded-xl focus:font-bold focus:text-sm focus:shadow-xl"
+      >
+        Skip to main content
+      </a>
+
       {/* Decorative Background Elements */}
       <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-b from-indigo-50/50 to-transparent pointer-events-none" />
       <div className="absolute top-[20%] right-[-10%] w-[500px] h-[500px] bg-indigo-100/30 rounded-full blur-[120px] pointer-events-none" />
@@ -5798,7 +5867,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
           <Logo size={36} className="group-hover:scale-110 transition-transform rounded-xl shadow-xl shadow-indigo-200" />
           <span className="text-xl font-black tracking-tighter text-slate-900 hidden sm:block">CareerVision<span className="text-indigo-600 italic">AI</span></span>
         </div>
-        <nav className="hidden md:flex items-center gap-1 relative bg-slate-100/70 rounded-2xl p-1">
+        <nav className="hidden md:flex items-center gap-1 relative bg-slate-100/70 rounded-2xl p-1" aria-label="Main navigation">
           {PILLAR_DEFS.map(pillar => {
             const isPillarActive = activePillar.id === pillar.id;
             const PillarIcon = pillar.icon;
@@ -5806,6 +5875,8 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
               <button
                 key={pillar.id}
                 onClick={() => handleNavigate(pillar.primaryView)}
+                aria-current={isPillarActive ? 'page' : undefined}
+                aria-label={pillar.label}
                 className={cn(
                   'flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all duration-150',
                   isPillarActive
@@ -5813,7 +5884,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                     : 'text-slate-500 hover:bg-slate-200/70 hover:text-slate-800'
                 )}
               >
-                <PillarIcon size={13} />
+                <PillarIcon size={13} aria-hidden="true" />
                 {pillar.label}
               </button>
             );
@@ -5825,6 +5896,8 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
             className="md:hidden flex items-center justify-center w-9 h-9 rounded-xl bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 transition-colors"
             onClick={() => setShowMobileNav(true)}
             aria-label="Open navigation"
+            aria-expanded={showMobileNav}
+            aria-controls="mobile-nav-drawer"
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect y="3" width="18" height="1.8" rx="0.9" fill="currentColor"/><rect y="8.1" width="18" height="1.8" rx="0.9" fill="currentColor"/><rect y="13.2" width="18" height="1.8" rx="0.9" fill="currentColor"/></svg>
           </button>
@@ -5874,9 +5947,9 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
 
       {/* ── SUB-NAV STRIP ── */}
       {activePillar.subs.length > 0 && (
-        <div className="hidden md:flex items-center gap-1 border-b border-slate-200/50 bg-white/80 backdrop-blur-sm px-5 py-2 z-20 shrink-0">
-          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 mr-2">{activePillar.label}</span>
-          <div className="w-px h-3.5 bg-slate-200 mr-1.5" />
+        <nav className="hidden md:flex items-center gap-1 border-b border-slate-200/50 bg-white/80 backdrop-blur-sm px-5 py-2 z-20 shrink-0" aria-label={`${activePillar.label} sub-navigation`}>
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 mr-2" aria-hidden="true">{activePillar.label}</span>
+          <div className="w-px h-3.5 bg-slate-200 mr-1.5" aria-hidden="true" />
           {activePillar.subs.map(sub => {
             const SubIcon = sub.icon;
             const isSubActive = activeView === sub.view;
@@ -5884,6 +5957,8 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
               <button
                 key={sub.view}
                 onClick={() => handleNavigate(sub.view)}
+                aria-current={isSubActive ? 'page' : undefined}
+                aria-label={sub.label}
                 className={cn(
                   'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all',
                   isSubActive
@@ -5891,12 +5966,12 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                     : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
                 )}
               >
-                <SubIcon size={11} />
+                <SubIcon size={11} aria-hidden="true" />
                 {sub.label}
               </button>
             );
           })}
-        </div>
+        </nav>
       )}
 
       {/* ── MOBILE DRAWER ── */}
@@ -5919,6 +5994,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              id="mobile-nav-drawer"
               className="fixed top-0 right-0 bottom-0 w-72 bg-white z-50 flex flex-col shadow-2xl lg:hidden"
             >
               {/* Drawer header */}
@@ -6018,7 +6094,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       </AnimatePresence>
       
       {/* Main Content Viewport */}
-      <main className="flex-1 overflow-y-auto scrollbar-hide relative z-10 px-4 lg:px-10 py-6 pb-24 lg:pb-32">
+      <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto scrollbar-hide relative z-10 px-4 lg:px-10 py-6 pb-24 lg:pb-32" aria-label="Main content">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeView}
@@ -6042,8 +6118,22 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                    {activeView === 'expenses' && <FinancialView profile={profile} setProfile={setProfile} />}
                    {activeView === 'resume' && <ResumeManager profile={profile} userId={user.id || user.uid} />}
                    {activeView === 'job-match' && <JobMatchView userId={user.id || user.uid} resumeContent={null} />}
-                   {activeView === 'interview' && <InterviewPrepView userId={user.id || user.uid} defaultRole={profile.targetCareerId?.replace(/-/g,' ') || 'Software Engineer'} />}
+                   {activeView === 'interview' && (
+                     isMobileDevice()
+                       ? <MobileInterviewView userId={(user?.id || (user as any)?.uid) as string} defaultRole={profile.targetCareerId?.replace(/-/g,' ') || 'Software Engineer'} />
+                       : <InterviewPrepView userId={user.id || user.uid} defaultRole={profile.targetCareerId?.replace(/-/g,' ') || 'Software Engineer'} />
+                   )}
                    {activeView === 'directory' && <CareerDirectoryView profile={profile} />}
+                   {activeView === 'network' && <NetworkView profile={profile} />}
+                   {activeView === 'analytics' && <AnalyticsDashboard profile={profile} userId={(user?.id || (user as any)?.uid) as string} />}
+                   {activeView === 'pricing' && <PricingPage userId={(user?.id || (user as any)?.uid) as string} onNavigate={(v) => setActiveView(v as AppView)} />}
+                   {activeView === 'enterprise' && <EnterpriseView userId={(user?.id || (user as any)?.uid) as string} onNavigatePricing={() => setActiveView('pricing')} />}
+                   {activeView === 'career-coach'  && <CareerCoachChat profile={profile} />}
+                   {activeView === 'industry-sim'  && <IndustrySimulator profile={profile} />}
+                   {activeView === 'soft-skills'   && <SoftSkillsAssessment profile={profile} />}
+                   {activeView === 'salary-coach'  && <SalaryNegotiationCoach profile={profile} />}
+                   {activeView === 'side-hustle'   && <SideHustleAdvisor profile={profile} />}
+                   {activeView === 'burnout'        && <BurnoutPrevention profile={profile} />}
                 </section>
 
                 <section className="hidden xl:col-span-3 xl:flex flex-col gap-8 overflow-hidden">
@@ -6068,15 +6158,18 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       </main>
 
       {/* ── MOBILE BOTTOM TAB BAR ── */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-slate-200 shadow-2xl shadow-slate-200/60">
-        <div className="grid grid-cols-4 h-16">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-slate-200 shadow-2xl shadow-slate-200/60" aria-label="Mobile navigation">
+        <div className="grid grid-cols-4 h-16" role="list">
           {PILLAR_DEFS.map(pillar => {
             const isPillarActive = activePillar.id === pillar.id;
             const PillarIcon = pillar.icon;
             return (
               <button
                 key={pillar.id}
+                role="listitem"
                 onClick={() => handleNavigate(pillar.primaryView)}
+                aria-current={isPillarActive ? 'page' : undefined}
+                aria-label={pillar.label}
                 className={cn(
                   'flex flex-col items-center justify-center gap-1 transition-all relative',
                   isPillarActive ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-700'
@@ -6087,10 +6180,11 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                     layoutId="bottomNavIndicator"
                     className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-indigo-500 rounded-full"
                     transition={{ type: 'spring', bounce: 0.3, duration: 0.5 }}
+                    aria-hidden="true"
                   />
                 )}
-                <PillarIcon size={18} strokeWidth={isPillarActive ? 2.5 : 1.8} />
-                <span className="text-[9px] font-black uppercase tracking-widest">{pillar.label}</span>
+                <PillarIcon size={18} strokeWidth={isPillarActive ? 2.5 : 1.8} aria-hidden="true" />
+                <span className="text-[9px] font-black uppercase tracking-widest" aria-hidden="true">{pillar.label}</span>
               </button>
             );
           })}
@@ -6204,6 +6298,18 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
           </>
         )}
       </AnimatePresence>
+
+      {/* Accessibility Toolbar — always visible */}
+      <AccessibilityToolbar
+        isAdmin={!!(user?.email && import.meta.env.VITE_ADMIN_EMAIL && user.email === import.meta.env.VITE_ADMIN_EMAIL)}
+        onOpenChecker={() => setShowA11yChecker(true)}
+      />
+
+      {/* Accessibility Checker — admin only, opened on demand */}
+      {showA11yChecker && (
+        <AccessibilityChecker onClose={() => setShowA11yChecker(false)} />
+      )}
+
     </div>
   );
 }

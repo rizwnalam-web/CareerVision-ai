@@ -24,6 +24,12 @@ import resumeRouter from "./routes/resume.js";
 import jobMatchRouter from "./routes/jobMatch.js";
 import interviewPrepRouter from "./routes/interviewPrep.js";
 import contactRouter from "./routes/contact.js";
+import analyticsRouter from "./routes/analytics.js";
+import pushRouter from "./routes/push.js";
+import subscriptionRouter from "./routes/subscriptions.js";
+import affiliatesRouter from "./routes/affiliates.js";
+import stripeRouter, { stripeWebhookHandler } from "./routes/stripe.js";
+import innovativeRouter from "./routes/innovative.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,6 +70,9 @@ function isPortAvailable(port: number, host = "0.0.0.0"): Promise<boolean> {
     tester.listen(port, host);
   });
 }
+
+// Stripe webhook must receive a raw body — register BEFORE express.json()
+app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), stripeWebhookHandler);
 
 // Middleware
 app.use(express.json());
@@ -109,6 +118,12 @@ app.use("/api/resume", resumeRouter);
 app.use("/api/job-match", jobMatchRouter);
 app.use("/api/interview-prep", interviewPrepRouter);
 app.use("/api/contact", contactRouter);
+app.use("/api/analytics", analyticsRouter);
+app.use("/api/push", pushRouter);
+app.use("/api/subscription", subscriptionRouter);
+app.use("/api/affiliates", affiliatesRouter);
+app.use("/api/stripe", stripeRouter);
+app.use("/api/innovative", innovativeRouter);
 
 // 404 handler
 app.use(notFoundHandler);

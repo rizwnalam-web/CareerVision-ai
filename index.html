@@ -2,10 +2,38 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- PWA essentials -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#4f46e5" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="CareerVision" />
+
+    <!-- Favicon & touch icons -->
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <link rel="apple-touch-icon" href="/logo.svg" />
+
+    <!-- Open Graph for share previews -->
+    <meta property="og:type"        content="website" />
+    <meta property="og:title"       content="CareerVision AI – Global Career Guidance" />
+    <meta property="og:description" content="AI-powered career mapping, job matching, and interview coaching." />
+    <meta property="og:image"       content="/demo-poster.jpg" />
+
+    <!-- Prevent tap delay on mobile -->
+    <meta name="format-detection" content="telephone=no" />
+
     <title>CareerVision AI</title>
+
+    <!-- Accessibility: supported locale declarations -->
+    <link rel="alternate" hreflang="en" href="/" />
+    <link rel="alternate" hreflang="es" href="/?lang=es" />
+    <link rel="alternate" hreflang="fr" href="/?lang=fr" />
+    <link rel="alternate" hreflang="ar" href="/?lang=ar" />
+    <link rel="alternate" hreflang="zh" href="/?lang=zh" />
+    <link rel="alternate" hreflang="x-default" href="/" />
   </head>
   <body>
     <div id="root"></div>

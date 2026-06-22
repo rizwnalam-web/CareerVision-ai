@@ -69,6 +69,7 @@ export interface FundingOpportunity {
     terms?: string;
     matchScore?: number;
     matchReasoning?: string;
+    website?: string;
 }
 export interface UserProfile {
     name: string;

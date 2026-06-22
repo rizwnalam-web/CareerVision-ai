@@ -70,6 +70,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ onClose }) => {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
+        aria-hidden="true"
         className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
       />
 
@@ -83,6 +84,9 @@ export const ContactModal: React.FC<ContactModalProps> = ({ onClose }) => {
         className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
       >
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="contact-modal-title"
           className="w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl overflow-hidden pointer-events-auto"
           onClick={e => e.stopPropagation()}
         >
@@ -93,11 +97,12 @@ export const ContactModal: React.FC<ContactModalProps> = ({ onClose }) => {
                 <MessageSquare size={18} className="text-indigo-400" />
                 <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.25em]">Get in Touch</p>
               </div>
-              <h2 className="text-2xl font-black text-white tracking-tight">Contact Us</h2>
+              <h2 id="contact-modal-title" className="text-2xl font-black text-white tracking-tight">Contact Us</h2>
               <p className="text-slate-400 text-sm font-medium mt-1">We typically reply within 1–2 business days.</p>
             </div>
             <button
               onClick={onClose}
+              aria-label="Close contact modal"
               className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-slate-400 hover:text-white transition-colors shrink-0 mt-1"
             >
               <X size={18} />

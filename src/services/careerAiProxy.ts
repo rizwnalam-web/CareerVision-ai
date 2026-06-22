@@ -357,3 +357,25 @@ export async function getCareerMilestones(
     country,
   });
 }
+
+// ─── Network & Community ──────────────────────────────────────────────────────
+
+export async function getNetworkCommunities(profile: UserProfile): Promise<any[]> {
+  return callBackend<any[]>('/network-communities', 'POST', { profile });
+}
+
+export async function getNetworkMentors(profile: UserProfile): Promise<any[]> {
+  return callBackend<any[]>('/network-mentors', 'POST', { profile });
+}
+
+export async function getNetworkResumeReviews(profile: UserProfile): Promise<any[]> {
+  return callBackend<any[]>('/network-resume-reviews', 'POST', { profile });
+}
+
+export async function getNetworkReferrals(profile: UserProfile): Promise<any[]> {
+  return callBackend<any[]>('/network-referrals', 'POST', { profile });
+}
+
+export async function getNetworkCompanies(profile: UserProfile): Promise<any[]> {
+  return callBackend<any[]>('/network-companies', 'POST', { profile });
+}
