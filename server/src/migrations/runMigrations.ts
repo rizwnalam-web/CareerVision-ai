@@ -17,6 +17,7 @@ import * as migration014 from "./014_interview_prep_tables.js";
 import * as migration015 from "./015_analytics_tables.js";
 import * as migration016 from "./016_push_subscriptions.js";
 import * as migration017 from "./017_monetization_tables.js";
+import * as migration018 from "./018_feedback_status.js";
 
 const migrations = [
   { name: "001_initial_schema",        module: migration001 },
@@ -37,6 +38,7 @@ const migrations = [
   { name: "015_analytics_tables",               module: migration015 },
   { name: "016_push_subscriptions",              module: migration016 },
   { name: "017_monetization_tables",              module: migration017 },
+  { name: "018_feedback_status",                  module: migration018 },
 ];
 
 export async function runMigrations() {

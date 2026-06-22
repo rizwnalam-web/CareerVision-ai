@@ -125,6 +125,7 @@ import SoftSkillsAssessment from './components/SoftSkillsAssessment';
 import SalaryNegotiationCoach from './components/SalaryNegotiationCoach';
 import SideHustleAdvisor from './components/SideHustleAdvisor';
 import BurnoutPrevention from './components/BurnoutPrevention';
+import AdminDashboard from './components/AdminDashboard';
 import { trackView } from './services/analyticsService';
 import { prefetchVariants } from './lib/abTesting';
 import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
@@ -5466,8 +5467,12 @@ export default function App() {
 
 function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   const { t } = useTranslation();
-  type AppView = 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'resume' | 'job-match' | 'interview' | 'directory' | 'network' | 'analytics' | 'pricing' | 'enterprise' | 'career-coach' | 'industry-sim' | 'soft-skills' | 'salary-coach' | 'side-hustle' | 'burnout';
-  const VALID_VIEWS: AppView[] = ['dashboard', 'roadmap', 'institutions', 'materials', 'expenses', 'advisor', 'parent', 'heatmap', 'jobs', 'resume', 'job-match', 'interview', 'directory', 'network', 'analytics', 'pricing', 'enterprise', 'career-coach', 'industry-sim', 'soft-skills', 'salary-coach', 'side-hustle', 'burnout'];
+
+  // ── Admin check (used for pillar visibility + admin view) ──────────────────
+  const isAdmin = !!(user?.email && import.meta.env.VITE_ADMIN_EMAIL && user.email === import.meta.env.VITE_ADMIN_EMAIL);
+
+  type AppView = 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'resume' | 'job-match' | 'interview' | 'directory' | 'network' | 'analytics' | 'pricing' | 'enterprise' | 'career-coach' | 'industry-sim' | 'soft-skills' | 'salary-coach' | 'side-hustle' | 'burnout' | 'admin';
+  const VALID_VIEWS: AppView[] = ['dashboard', 'roadmap', 'institutions', 'materials', 'expenses', 'advisor', 'parent', 'heatmap', 'jobs', 'resume', 'job-match', 'interview', 'directory', 'network', 'analytics', 'pricing', 'enterprise', 'career-coach', 'industry-sim', 'soft-skills', 'salary-coach', 'side-hustle', 'burnout', 'admin'];
   // ── Pillar Definitions ──
   type PillarSub = { label: string; view: AppView; icon: React.ElementType; desc: string };
   type Pillar = { id: string; label: string; icon: React.ElementType; primaryView: AppView; views: AppView[]; accent: { bg: string; text: string }; subs: PillarSub[] };
@@ -5529,6 +5534,11 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
         { label: t('pillars.subs.enterprise'), view: 'enterprise', icon: Building2,     desc: 'Team & company-scale solutions' },
       ],
     },
+    ...(isAdmin ? [{
+      id: 'admin', label: 'Admin', icon: ShieldCheck, primaryView: 'admin' as AppView, views: ['admin' as AppView],
+      accent: { bg: 'bg-rose-700', text: 'text-white' },
+      subs: [] as PillarSub[],
+    }] : []),
   ];
   const persistedView = sessionStorage.getItem('cv_activeView') as AppView | null;
   const [activeView, setActiveViewState] = useState<AppView>(
@@ -6105,8 +6115,13 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
             className={activeView === 'institutions' ? 'min-h-full' : 'h-full'}
           >
             {activeView === 'dashboard' && <Dashboard profile={profile} onSelectPath={handleSelectPath} onSelectByTitle={handleSelectByTitle} careers={careers} isLoading={isCareersLoading} onInitInterview={initiateInterview} onAiCareerSearch={handleAiCareerSearch} isAiCareerLoading={isAiCareerLoading} aiCareerSearchMessage={aiCareerSearchMessage} onNavigate={handleNavigate} dashboardIntel={dashboardIntel} isDashboardIntelLoading={isDashboardIntelLoading} onResetToGlobal={fetchTopGlobalCareers} />}
+
+            {/* Admin view — full width, no sidebar */}
+            {activeView === 'admin' && isAdmin && (
+              <AdminDashboard adminEmail={user.email} />
+            )}
             
-            {activeView !== 'dashboard' && (
+            {activeView !== 'dashboard' && activeView !== 'admin' && (
               <div className={activeView === 'institutions' ? 'grid grid-cols-12 gap-8' : 'grid grid-cols-12 gap-8 h-full'}>
                 <section className={activeView === 'institutions' ? 'col-span-12 xl:col-span-9 space-y-8' : 'col-span-12 xl:col-span-9 space-y-8 h-full'}>
                    {activeView === 'roadmap' && <RoadmapView profile={profile} pathId={selectedPathId} careers={careers} onNavigate={handleNavigate} onInitInterview={initiateInterview} />}
