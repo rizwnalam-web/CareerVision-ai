@@ -33,5 +33,12 @@ const bannerOut = path.resolve(__dirname, '../public/careervision-banner.jpg');
 writeFileSync(bannerOut, bannerBuf);
 console.log('✓ Banner saved:', bannerOut);
 
+// ── OG Image PNG (1200×627) ─────────────────────────────────────────────────
+const ogEl = await page.$('#og');
+const ogBuf = await ogEl.screenshot({ type: 'png' });
+const ogOut = path.resolve(__dirname, '../public/easycareer-og.png');
+writeFileSync(ogOut, ogBuf);
+console.log('✓ OG image saved:', ogOut);
+
 await browser.close();
-console.log('\nDone! Both assets are in /public/');
+console.log('\nDone! All assets are in /public/');
