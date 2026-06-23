@@ -8,7 +8,7 @@ import {
   Reply, Bookmark, ExternalLink,
   CheckCircle, Share2,
   ArrowRight, Hash, Lock,
-  FileText, Plus, X, Loader2, RefreshCw,
+  FileText, Plus, X, Loader2, RefreshCw, Sparkles,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { UserProfile } from "../types/career";
@@ -883,17 +883,55 @@ const ReferralsTab: React.FC<{ initialData: ReferralConnection[] }> = ({ initial
 // Company Research & Alumni Tab
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CompaniesTab: React.FC<{ initialData: CompanyProfile[] }> = ({ initialData }) => {
+const CompaniesTab: React.FC<{ initialData: CompanyProfile[]; profile: UserProfile }> = ({ initialData, profile }) => {
   const [companies, setCompanies] = useState<CompanyProfile[]>(initialData);
   const [selected, setSelected] = useState<CompanyProfile | null>(null);
   const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [industry, setIndustry] = useState("All");
+  const [searching, setSearching] = useState(false);
+
+  // Run an AI-powered company search with the given query
+  const runSearch = useCallback(async (query: string) => {
+    const q = query.trim();
+    if (!q) {
+      setCompanies(initialData);
+      setSearch("");
+      return;
+    }
+    setSearch(q);
+    setSearching(true);
+    try {
+      const results = await getNetworkCompanies(profile, q);
+      // Always use AI results directly — even if empty, don't fall back to
+      // unrelated initialData which would then get text-filtered to 0.
+      setCompanies(Array.isArray(results) ? results : []);
+    } catch {
+      setCompanies([]);
+    } finally {
+      setSearching(false);
+    }
+  }, [initialData, profile]);
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') runSearch(searchInput);
+  };
+
+  const clearSearch = () => {
+    setSearchInput("");
+    setSearch("");
+    setCompanies(initialData);
+    setIndustry("All");
+  };
 
   const industries = ["All", ...Array.from(new Set(companies.map(c => c.industry)))];
-  const filtered = companies.filter(c =>
-    (industry === "All" || c.industry === industry) &&
-    (c.name.toLowerCase().includes(search.toLowerCase()) || c.industry.toLowerCase().includes(search.toLowerCase()))
-  );
+  // When an AI search is active the LLM already filtered the results — only
+  // apply the industry dropdown. Without search, do a local text match.
+  const filtered = companies.filter(c => {
+    if (industry !== "All" && c.industry !== industry) return false;
+    if (search) return true; // AI already selected relevant companies
+    return true;
+  });
 
   const toggleFollow = (id: string) => {
     setCompanies(prev => prev.map(c => c.id === id ? { ...c, followed: !c.followed } : c));
@@ -905,20 +943,75 @@ const CompaniesTab: React.FC<{ initialData: CompanyProfile[] }> = ({ initialData
       <div className="flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[180px]">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search companies…"
+          <input
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            placeholder="Search companies… (press Enter)"
             className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:border-indigo-400"
           />
         </div>
+        <button
+          onClick={() => runSearch(searchInput)}
+          disabled={searching}
+          className={cn(
+            "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all",
+            searching
+              ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+              : "bg-indigo-600 text-white hover:bg-indigo-700"
+          )}
+        >
+          {searching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+          {searching ? "Searching AI…" : "Search"}
+        </button>
+        {search && (
+          <button onClick={clearSearch} className="flex items-center gap-1 px-3 py-2 rounded-xl text-sm font-bold text-slate-500 bg-white border border-slate-200 hover:border-slate-300 transition-all">
+            <X size={13} /> Clear
+          </button>
+        )}
         <select value={industry} onChange={e => setIndustry(e.target.value)} className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none">
           {industries.map(i => <option key={i}>{i}</option>)}
         </select>
       </div>
 
+      {search && (
+        <div className="flex items-center gap-2 text-xs text-slate-500 bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2">
+          <Sparkles size={12} className="text-indigo-500" />
+          <span>
+            Showing AI results for <strong className="text-indigo-700">"{search}"</strong> — first result is the exact match, followed by similar companies
+            {filtered.length > 0 && <span className="ml-1 text-slate-400">({filtered.length} found)</span>}
+          </span>
+        </div>
+      )}
+
+      {/* Empty state when search returns nothing */}
+      {filtered.length === 0 && !searching && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mb-4">
+            <Building2 size={22} className="text-slate-400" />
+          </div>
+          <p className="font-bold text-slate-700 mb-1">
+            {search ? `No companies found for "${search}"` : "No companies found"}
+          </p>
+          <p className="text-sm text-slate-400 mb-4">
+            {search ? "Try a different name or broaden your search." : "Try searching for a specific company."}
+          </p>
+          {search && (
+            <button onClick={clearSearch} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all">
+              <RefreshCw size={13} /> Reset search
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <AnimatePresence mode="popLayout">
           {filtered.map((company, i) => (
             <motion.div key={company.id} initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.07 }}
-              className="bg-white border border-slate-200 rounded-2xl p-5 hover:shadow-md transition-all cursor-pointer"
+              className={cn(
+                "bg-white border rounded-2xl p-5 hover:shadow-md transition-all cursor-pointer",
+                search && i === 0 ? "border-indigo-300 ring-1 ring-indigo-200 shadow-sm" : "border-slate-200"
+              )}
               onClick={() => setSelected(company)}
             >
               <div className="flex items-start gap-3 mb-3">
@@ -926,6 +1019,11 @@ const CompaniesTab: React.FC<{ initialData: CompanyProfile[] }> = ({ initialData
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h4 className="font-bold text-slate-800">{company.name}</h4>
+                    {search && i === 0 && (
+                      <span className="px-2 py-0.5 bg-indigo-600 text-white rounded text-[9px] font-black flex items-center gap-1">
+                        <CheckCircle size={9} /> Best Match
+                      </span>
+                    )}
                     {company.followed && <span className="px-2 py-0.5 bg-indigo-100 text-indigo-600 rounded text-[9px] font-bold">Following</span>}
                   </div>
                   <p className="text-xs text-slate-500">{company.industry} · {company.size} employees</p>
@@ -1107,8 +1205,12 @@ const NetworkView: React.FC<Props> = ({ profile }) => {
   const [loading, setLoading] = useState<Partial<Record<NetworkTab, boolean>>>({});
   const [errors, setErrors] = useState<Partial<Record<NetworkTab, string>>>({});
 
-  const fetchTab = useCallback(async (tab: NetworkTab) => {
-    if (data[tab]) return; // already loaded
+  // Use a ref to access latest data without it being a useCallback dep (avoids stale-closure loop)
+  const dataRef = React.useRef(data);
+  dataRef.current = data;
+
+  const fetchTab = useCallback(async (tab: NetworkTab, force = false) => {
+    if (!force && dataRef.current[tab]) return; // already loaded, skip unless forced
     setLoading(prev => ({ ...prev, [tab]: true }));
     setErrors(prev => ({ ...prev, [tab]: undefined }));
     try {
@@ -1119,13 +1221,17 @@ const NetworkView: React.FC<Props> = ({ profile }) => {
     } finally {
       setLoading(prev => ({ ...prev, [tab]: false }));
     }
-  }, [profile, data]);
+  }, [profile]);
 
-  const retryTab = (tab: NetworkTab) => {
+  const retryTab = useCallback((tab: NetworkTab) => {
     setData(prev => { const next = { ...prev }; delete next[tab]; return next; });
     setErrors(prev => ({ ...prev, [tab]: undefined }));
-    // fetch will be triggered by the useEffect below
-  };
+    fetchTab(tab, true);
+  }, [fetchTab]);
+
+  const refreshCurrentTab = useCallback(() => {
+    fetchTab(activeTab, true);
+  }, [fetchTab, activeTab]);
 
   // Fetch current tab on mount and when switching
   useEffect(() => { fetchTab(activeTab); }, [activeTab]);
@@ -1179,6 +1285,20 @@ const NetworkView: React.FC<Props> = ({ profile }) => {
         <current.icon size={13} />
         <span>{current.desc}</span>
         {isLoading && <span className="text-indigo-400 flex items-center gap-1"><Loader2 size={11} className="animate-spin" /> Loading AI data…</span>}
+        <button
+          onClick={refreshCurrentTab}
+          disabled={isLoading}
+          title="Refresh data from AI"
+          className={cn(
+            "ml-auto flex items-center gap-1.5 px-3 py-1 rounded-xl text-[11px] font-bold transition-all border",
+            isLoading
+              ? "bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed"
+              : "bg-white border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50"
+          )}
+        >
+          <RefreshCw size={11} className={cn(isLoading && "animate-spin")} />
+          Refresh
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -1194,7 +1314,7 @@ const NetworkView: React.FC<Props> = ({ profile }) => {
               {activeTab === "mentorship"    && <MentorshipTab    initialData={data.mentorship    ?? []} />}
               {activeTab === "resume-review" && <ResumeReviewTab  initialData={data["resume-review"] ?? []} />}
               {activeTab === "referrals"     && <ReferralsTab     initialData={data.referrals     ?? []} />}
-              {activeTab === "companies"     && <CompaniesTab     initialData={data.companies     ?? []} />}
+              {activeTab === "companies"     && <CompaniesTab     initialData={data.companies     ?? []} profile={profile} />}
             </>
           )}
         </motion.div>

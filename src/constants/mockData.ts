@@ -632,6 +632,50 @@ export const FUNDING_OPPORTUNITIES: FundingOpportunity[] = [
     terms: "3.5% Fixed APR, 10-year term",
     description: "Low-interest loan specifically for STEM students studying cross-border.",
     eligibilityCriteria: ["Enrolled in STEM program", "Valid Global ID"]
+  },
+  {
+    id: "sch-4",
+    name: "Rhodes International Excellence Award",
+    provider: "Rhodes Foundation",
+    amount: 50000,
+    deadline: "2026-10-15",
+    category: "Merit",
+    type: "Scholarship",
+    description: "Prestigious award for outstanding academic achievers with GPA 3.8+ pursuing global, cross-disciplinary education and demonstrating strong leadership.",
+    eligibilityCriteria: ["GPA > 3.8", "Demonstrated leadership", "International study commitment"]
+  },
+  {
+    id: "sch-5",
+    name: "Women in STEM Excellence Grant",
+    provider: "StemHer Global",
+    amount: 20000,
+    deadline: "2026-11-30",
+    category: "Interest",
+    type: "Scholarship",
+    description: "Empowers women and non-binary students excelling in technology, AI, engineering, or data science. Supports gender diversity in STEM fields.",
+    eligibilityCriteria: ["Identifies as woman or non-binary", "Enrolled in STEM programme", "GPA > 3.0"]
+  },
+  {
+    id: "sch-6",
+    name: "Climate Justice Fellowship",
+    provider: "EarthFund International",
+    amount: 18000,
+    deadline: "2026-09-20",
+    category: "Interest",
+    type: "Scholarship",
+    description: "Awarded to students with demonstrated sustainability, green tech, or climate advocacy work. First-generation students are strongly encouraged to apply.",
+    eligibilityCriteria: ["Sustainability project or portfolio", "Environmental science or related field", "First-generation applicants preferred"]
+  },
+  {
+    id: "sch-7",
+    name: "Global Health Equity Fund",
+    provider: "WHO Education Partners",
+    amount: 25000,
+    deadline: "2026-08-01",
+    category: "Need",
+    type: "Scholarship",
+    description: "Need-based funding for underrepresented communities pursuing healthcare, public health, or nursing. Targets students from low-income households.",
+    eligibilityCriteria: ["Annual household income < $30,000", "Enrolled in healthcare programme", "Member of underrepresented community", "Demonstrated financial need"]
   }
 ];
 

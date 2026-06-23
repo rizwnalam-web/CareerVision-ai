@@ -13,10 +13,13 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
   /* Custom Palette */
-  --color-slate-950: #0a0c10;
-  --color-indigo-500: #6366f1;
-  --color-indigo-600: #4f46e5;
-  --color-indigo-400: #818cf8;
+  --color-slate-900:   #0f172a;
+  --color-slate-950:   #0a0c10;
+  --color-indigo-400:  #818cf8;
+  --color-indigo-500:  #6366f1;
+  --color-indigo-600:  #4f46e5;
+  --color-indigo-950:  #1e1b4b;
+  --color-violet-600:  #7c3aed;
 }
 
 @layer base {
@@ -141,4 +144,42 @@
 :focus-visible {
   outline: 2px solid var(--cv-focus-ring);
   outline-offset: 2px;
+}
+
+/* ── Italic text selection on LandingPage ─────────────────────────────────── */
+.italic-selection *::selection,
+.italic-selection::selection {
+  font-style: italic;
+  background-color: #e0e7ff;
+}
+
+/* ── Auth / Register: guaranteed dark backgrounds ────────────────────────────
+   Tailwind v4 gradient color-stop utilities (from-* via-* to-*) rely on CSS
+   custom-property chaining that can silently fail during the Vite/esbuild pass.
+   These plain CSS classes are always compiled correctly.
+   ─────────────────────────────────────────────────────────────────────────── */
+.auth-dark-bg {
+  background: linear-gradient(to bottom right, #0a0c10, #1e1b4b, #0f172a);
+}
+.register-dark-bg {
+  background-color: #0a0c10;
+}
+
+/* ── Button / accent gradients — inline-style fallback for Tailwind v4 ────── */
+/* Applied via className when from-/via-/to- gradient stop utilities are used  */
+.btn-indigo-violet {
+  background: linear-gradient(to right, #4f46e5, #7c3aed);
+}
+.btn-indigo-violet:hover {
+  background: linear-gradient(to right, #6366f1, #8b5cf6);
+}
+.btn-emerald-teal {
+  background: linear-gradient(to right, #059669, #0d9488);
+}
+.btn-amber-orange {
+  background: linear-gradient(to right, #f59e0b, #ea580c);
+}
+/* Roadmap header gradient */
+.bg-roadmap-header {
+  background: linear-gradient(to bottom right, #4f46e5, #6d28d9);
 }

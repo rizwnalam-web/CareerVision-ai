@@ -153,7 +153,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ onClose }) => {
                     </div>
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Website</p>
-                      <p className="text-xs font-bold text-slate-700">decodflow.com</p>
+                      <p className="text-xs font-bold text-slate-700">https://easycareer-ai.decodflow.com</p>
                     </div>
                   </div>
                 </div>

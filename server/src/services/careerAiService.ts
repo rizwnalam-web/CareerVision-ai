@@ -2234,28 +2234,98 @@ Rules: connectionStrength values are strong|medium|weak; 2 are connected true; 1
   }
 }
 
-export async function getNetworkCompanies(profile: UserProfile): Promise<any[]> {
-  const cacheKey = `network:companies:${profile.targetCareerId || 'any'}:${profile.country || 'global'}`;
-  const cached = await getAiCache<any[]>(cacheKey);
-  if (cached && cached.length > 0) return cached;
+export async function getNetworkCompanies(profile: UserProfile, query?: string): Promise<any[]> {
+  const normalizedQuery = query?.toLowerCase().trim();
 
-  const systemInstruction = `You are a company research and alumni network intelligence engine. Return ONLY valid JSON — no markdown, no explanation.`;
-  const prompt = `Generate 5 real company profiles with alumni network data for someone targeting: ${profile.targetCareerId || 'Technology'} in ${profile.targetLocation || profile.country || 'Global'}.
+  // For the default (no search) case, use cache as before
+  if (!normalizedQuery) {
+    const cacheKey = `network:companies:${profile.targetCareerId || 'any'}:${profile.country || 'global'}`;
+    const cached = await getAiCache<any[]>(cacheKey);
+    if (cached && cached.length > 0) return cached;
+
+    const systemInstruction = `You are a company research and alumni network intelligence engine. Return ONLY valid JSON — no markdown, no explanation.`;
+    const prompt = `Generate 5 real company profiles with alumni network data for someone targeting: ${profile.targetCareerId || 'Technology'} in ${profile.targetLocation || profile.country || 'Global'}.
 
 Return a JSON array of exactly 5 objects with this schema:
 {"id":"slug","name":"Company","logo":"CO","industry":"Industry","size":"10,000+","rating":4.2,"reviews":5200,"alumniCount":320,"openRoles":85,"hq":"City, Country","culture":["trait1","trait2","trait3"],"alumni":[{"name":"Full Name","role":"Job Title","avatar":"FN","gradYear":2021},{"name":"Full Name 2","role":"Job Title","avatar":"FN","gradYear":2022}],"followed":false}
 Rules: 2 companies have followed true; each company has exactly 2 alumni; use top companies for ${profile.targetCareerId || 'Technology'}.`;
 
-  try {
-    const text = await callLLM(prompt, systemInstruction, { temperature: 0.5, maxTokens: 2500 });
-    const result = parseAIJson<any[]>(text);
-    if (Array.isArray(result) && result.length > 0) {
-      setAiCache(cacheKey, result, 24).catch(() => {});
-      return result;
+    try {
+      const text = await callLLM(prompt, systemInstruction, { temperature: 0.5, maxTokens: 2500 });
+      const result = parseAIJson<any[]>(text);
+      if (Array.isArray(result) && result.length > 0) {
+        setAiCache(cacheKey, result, 24).catch(() => {});
+        return result;
+      }
+    } catch (error) {
+      console.error('[Network] getNetworkCompanies (default) failed:', error);
     }
     return [];
+  }
+
+  // ── Search query path — NEVER use cache so results are always fresh & accurate ──
+  // Strong system instruction: the model must act as a structured database lookup,
+  // not a "suggest popular companies" task.
+  const systemInstruction = `You are a structured company database. Your ONLY job is to look up the EXACT company the user named and return its profile as JSON index 0, followed by its real-world direct competitors at index 1–4.
+NEVER substitute the queried company with a different well-known company.
+NEVER return Google, Microsoft, Amazon, Apple, or Meta as the first result unless the user specifically searched for one of those companies.
+Return ONLY valid JSON — no markdown, no prose, no explanation.`;
+
+  const prompt = `USER SEARCHED FOR: "${query}"
+
+YOUR TASK:
+1. Identify the real company that best matches "${query}".
+   - "Cognizant" or "Cognizant Technology" → Cognizant Technology Solutions (CTSH), IT services, HQ: Teaneck, NJ, USA. Competitors: Infosys, Wipro, TCS, HCL Technologies.
+   - "Infosys" → Infosys Limited (INFY), IT services, HQ: Bangalore, India. Competitors: TCS, Cognizant, Wipro, HCL.
+   - "Wipro" → Wipro Limited, IT services, HQ: Bangalore, India. Competitors: Infosys, TCS, Cognizant, HCL.
+   - "TCS" or "Tata Consultancy" → Tata Consultancy Services, IT services, HQ: Mumbai, India. Competitors: Infosys, Cognizant, Wipro, HCL.
+   - "Accenture" → Accenture PLC, consulting, HQ: Dublin, Ireland. Competitors: Deloitte, McKinsey, Capgemini, IBM Consulting.
+   - "Deloitte" → Deloitte Touche Tohmatsu, professional services, HQ: London, UK. Competitors: PwC, EY, KPMG, Accenture.
+   - For any other company not listed above: research it accurately and use its real HQ, industry, and direct competitors.
+
+2. Return a JSON array of exactly 5 objects:
+   - Index 0: MUST be the exact company matching "${query}" — use its real name, industry, HQ.
+   - Index 1–4: MUST be its 4 real direct competitors in the same industry.
+
+JSON SCHEMA (use for all 5 entries):
+{"id":"lowercase-slug","name":"Real Company Name","logo":"2-4 CAPS abbreviation","industry":"Exact industry","size":"headcount range","rating":4.1,"reviews":3200,"alumniCount":280,"openRoles":75,"hq":"City, Country","culture":["value1","value2","value3"],"alumni":[{"name":"Full Name","role":"Job Title","avatar":"XX","gradYear":2020},{"name":"Full Name","role":"Job Title","avatar":"XX","gradYear":2022}],"followed":false}
+
+CONSTRAINTS:
+- Exactly 5 objects total.
+- Index 0 name MUST contain a word from "${query}" (case-insensitive).
+- Each company has exactly 2 alumni entries.
+- Exactly 1 company has followed:true.
+- rating between 3.5 and 4.9, reviews between 500 and 50000.`;
+
+  try {
+    const text = await callLLM(prompt, systemInstruction, { temperature: 0.1, maxTokens: 2800 });
+    const result = parseAIJson<any[]>(text);
+
+    if (!Array.isArray(result) || result.length === 0) return [];
+
+    // Post-process: verify index 0 matches the query.
+    // If the LLM drifted, find the correct entry and move it to index 0.
+    const queryWords = normalizedQuery.split(/\s+/).filter(w => w.length > 2);
+    const matchesQuery = (name: string) =>
+      queryWords.some(w => name.toLowerCase().includes(w));
+
+    const firstOk = matchesQuery(result[0]?.name ?? '');
+    if (!firstOk) {
+      const correctIdx = result.findIndex(c => matchesQuery(c?.name ?? ''));
+      if (correctIdx > 0) {
+        // Swap the correct entry to index 0
+        [result[0], result[correctIdx]] = [result[correctIdx], result[0]];
+        console.warn(`[Network] Swapped company at index ${correctIdx} ("${result[0]?.name}") to index 0 for query "${query}"`);
+      } else {
+        // LLM completely missed the company — log but return what we have
+        console.warn(`[Network] LLM could not find "${query}" in results: ${result.map(r => r?.name).join(', ')}`);
+      }
+    }
+
+    // Do NOT cache search results — always fetch fresh so search is accurate
+    return result;
   } catch (error) {
-    console.error('[Network] getNetworkCompanies failed:', error);
+    console.error('[Network] getNetworkCompanies (search) failed:', error);
     return [];
   }
 }

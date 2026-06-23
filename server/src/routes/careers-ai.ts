@@ -481,9 +481,9 @@ router.post("/network-referrals", async (req: Request, res: Response) => {
 
 router.post("/network-companies", async (req: Request, res: Response) => {
   try {
-    const { profile } = req.body;
+    const { profile, query } = req.body;
     if (!profile) return res.status(400).json({ error: "profile is required" });
-    const results = await careerAiService.getNetworkCompanies(profile);
+    const results = await careerAiService.getNetworkCompanies(profile, query);
     res.json({ success: true, data: results });
   } catch (error) {
     console.error("Network companies error:", error);

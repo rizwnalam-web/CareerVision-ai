@@ -376,6 +376,6 @@ export async function getNetworkReferrals(profile: UserProfile): Promise<any[]> 
   return callBackend<any[]>('/network-referrals', 'POST', { profile });
 }
 
-export async function getNetworkCompanies(profile: UserProfile): Promise<any[]> {
-  return callBackend<any[]>('/network-companies', 'POST', { profile });
+export async function getNetworkCompanies(profile: UserProfile, query?: string): Promise<any[]> {
+  return callBackend<any[]>('/network-companies', 'POST', { profile, query });
 }

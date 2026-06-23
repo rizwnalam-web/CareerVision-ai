@@ -61,7 +61,10 @@ import {
   Users,
   Layers,
   Crown,
-  Building2
+  Building2,
+  Bell,
+  CalendarDays,
+  GraduationCap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle } from 'react-leaflet';
@@ -97,6 +100,7 @@ import {
 } from 'recharts';
 import { cn } from './lib/utils';
 // mock data removed — all data is loaded from the AI/backend
+import { FUNDING_OPPORTUNITIES } from './constants/mockData';
 import { CareerPath, UserProfile, Institution, FundingOpportunity, DashboardIntelligence, CareerSkillGap } from './types/career';
 import { getCareerAdvice, matchScholarships, getRecommendedCourses, getTopGlobalCareers, aiSearchCareerPaths, generateCoverLetter, getLatestCareerNews, getAiInstitutionRecommendations, getDynamicInstitutions, getDynamicStudyMaterials, getVisaGuidance, getCareerHubIntelligence, aiSearchInstitutions, aiSearchCareerHubs, getDashboardIntelligence, getCareerSkillGap, getGlobalContextInsights, getCareersByCountry, getCareerMilestones, getJobDirectory, getCareerRequirements, GlobalInsight, type CountryCareerEntry, type CareerMilestone, type JobDirectory, type CareerRequirements } from './services/geminiService';
 import ReactMarkdown from 'react-markdown';
@@ -114,6 +118,7 @@ import { RegisterScreen } from './components/RegisterScreen';
 import { InterviewStats } from './types/interview';
 import { AuthProvider, LoginScreen } from './components/Auth';
 import { useTranslation } from 'react-i18next';
+import { useAccessibility } from './lib/AccessibilityContext';
 import { VisaDetails } from './components/VisaDetails';
 import { CareerHubCard } from './components/CareerHubCard';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
@@ -970,12 +975,1174 @@ const SECTOR_PLACEHOLDERS = [
   { name: "Gov't & Defence", status: 'Emerging' as const, color: '#fbbf24', trend: '+12% new openings',      spark: [{v:40},{v:45},{v:50},{v:55},{v:58},{v:62},{v:65}] },
 ];
 
-const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading, onInitInterview, onAiCareerSearch, isAiCareerLoading, aiCareerSearchMessage, onNavigate, dashboardIntel, isDashboardIntelLoading, onResetToGlobal }: { profile: UserProfile, onSelectPath: (id: string) => void, onSelectByTitle: (title: string) => void, careers: CareerPath[], isLoading: boolean, onInitInterview: (role: string, company?: string) => void, onAiCareerSearch: (query: string) => Promise<void>, isAiCareerLoading: boolean, aiCareerSearchMessage: string, onNavigate: (view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'resume' | 'interview') => void, dashboardIntel: DashboardIntelligence | null, isDashboardIntelLoading: boolean, onResetToGlobal: () => Promise<void> }) => {
+// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Deadline Tracker — countdown helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function getDaysUntil(dateStr: string): number {
+  const deadline = new Date(dateStr);
+  deadline.setHours(23, 59, 59, 999);
+  const now = new Date();
+  return Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function getDeadlineUrgency(days: number): {
+  label: string; bg: string; border: string; text: string;
+  numBg: string; badge: string; pulse: boolean;
+} {
+  if (days <= 7)  return { label: 'Critical', bg: 'bg-rose-50',   border: 'border-rose-200',   text: 'text-rose-600',   numBg: 'bg-rose-500',   badge: 'bg-rose-100 text-rose-700 border-rose-200',   pulse: true  };
+  if (days <= 30) return { label: 'Urgent',   bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-600',  numBg: 'bg-amber-500',  badge: 'bg-amber-100 text-amber-700 border-amber-200',  pulse: false };
+  if (days <= 90) return { label: 'Soon',     bg: 'bg-indigo-50', border: 'border-indigo-100', text: 'text-indigo-600', numBg: 'bg-indigo-500', badge: 'bg-indigo-100 text-indigo-700 border-indigo-200', pulse: false };
+  return               { label: 'Upcoming',  bg: 'bg-slate-50',  border: 'border-slate-100',  text: 'text-slate-400',  numBg: 'bg-slate-400',  badge: 'bg-slate-100 text-slate-500 border-slate-200',  pulse: false };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DeadlineCountdownWidget
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DeadlineCountdownWidget = ({
+  onViewAll,
+}: {
+  onViewAll: () => void;
+}) => {
+  const [, setTick] = useState(0);
+  // Re-render every 60 s so countdowns stay live
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const sorted = [...FUNDING_OPPORTUNITIES]
+    .map(opp => ({ ...opp, daysLeft: getDaysUntil(opp.deadline) }))
+    .filter(opp => opp.daysLeft >= 0)
+    .sort((a, b) => a.daysLeft - b.daysLeft);
+
+  const urgentCount = sorted.filter(o => o.daysLeft <= 30).length;
+
+  const handleReminder = (opp: (typeof sorted)[0]) => {
+    if (!('Notification' in window)) return;
+    Notification.requestPermission().then(perm => {
+      if (perm === 'granted') {
+        new Notification(`Deadline Reminder: ${opp.name}`, {
+          body: `Application closes in ${opp.daysLeft} day${opp.daysLeft !== 1 ? 's' : ''} on ${new Date(opp.deadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. Amount: $${opp.amount.toLocaleString()}.`,
+          icon: '/manifest.webmanifest',
+          tag: `deadline-${opp.id}`,
+        });
+      }
+    });
+  };
+
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="px-6 pt-6 pb-4 flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#ef4444' }}>
+              <CalendarDays size={12} className="text-white" />
+            </div>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deadline Tracker</span>
+            {urgentCount > 0 && (
+              <span className="flex items-center gap-1 text-[8px] font-black text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-full uppercase tracking-widest animate-pulse">
+                {urgentCount} urgent
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-500 font-medium leading-snug">
+            Application windows — live countdown
+          </p>
+        </div>
+        <button onClick={onViewAll} className="shrink-0 text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-800 transition-colors flex items-center gap-1 mt-1">
+          View All <ChevronRight size={11} />
+        </button>
+      </div>
+
+      <div className="px-4 pb-5 space-y-2.5">
+        {sorted.length === 0 ? (
+          <p className="text-[10px] text-slate-400 font-bold text-center py-6 uppercase tracking-widest">No upcoming deadlines</p>
+        ) : sorted.slice(0, 5).map((opp, idx) => {
+          const cfg = getDeadlineUrgency(opp.daysLeft);
+          return (
+            <motion.div
+              key={opp.id}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.05 }}
+              className={`rounded-2xl border p-3 ${cfg.bg} ${cfg.border} ${cfg.pulse ? 'ring-1 ring-rose-300' : ''}`}
+            >
+              <div className="flex items-center gap-2.5">
+                {/* Countdown box */}
+                <div className={`shrink-0 w-12 h-12 rounded-xl flex flex-col items-center justify-center ${cfg.numBg}`}>
+                  <span className="text-[15px] font-black text-white leading-none">{opp.daysLeft}</span>
+                  <span className="text-[6px] font-black text-white/70 uppercase tracking-widest">days</span>
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                    <span className={`text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${cfg.badge}`}>
+                      {opp.type}
+                    </span>
+                    {cfg.pulse && (
+                      <span className="text-[7px] font-black text-rose-500 uppercase tracking-widest">● Closing soon</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] font-black text-slate-800 leading-tight truncate">{opp.name}</p>
+                  <p className="text-[8px] text-slate-400 font-medium">{opp.provider} · {new Date(opp.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                </div>
+
+                {/* Amount + remind */}
+                <div className="shrink-0 flex flex-col items-end gap-1.5">
+                  <span className="text-[12px] font-black text-slate-900">${opp.amount.toLocaleString()}</span>
+                  <button
+                    onClick={() => handleReminder(opp)}
+                    title="Set browser reminder"
+                    className={`flex items-center gap-1 text-[7px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border transition-colors ${cfg.badge} hover:opacity-80`}
+                  >
+                    <Bell size={8} /> Remind
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Footer */}
+      <div className="border-t border-slate-100 px-6 py-3 flex items-center justify-between">
+        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{sorted.length} active window{sorted.length !== 1 ? 's' : ''}</span>
+        <button onClick={onViewAll} className="text-[10px] font-black text-indigo-600 hover:text-indigo-800 transition-colors uppercase tracking-widest flex items-center gap-1">
+          Browse Funding <ArrowUpRight size={10} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Scholarship Triage System — Intelligent Tiered Categorization// Three tiers: Merit | Need | Interest/Inclusion
+// Scores each tier using the full user profile, not just academics.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type ScholarshipTier = 'Merit' | 'Need' | 'Interest';
+
+interface TieredMatch extends FundingOpportunity {
+  localScore: number;
+  tier: ScholarshipTier;
+  breakdown: { label: string; points: number; max: number }[];
+  profileSignals: string[];
+}
+
+/** Classify an opportunity into its primary funding tier */
+function classifyTier(opp: FundingOpportunity): ScholarshipTier {
+  if (opp.category === 'Merit') return 'Merit';
+  if (opp.category === 'Need') return 'Need';
+  if (opp.category === 'Interest' || opp.category === 'Geographic') return 'Interest';
+  const text = `${opp.name} ${opp.description} ${opp.eligibilityCriteria.join(' ')}`.toLowerCase();
+  if (/\bgpa\b|merit|academic|grade|honor|dean|excellence/.test(text)) return 'Merit';
+  if (/income|need-based|financial aid|family income|low.income|household|demonstrated need/.test(text)) return 'Need';
+  return 'Interest';
+}
+
+/** Tier-aware scoring — each tier uses the profile data most relevant to it */
+function computeTieredScore(
+  opp: FundingOpportunity,
+  profile: UserProfile,
+  tier: ScholarshipTier
+): { score: number; breakdown: { label: string; points: number; max: number }[]; profileSignals: string[] } {
+  const breakdown: { label: string; points: number; max: number }[] = [];
+  const signals: string[] = [];
+  const text = `${opp.name} ${opp.description} ${opp.eligibilityCriteria.join(' ')}`.toLowerCase();
+  const gpa = Number(profile.academicPerformance?.gpa ?? 0);
+  const edu = (profile.education || '').toLowerCase();
+  const career = (profile.targetCareerId || '').toLowerCase();
+  const interests = (Array.isArray(profile.interests) ? profile.interests : []).map((i: string) => i.toLowerCase().trim()).filter(i => i.length > 2);
+  const budget = Number(profile.budget ?? (profile as any).financialProfile?.monthlyIncome ?? 0);
+  const location = (profile.targetLocation || profile.country || '').toLowerCase();
+
+  if (tier === 'Merit') {
+    // GPA (40 pts)
+    const reqGpa = parseFloat((text.match(/gpa\s*[>≥]\s*([\d.]+)/)?.[1] ?? '0'));
+    let gpaPts = 0;
+    if (reqGpa > 0) {
+      gpaPts = gpa >= reqGpa + 0.5 ? 40 : gpa >= reqGpa + 0.2 ? 33 : gpa >= reqGpa ? 25 : gpa >= reqGpa - 0.3 ? 10 : 0;
+    } else {
+      gpaPts = gpa >= 3.8 ? 40 : gpa >= 3.5 ? 34 : gpa >= 3.2 ? 26 : gpa >= 3.0 ? 18 : gpa >= 2.7 ? 10 : 4;
+    }
+    if (gpa > 0) signals.push(`GPA ${gpa.toFixed(1)}`);
+    breakdown.push({ label: 'GPA', points: gpaPts, max: 40 });
+
+    // Field of study (35 pts)
+    const stemKw = ['engineer', 'comput', 'tech', 'science', 'math', 'data', 'ai', 'cyber', 'bio', 'physics', 'nursing', 'medicine'];
+    const isStemEdu = stemKw.some(k => edu.includes(k));
+    const isStemOpp = stemKw.some(k => text.includes(k));
+    let fieldPts = 14; // baseline
+    if (edu && text.includes(edu.split(' ')[0])) fieldPts = 35;
+    else if (isStemEdu && isStemOpp) fieldPts = 28;
+    if (edu) signals.push(edu.split(' ').slice(0, 2).join(' '));
+    breakdown.push({ label: 'Field of Study', points: fieldPts, max: 35 });
+
+    // Career alignment (15 pts)
+    const careerPts = career && (text.includes(career.split(' ')[0]) || career.split(' ').some(w => w.length > 3 && text.includes(w))) ? 15 : 6;
+    if (career) signals.push(career.split(' ')[0]);
+    breakdown.push({ label: 'Career Goal', points: careerPts, max: 15 });
+
+    // Location (10 pts)
+    breakdown.push({ label: 'Location', points: location && text.includes(location) ? 10 : 5, max: 10 });
+
+  } else if (tier === 'Need') {
+    // Financial need (50 pts) — primary driver
+    const hasNeedCriteria = /income|need.based|financial|family|household/.test(text);
+    let needPts = 0;
+    if (hasNeedCriteria) {
+      needPts = budget < 20000 ? 50 : budget < 35000 ? 42 : budget < 50000 ? 32 : budget < 70000 ? 18 : 8;
+    } else {
+      needPts = budget < 30000 ? 35 : budget < 50000 ? 25 : 15;
+    }
+    if (budget > 0) signals.push(`Budget $${budget.toLocaleString()}`);
+    breakdown.push({ label: 'Financial Need', points: needPts, max: 50 });
+
+    // Academic minimum (20 pts)
+    const minGpa = parseFloat((text.match(/gpa\s*[>≥]\s*([\d.]+)/)?.[1] ?? '0'));
+    const acadPts = minGpa === 0 ? 20 : gpa >= minGpa ? 20 : gpa >= minGpa - 0.3 ? 12 : 0;
+    if (gpa > 0) signals.push(`GPA ${gpa.toFixed(1)}`);
+    breakdown.push({ label: 'Academic Min', points: acadPts, max: 20 });
+
+    // Location / citizenship (20 pts)
+    const locPts = location && text.includes(location) ? 20 : 10;
+    if (location) signals.push(location);
+    breakdown.push({ label: 'Citizenship', points: locPts, max: 20 });
+
+    // Field fit (10 pts)
+    const fieldPts = edu && text.includes(edu.split(' ')[0]) ? 10 : 5;
+    breakdown.push({ label: 'Field', points: fieldPts, max: 10 });
+
+  } else {
+    // Interest / Inclusion tier
+    // Interest keyword matches (50 pts)
+    const hits = interests.filter(i => text.includes(i) || i.split(' ').some(w => w.length > 3 && text.includes(w)));
+    const interestPts = Math.min(50, hits.length * 15 + (hits.length > 0 ? 5 : 0));
+    if (interests.length > 0) signals.push(...interests.slice(0, 2));
+    breakdown.push({ label: 'Interests', points: interestPts, max: 50 });
+
+    // Background / identity (25 pts) — open-to-all gets 10 as baseline
+    const identityKw = ['women', 'minority', 'hispanic', 'latina', 'latino', 'black', 'african', 'asian',
+      'indigenous', 'native', 'lgbtq', 'first-generation', 'first generation', 'veteran', 'disability', 'underrepresented'];
+    const profileBlob = `${career} ${interests.join(' ')}`.toLowerCase();
+    const identityMatches = identityKw.filter(k => text.includes(k) && profileBlob.includes(k)).length;
+    const bgPts = identityMatches > 0 ? Math.min(25, identityMatches * 13) : 10;
+    breakdown.push({ label: 'Background', points: bgPts, max: 25 });
+
+    // Career field fit (15 pts)
+    const careerPts = career && career.split(' ').some(w => w.length > 3 && text.includes(w)) ? 15 : 6;
+    if (career) signals.push(career.split(' ')[0]);
+    breakdown.push({ label: 'Career', points: careerPts, max: 15 });
+
+    // Location (10 pts)
+    breakdown.push({ label: 'Location', points: location && text.includes(location) ? 10 : 5, max: 10 });
+  }
+
+  const total = breakdown.reduce((s, b) => s + b.points, 0);
+  return { score: Math.min(100, Math.round(total)), breakdown, profileSignals: [...new Set(signals)].slice(0, 3) };
+}
+
+const TIER_CONFIG: Record<ScholarshipTier, {
+  label: string; subtitle: string;
+  ringColor: string; barClass: string;
+  headerClass: string; iconClass: string; textClass: string; badgeClass: string;
+}> = {
+  Merit: {
+    label: 'Merit-Based', subtitle: 'GPA & field of study',
+    ringColor: '#3b82f6', barClass: 'bg-blue-500',
+    headerClass: 'bg-blue-50 border-blue-100', iconClass: 'bg-blue-600', textClass: 'text-blue-700', badgeClass: 'bg-blue-100 text-blue-700 border-blue-200',
+  },
+  Need: {
+    label: 'Need-Based', subtitle: 'Financial profile',
+    ringColor: '#f59e0b', barClass: 'bg-amber-500',
+    headerClass: 'bg-amber-50 border-amber-100', iconClass: 'bg-amber-600', textClass: 'text-amber-700', badgeClass: 'bg-amber-100 text-amber-700 border-amber-200',
+  },
+  Interest: {
+    label: 'Interest & Inclusion', subtitle: 'Extracurriculars & background',
+    ringColor: '#8b5cf6', barClass: 'bg-violet-500',
+    headerClass: 'bg-violet-50 border-violet-100', iconClass: 'bg-violet-600', textClass: 'text-violet-700', badgeClass: 'bg-violet-100 text-violet-700 border-violet-200',
+  },
+};
+
+const TIER_ICONS: Record<ScholarshipTier, React.FC<{ size?: number; className?: string }>> = {
+  Merit: (p) => <BookOpen {...p} />,
+  Need: (p) => <CircleDollarSign {...p} />,
+  Interest: (p) => <Sparkles {...p} />,
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scholarship Match Wizard — progressive Q&A that refines match scores
+// ─────────────────────────────────────────────────────────────────────────────
+type WizardKey =
+  | 'enrolled' | 'studyField' | 'gpaAbove35' | 'gpaAbove38'
+  | 'incomeBelow30k' | 'hasFinancialNeed' | 'firstGen'
+  | 'hasGreenProject' | 'isWoman' | 'underrepresented' | 'studyCountry';
+
+type WizardAnswers = Record<WizardKey, boolean | string | null>;
+
+const EMPTY_WIZARD: WizardAnswers = {
+  enrolled: null, studyField: null, gpaAbove35: null, gpaAbove38: null,
+  incomeBelow30k: null, hasFinancialNeed: null, firstGen: null,
+  hasGreenProject: null, isWoman: null, underrepresented: null, studyCountry: null,
+};
+
+interface WizardQuestionDef {
+  id: WizardKey;
+  label: string;
+  hint: string;
+  type: 'yesno' | 'dropdown';
+  options?: { value: string; label: string }[];
+  showIf?: (a: WizardAnswers) => boolean;
+  impact: string;
+}
+
+const WIZARD_QUESTIONS: WizardQuestionDef[] = [
+  {
+    id: 'enrolled',
+    label: 'Are you currently enrolled in a degree programme?',
+    hint: 'Full-time or part-time at any accredited university.',
+    type: 'yesno',
+    impact: 'Affects all scholarships',
+  },
+  {
+    id: 'studyField',
+    label: 'What is your primary field of study?',
+    hint: 'Helps match field-specific awards.',
+    type: 'dropdown',
+    options: [
+      { value: 'cs-ai',          label: 'Computer Science / AI / Software' },
+      { value: 'healthcare',     label: 'Healthcare / Nursing / Medicine' },
+      { value: 'stem-other',     label: 'Other STEM (Engineering, Physics, Maths)' },
+      { value: 'sustainability', label: 'Environmental Science / Sustainability' },
+      { value: 'business',       label: 'Business / Finance / Economics' },
+      { value: 'social',         label: 'Social Sciences / Arts / Humanities' },
+    ],
+    showIf: (a) => a.enrolled === true,
+    impact: 'Merit & interest-based scholarships',
+  },
+  {
+    id: 'gpaAbove35',
+    label: 'Is your current GPA 3.5 or above?',
+    hint: 'On a standard 4.0 scale.',
+    type: 'yesno',
+    showIf: (a) => a.enrolled === true,
+    impact: 'Merit scholarships',
+  },
+  {
+    id: 'gpaAbove38',
+    label: 'Is your GPA 3.8 or above?',
+    hint: 'Required for top-tier merit awards like the Rhodes.',
+    type: 'yesno',
+    showIf: (a) => a.gpaAbove35 === true,
+    impact: 'Rhodes Award · Future Innovators Grant',
+  },
+  {
+    id: 'incomeBelow30k',
+    label: 'Is your annual household income below $30,000 USD?',
+    hint: 'Based on total household income, not personal earnings.',
+    type: 'yesno',
+    impact: 'Need-based scholarships',
+  },
+  {
+    id: 'hasFinancialNeed',
+    label: 'Do you have significant education-related financial hardship?',
+    hint: 'E.g. student debt, no family financial support, or self-funding tuition.',
+    type: 'yesno',
+    showIf: (a) => a.incomeBelow30k !== null,
+    impact: 'Equity & healthcare funds',
+  },
+  {
+    id: 'firstGen',
+    label: 'Are you a first-generation university student?',
+    hint: "Neither parent holds a bachelor's degree.",
+    type: 'yesno',
+    showIf: (a) => a.enrolled !== null,
+    impact: 'Inclusion & need-based awards',
+  },
+  {
+    id: 'hasGreenProject',
+    label: 'Have you worked on a sustainability, green tech, or climate project?',
+    hint: 'Research, capstone, volunteer, or open-source work all count.',
+    type: 'yesno',
+    showIf: (a) => a.studyField !== null,
+    impact: 'Green Earth Award · Climate Fellowship',
+  },
+  {
+    id: 'isWoman',
+    label: 'Do you identify as a woman or non-binary person?',
+    hint: 'Certain inclusion grants specifically support women & non-binary students.',
+    type: 'yesno',
+    showIf: (a) => a.studyField !== null,
+    impact: 'Women in STEM Excellence Grant',
+  },
+  {
+    id: 'underrepresented',
+    label: 'Do you identify as a member of an underrepresented community?',
+    hint: 'E.g. racial minority, indigenous, LGBTQ+, disability, or similar.',
+    type: 'yesno',
+    showIf: (a) => a.firstGen !== null,
+    impact: 'Equity & inclusion awards',
+  },
+  {
+    id: 'studyCountry',
+    label: 'Which country are you currently studying in?',
+    hint: 'Some awards are region-specific.',
+    type: 'dropdown',
+    options: [
+      { value: 'us',    label: 'United States' },
+      { value: 'uk',    label: 'United Kingdom' },
+      { value: 'au',    label: 'Australia' },
+      { value: 'ca',    label: 'Canada' },
+      { value: 'ng',    label: 'Nigeria' },
+      { value: 'gh',    label: 'Ghana' },
+      { value: 'ke',    label: 'Kenya' },
+      { value: 'za',    label: 'South Africa' },
+      { value: 'in',    label: 'India' },
+      { value: 'other', label: 'Other / Not listed' },
+    ],
+    showIf: (a) => a.enrolled !== null,
+    impact: 'Geographic & global scholarships',
+  },
+];
+
+function computeWizardRefinedScore(opp: FundingOpportunity, answers: WizardAnswers): number {
+  const text = `${opp.name} ${opp.description} ${(opp.eligibilityCriteria || []).join(' ')}`.toLowerCase();
+  const answered = Object.values(answers).filter(v => v !== null).length;
+  if (answered === 0) return 0;
+
+  let score = 30; // baseline when at least 1 answer exists
+
+  // Enrollment
+  if (answers.enrolled === true)  score += 8;
+  if (answers.enrolled === false) score -= 25;
+
+  // Field of study
+  const FIELD_KWS: Record<string, string[]> = {
+    'cs-ai':          ['tech', 'software', 'ai', 'robotic', 'comput', 'innovat', 'data'],
+    'healthcare':     ['health', 'nurs', 'medic', 'paramedic', 'clinical'],
+    'stem-other':     ['stem', 'engineer', 'physic', 'math', 'science'],
+    'sustainability': ['sustain', 'green', 'climate', 'renew', 'earth', 'environment'],
+    'business':       ['business', 'finance', 'econom', 'entrepreneur'],
+    'social':         ['social', 'arts', 'humanit', 'education'],
+  };
+  if (answers.studyField) {
+    const kws = FIELD_KWS[answers.studyField as string] || [];
+    const hit = kws.some(k => text.includes(k));
+    if (hit) score += opp.category === 'Merit' ? 25 : (opp.category === 'Interest' || opp.category === 'Geographic') ? 20 : 8;
+    else if (opp.category === 'Merit' || opp.category === 'Interest') score -= 12;
+  }
+
+  // GPA / merit
+  if (opp.category === 'Merit') {
+    if (answers.gpaAbove38 === true)       score += 32;
+    else if (answers.gpaAbove35 === true)  score += 18;
+    else if (answers.gpaAbove35 === false) score -= 22;
+  } else {
+    if (answers.gpaAbove35 === true) score += 5;
+  }
+
+  // Financial need
+  if (opp.category === 'Need') {
+    if (answers.incomeBelow30k === true)       score += 35;
+    else if (answers.incomeBelow30k === false) score -= 28;
+    if (answers.hasFinancialNeed === true)     score += 14;
+  } else {
+    if (answers.incomeBelow30k === true) score += 5;
+  }
+
+  // First-generation
+  if (answers.firstGen === true) score += /first.gen|first generation/.test(text) ? 20 : 6;
+
+  // Sustainability project
+  const isGreen = /green|sustain|climate|renew|earth/.test(text);
+  if (answers.hasGreenProject === true  && isGreen) score += 32;
+  if (answers.hasGreenProject === false && isGreen) score -= 18;
+
+  // Gender inclusion
+  const needsWomen = /women|woman|female|non.binary|gender/.test(text);
+  if (answers.isWoman === true  && needsWomen) score += 32;
+  if (answers.isWoman === false && needsWomen) score -= 15;
+
+  // Underrepresented
+  if (answers.underrepresented === true && /minority|underrepresent|equity|inclus|diversity/.test(text)) score += 28;
+
+  // Country
+  const COUNTRY_KWS: Record<string, string[]> = {
+    us: ['united states', 'usa', 'america'], uk: ['united kingdom', 'uk', 'britain'],
+    au: ['australia'], ca: ['canada'],       ng: ['nigeria'],
+    gh: ['ghana'],     ke: ['kenya'],        za: ['south africa'], in: ['india'],
+  };
+  if (answers.studyCountry && answers.studyCountry !== 'other') {
+    const kws = COUNTRY_KWS[answers.studyCountry as string] || [];
+    if (kws.some(k => text.includes(k))) score += 12;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+const ScholarshipWizardModal: React.FC<{ onClose: () => void; onViewScholarship?: (id: string) => void }> = ({ onClose, onViewScholarship }) => {
+  const [answers, setAnswers] = useState<WizardAnswers>({ ...EMPTY_WIZARD });
+  const feedEndRef = useRef<HTMLDivElement>(null);
+
+  const answeredCount = Object.values(answers).filter(v => v !== null).length;
+  const activeQuestions = WIZARD_QUESTIONS.filter(q => !q.showIf || q.showIf(answers));
+  const rankedOpps = FUNDING_OPPORTUNITIES
+    .filter(o => o.type !== 'Loan')
+    .map(o => ({ ...o, wScore: computeWizardRefinedScore(o, answers) }))
+    .sort((a, b) => b.wScore - a.wScore);
+
+  const handleAnswer = (id: WizardKey, value: boolean | string) => {
+    setAnswers(prev => ({ ...prev, [id]: value }));
+    setTimeout(() => feedEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 200);
+  };
+
+  const topMatch = rankedOpps[0];
+  const completionPct = Math.round((answeredCount / WIZARD_QUESTIONS.length) * 100);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(10,12,16,0.75)' }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0, y: 20 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        className="w-full max-w-4xl max-h-[90vh] bg-white rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* ── Header ── */}
+        <div className="px-8 py-5 border-b border-slate-100 flex items-center gap-4 shrink-0">
+          <div
+            className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
+            style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
+          >
+            <Sparkles size={18} className="text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-base font-black text-slate-900 tracking-tight">Scholarship Match Wizard</h2>
+            <p className="text-[11px] text-slate-400 font-medium">Answer questions to sharpen your scholarship rankings in real-time</p>
+          </div>
+          <div className="hidden sm:flex flex-col items-end gap-1.5 shrink-0">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+              {answeredCount} / {WIZARD_QUESTIONS.length} answered
+            </span>
+            <div className="w-28 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <motion.div
+                animate={{ width: `${completionPct}%` }}
+                transition={{ duration: 0.4 }}
+                className="h-full rounded-full"
+                style={{ background: 'linear-gradient(to right, #4f46e5, #7c3aed)' }}
+              />
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors shrink-0"
+          >
+            <X size={14} className="text-slate-500" />
+          </button>
+        </div>
+
+        {/* ── Body ── */}
+        <div className="flex-1 flex overflow-hidden min-h-0">
+
+          {/* Left — question feed */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-3">
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Questions</p>
+
+            {activeQuestions.map((q, idx) => {
+              const answered = answers[q.id];
+              const answeredSoFar = activeQuestions.filter(x => answers[x.id] !== null).length;
+              const isActiveQ = answered === null && idx === answeredSoFar;
+
+              return (
+                <motion.div
+                  key={q.id}
+                  initial={{ opacity: 0, x: -12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className={`rounded-2xl border p-4 transition-all ${
+                    answered !== null
+                      ? 'bg-slate-50 border-slate-100'
+                      : isActiveQ
+                      ? 'bg-white border-indigo-200 shadow-sm shadow-indigo-50'
+                      : 'bg-white border-slate-100 opacity-40 pointer-events-none'
+                  }`}
+                >
+                  {/* Question row */}
+                  <div className="flex items-start gap-2.5 mb-3">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                      answered !== null
+                        ? 'border-indigo-500 bg-indigo-500'
+                        : isActiveQ ? 'border-indigo-400' : 'border-slate-300'
+                    }`}>
+                      {answered !== null && <Check size={8} className="text-white" />}
+                    </div>
+                    <div className="flex-1">
+                      <p className={`text-[12px] font-bold leading-snug ${answered !== null ? 'text-slate-400' : 'text-slate-800'}`}>
+                        {q.label}
+                      </p>
+                      <p className="text-[9px] text-slate-400 font-medium mt-0.5">{q.hint}</p>
+                    </div>
+                  </div>
+
+                  {/* Answer area */}
+                  {answered !== null ? (
+                    /* Already answered */
+                    <div className="flex items-center gap-2 pl-6">
+                      <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
+                        {typeof answered === 'boolean'
+                          ? (answered ? 'Yes' : 'No')
+                          : (q.options?.find(o => o.value === answered)?.label ?? String(answered))}
+                      </span>
+                      <button
+                        className="text-[9px] text-slate-400 hover:text-slate-600 font-bold underline transition-colors"
+                        onClick={() => setAnswers(prev => ({ ...prev, [q.id]: null }))}
+                      >
+                        Change
+                      </button>
+                    </div>
+                  ) : q.type === 'yesno' ? (
+                    /* Yes / No */
+                    <div className="flex gap-2 pl-6">
+                      {(['Yes', 'No'] as const).map(opt => (
+                        <button
+                          key={opt}
+                          onClick={() => handleAnswer(q.id, opt === 'Yes')}
+                          className={`flex-1 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-all ${
+                            opt === 'Yes'
+                              ? 'border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-400'
+                              : 'border-slate-200 text-slate-500 hover:bg-slate-50 hover:border-slate-400'
+                          }`}
+                        >
+                          {opt === 'Yes' ? '✓  Yes' : '✗  No'}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    /* Dropdown */
+                    <div className="pl-6">
+                      <select
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-[12px] font-semibold text-slate-700 focus:outline-none focus:border-indigo-400 transition-colors cursor-pointer"
+                        defaultValue=""
+                        onChange={e => { if (e.target.value) handleAnswer(q.id, e.target.value); }}
+                      >
+                        <option value="" disabled>Select an option…</option>
+                        {q.options!.map(o => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Impact label */}
+                  <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-2 pl-6">
+                    Impacts: {q.impact}
+                  </p>
+                </motion.div>
+              );
+            })}
+
+            <div ref={feedEndRef} />
+          </div>
+
+          {/* Right — live rankings */}
+          <div className="w-64 shrink-0 overflow-y-auto p-5 bg-slate-50 border-l border-slate-100">
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Live Rankings</p>
+
+            {answeredCount === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 text-center gap-3 px-4">
+                <div className="w-10 h-10 rounded-2xl bg-slate-200 flex items-center justify-center">
+                  <Sparkles size={16} className="text-slate-400" />
+                </div>
+                <p className="text-[10px] text-slate-400 font-medium leading-snug">
+                  Answer questions to see your personalised rankings.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {rankedOpps.map((opp, idx) => (
+                  <motion.div
+                    key={opp.id}
+                    layout
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className={`bg-white rounded-2xl border border-slate-100 p-3 shadow-sm transition-all ${
+                      onViewScholarship ? 'cursor-pointer hover:border-indigo-200 hover:shadow-md' : ''
+                    }`}
+                    onClick={() => { if (onViewScholarship) { onViewScholarship(opp.id); onClose(); } }}
+                  >
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="text-[8px] font-black text-slate-400 w-4">{idx + 1}</span>
+                      {idx === 0 && (
+                        <span className="text-[7px] font-black uppercase tracking-widest bg-indigo-100 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded-full">
+                          Best
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] font-black text-slate-800 leading-tight">{opp.name}</p>
+                    <p className="text-[8px] text-slate-400 mt-0.5 mb-1.5">{opp.provider}</p>
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <motion.div
+                          animate={{ width: `${opp.wScore}%` }}
+                          transition={{ duration: 0.5 }}
+                          className="h-full rounded-full"
+                          style={{ background: opp.wScore >= 70 ? '#4f46e5' : opp.wScore >= 45 ? '#f59e0b' : '#94a3b8' }}
+                        />
+                      </div>
+                      <span className="text-[9px] font-black text-slate-600 w-5 text-right shrink-0">{opp.wScore}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-[8px] text-slate-400 font-medium">${opp.amount.toLocaleString()}</span>
+                      <span className={`text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${
+                        opp.wScore >= 70 ? 'bg-emerald-100 text-emerald-700' :
+                        opp.wScore >= 45 ? 'bg-amber-100 text-amber-700' :
+                        'bg-slate-100 text-slate-500'
+                      }`}>
+                        {opp.wScore >= 70 ? 'Strong fit' : opp.wScore >= 45 ? 'Possible' : 'Low fit'}
+                      </span>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Footer ── */}
+        <div className="px-8 py-4 border-t border-slate-100 flex items-center justify-between shrink-0">
+          <div>
+            {answeredCount > 0 && topMatch && (
+              <p className="text-[11px] font-medium text-slate-600">
+                Top match: <span className="font-black text-indigo-600">{topMatch.name}</span>
+                <span className="text-slate-400 ml-1">({topMatch.wScore}% fit)</span>
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setAnswers({ ...EMPTY_WIZARD })}
+              className="text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors flex items-center gap-1"
+            >
+              <RotateCcw size={9} /> Reset
+            </button>
+            <button
+              onClick={onClose}
+              className="px-5 py-2 text-[10px] font-black uppercase tracking-widest text-white rounded-xl hover:opacity-90 transition-opacity"
+              style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+const ScholarshipAutoMatchWidget = ({
+  profile,
+  onViewAll,
+  onViewScholarship,
+}: {
+  profile: UserProfile;
+  onViewAll: () => void;
+  onViewScholarship?: (id: string) => void;
+}) => {
+  const [tieredMatches, setTieredMatches] = useState<Record<ScholarshipTier, TieredMatch[]>>({ Merit: [], Need: [], Interest: [] });
+  const [aiRefined, setAiRefined] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [openTiers, setOpenTiers] = useState<Set<ScholarshipTier>>(new Set(['Merit', 'Need', 'Interest']));
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [wizardOpen, setWizardOpen] = useState(false);
+
+  const toggleTier = (t: ScholarshipTier) =>
+    setOpenTiers(prev => { const s = new Set(prev); s.has(t) ? s.delete(t) : s.add(t); return s; });
+
+  useEffect(() => {
+    // Pass 1 — instant local tier-aware scoring
+    const buckets: Record<ScholarshipTier, TieredMatch[]> = { Merit: [], Need: [], Interest: [] };
+    for (const opp of FUNDING_OPPORTUNITIES) {
+      const tier = classifyTier(opp);
+      const { score, breakdown, profileSignals } = computeTieredScore(opp, profile, tier);
+      buckets[tier].push({ ...opp, localScore: score, matchScore: score, tier, breakdown, profileSignals });
+    }
+    for (const t of Object.keys(buckets) as ScholarshipTier[]) {
+      buckets[t].sort((a, b) => b.localScore - a.localScore);
+    }
+    setTieredMatches(buckets);
+    setLoading(false);
+
+    // Pass 2 — AI-refined scores
+    matchScholarships(profile)
+      .then(aiMatches => {
+        setTieredMatches(prev => {
+          const next = { ...prev };
+          for (const t of Object.keys(next) as ScholarshipTier[]) {
+            next[t] = next[t].map(m => {
+              const ai = aiMatches.find((a: FundingOpportunity) => a.id === m.id);
+              return ai?.matchScore !== undefined
+                ? { ...m, matchScore: ai.matchScore, matchReasoning: ai.matchReasoning ?? m.matchReasoning }
+                : m;
+            }).sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+          }
+          return next;
+        });
+        setAiRefined(true);
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.targetCareerId, (profile.interests || []).join(','), profile.academicPerformance?.gpa, profile.budget]);
+
+  const totalCount = Object.values(tieredMatches).reduce((s, arr) => s + arr.length, 0);
+
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+      {/* ── Widget header ── */}
+      <div className="px-6 pt-6 pb-4 flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-6 h-6 rounded-lg bg-indigo-600 flex items-center justify-center">
+              <Layers size={12} className="text-white" />
+            </div>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Scholarship Triage</span>
+            {aiRefined && (
+              <span className="flex items-center gap-1 text-[8px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full uppercase tracking-widest">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" /> AI Refined
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-500 font-medium leading-snug">
+            Personalised across merit, need &amp; interests
+          </p>
+        </div>
+        <button onClick={onViewAll} className="shrink-0 text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-800 transition-colors flex items-center gap-1 mt-1">
+          View All <ChevronRight size={11} />
+        </button>
+      </div>
+
+      {/* ── Three tier sections ── */}
+      <div className="px-4 pb-5 space-y-3">
+        {loading ? (
+          [1, 2, 3].map(i => <div key={i} className="h-20 bg-slate-50 rounded-2xl animate-pulse border border-slate-100" />)
+        ) : (
+          (['Merit', 'Need', 'Interest'] as ScholarshipTier[]).map(tier => {
+            const cfg = TIER_CONFIG[tier];
+            const TierIcon = TIER_ICONS[tier];
+            const opps = tieredMatches[tier].slice(0, 2);
+            const isOpen = openTiers.has(tier);
+            const topSignals = opps[0]?.profileSignals ?? [];
+
+            return (
+              <div key={tier} className={`rounded-2xl border overflow-hidden ${cfg.headerClass}`}>
+                {/* Tier header row */}
+                <button
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left"
+                  onClick={() => toggleTier(tier)}
+                >
+                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${cfg.iconClass}`}>
+                    <TierIcon size={13} className="text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-[10px] font-black uppercase tracking-widest leading-none ${cfg.textClass}`}>{cfg.label}</p>
+                    <p className="text-[8px] text-slate-500 font-medium mt-0.5">{cfg.subtitle}</p>
+                  </div>
+                  <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border shrink-0 ${cfg.badgeClass}`}>
+                    {opps.length} match{opps.length !== 1 ? 'es' : ''}
+                  </span>
+                  <ChevronDown size={13} className={`shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''} ${cfg.textClass}`} />
+                </button>
+
+                {/* Profile signals strip */}
+                {isOpen && topSignals.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 px-4 pb-2">
+                    {topSignals.map(s => (
+                      <span key={s} className={`text-[8px] font-black px-2 py-0.5 rounded-full border uppercase tracking-widest ${cfg.badgeClass}`}>{s}</span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Scholarship cards */}
+                <AnimatePresence initial={false}>
+                  {isOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="px-3 pb-3 space-y-2 border-t border-white/60">
+                        {opps.length === 0 ? (
+                          <p className="text-[9px] text-slate-400 font-bold text-center py-4 uppercase tracking-widest">
+                            Complete your profile to unlock matches
+                          </p>
+                        ) : opps.map((opp, idx) => {
+                          const score = opp.matchScore ?? opp.localScore;
+                          const CIRC_R = 15;
+                          const CIRC_C = 2 * Math.PI * CIRC_R;
+                          const dash = CIRC_C - (score / 100) * CIRC_C;
+                          const isExpanded = expandedId === opp.id;
+                          const isSaved = savedIds.includes(opp.id);
+
+                          return (
+                            <motion.div
+                              key={opp.id}
+                              initial={{ opacity: 0, y: 6 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: idx * 0.06 }}
+                              className={`bg-white rounded-xl border transition-all cursor-pointer ${isExpanded ? 'border-slate-200 shadow-sm' : 'border-slate-100 hover:border-slate-200'}`}
+                              onClick={() => setExpandedId(isExpanded ? null : opp.id)}
+                            >
+                              {/* Card main row */}
+                              <div className="flex items-center gap-2.5 p-3">
+                                {/* Fit score ring */}
+                                <div className="relative shrink-0">
+                                  <svg width={36} height={36} className="-rotate-90">
+                                    <circle cx={18} cy={18} r={CIRC_R} fill="none" stroke="#f1f5f9" strokeWidth={3.5} />
+                                    <motion.circle cx={18} cy={18} r={CIRC_R} fill="none"
+                                      stroke={cfg.ringColor} strokeWidth={3.5} strokeLinecap="round"
+                                      strokeDasharray={CIRC_C}
+                                      initial={{ strokeDashoffset: CIRC_C }}
+                                      animate={{ strokeDashoffset: dash }}
+                                      transition={{ duration: 0.9, ease: 'easeOut', delay: idx * 0.1 }}
+                                    />
+                                  </svg>
+                                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                    <span className={`text-[10px] font-black leading-none ${cfg.textClass}`}>{score}</span>
+                                  </div>
+                                </div>
+
+                                {/* Info */}
+                                <div className="flex-1 min-w-0">
+                                  {idx === 0 && (
+                                    <span className={`text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${cfg.badgeClass} inline-block mb-0.5`}>
+                                      Best Match
+                                    </span>
+                                  )}
+                                  <p className="text-[11px] font-black text-slate-800 leading-tight truncate">{opp.name}</p>
+                                  <p className="text-[8px] text-slate-400 font-medium truncate">{opp.provider}</p>
+                                </div>
+
+                                {/* Amount + save */}
+                                <div className="flex flex-col items-end gap-1 shrink-0">
+                                  <span className="text-[12px] font-black text-slate-900">${opp.amount.toLocaleString()}</span>
+                                  <button
+                                    onClick={e => { e.stopPropagation(); setSavedIds(p => p.includes(opp.id) ? p.filter(i => i !== opp.id) : [...p, opp.id]); }}
+                                    className={`transition-colors ${isSaved ? 'text-rose-500' : 'text-slate-200 hover:text-slate-400'}`}
+                                  >
+                                    <Heart size={11} fill={isSaved ? 'currentColor' : 'none'} />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Expanded detail */}
+                              <AnimatePresence initial={false}>
+                                {isExpanded && (
+                                  <motion.div
+                                    key="detail"
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.18 }}
+                                    className="overflow-hidden border-t border-slate-100"
+                                  >
+                                    <div className="px-3 pb-3 pt-2.5 space-y-2.5">
+                                      {/* Breakdown bars */}
+                                      <div className="space-y-1.5">
+                                        {opp.breakdown.map(b => (
+                                          <div key={b.label} className="flex items-center gap-2">
+                                            <span className="text-[7px] font-black text-slate-400 uppercase w-20 shrink-0">{b.label}</span>
+                                            <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
+                                              <motion.div
+                                                initial={{ width: 0 }}
+                                                animate={{ width: `${(b.points / b.max) * 100}%` }}
+                                                transition={{ duration: 0.5 }}
+                                                className={`h-full rounded-full ${cfg.barClass}`}
+                                              />
+                                            </div>
+                                            <span className="text-[7px] font-black text-slate-500 w-7 text-right">{b.points}/{b.max}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+
+                                      {/* AI reasoning */}
+                                      {opp.matchReasoning && (
+                                        <p className="text-[9px] text-slate-500 italic leading-snug border-l-2 pl-2" style={{ borderColor: cfg.ringColor }}>
+                                          "{opp.matchReasoning}"
+                                        </p>
+                                      )}
+
+                                      {/* Deadline + Actions */}
+                                      <div className="flex flex-col gap-2 pt-0.5">
+                                        <span className="text-[8px] font-black text-slate-400 flex items-center gap-1">
+                                          <Clock size={8} /> {new Date(opp.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                          {onViewScholarship && (
+                                            <button
+                                              onClick={e => { e.stopPropagation(); onViewScholarship(opp.id); }}
+                                              className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-[8px] font-black uppercase tracking-widest text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+                                            >
+                                              View Hub
+                                            </button>
+                                          )}
+                                          <a
+                                            href={opp.website || `https://www.google.com/search?q=${encodeURIComponent(opp.name + ' apply')}`}
+                                            target="_blank" rel="noopener noreferrer"
+                                            onClick={e => e.stopPropagation()}
+                                            className="flex-1 flex items-center justify-center gap-1 px-2.5 py-1.5 text-[8px] font-black uppercase tracking-widest text-white rounded-lg hover:opacity-90 transition-opacity"
+                                            style={{ backgroundColor: cfg.ringColor }}
+                                          >
+                                            Apply <ExternalLink size={8} />
+                                          </a>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="border-t border-slate-100 px-6 py-3 flex items-center justify-between">
+        <button
+          onClick={() => setWizardOpen(true)}
+          className="text-[9px] font-black text-violet-600 hover:text-violet-800 uppercase tracking-widest transition-colors flex items-center gap-1"
+        >
+          <Sparkles size={9} /> Refine with Wizard
+        </button>
+        <button onClick={onViewAll} className="text-[10px] font-black text-indigo-600 hover:text-indigo-800 transition-colors uppercase tracking-widest flex items-center gap-1">
+          View Full Hub <ArrowUpRight size={10} />
+        </button>
+      </div>
+      {/* Scholarship Match Wizard modal — fixed-positioned, safe inside any container */}
+      <AnimatePresence>
+        {wizardOpen && <ScholarshipWizardModal onClose={() => setWizardOpen(false)} onViewScholarship={onViewScholarship} />}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ScholarshipAlertBanner — shown when new matched scholarships are detected
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CV_SEEN_KEY = 'cv_seen_scholarships_v1';
+
+function computeScholarshipMatches(profile: UserProfile): FundingOpportunity[] {
+  const userWords = [
+    ...(profile.interests || []),
+    profile.targetCareerId || '',
+    profile.education || '',
+    profile.targetCareer || '',
+  ].flatMap(s => s.toLowerCase().split(/[\s,]+/)).filter(w => w.length > 3);
+
+  return FUNDING_OPPORTUNITIES.filter(opp => {
+    if (opp.type === 'Loan') return false; // Only scholarships / grants
+    const text = `${opp.name} ${opp.description} ${opp.eligibilityCriteria.join(' ')}`.toLowerCase();
+    return userWords.some(w => text.includes(w));
+  });
+}
+
+const ScholarshipAlertBanner = ({
+  newMatches,
+  onDismiss,
+  onViewAll,
+}: {
+  newMatches: FundingOpportunity[];
+  onDismiss: () => void;
+  onViewAll: () => void;
+}) => {
+  if (newMatches.length === 0) return null;
+  return (
+    <AnimatePresence>
+      <motion.div
+        key="alert-banner"
+        initial={{ opacity: 0, y: -16 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -16 }}
+        transition={{ duration: 0.3 }}
+        className="mb-6 rounded-[2rem] p-4 flex items-center gap-4 shadow-lg shadow-indigo-100 overflow-hidden relative"
+        style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
+      >
+        {/* Glow blob */}
+        <div className="absolute -right-12 -top-12 w-40 h-40 rounded-full opacity-20 pointer-events-none" style={{ background: '#818cf8', filter: 'blur(48px)' }} />
+        <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+          <Bell size={18} className="text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-black text-white uppercase tracking-widest mb-0.5">
+            {newMatches.length} new scholarship{newMatches.length !== 1 ? 's' : ''} match your profile
+          </p>
+          <p className="text-[10px] text-indigo-100 font-medium truncate">
+            {newMatches.map(m => m.name).join(' · ')}
+          </p>
+        </div>
+        <button
+          onClick={onViewAll}
+          className="shrink-0 px-3 py-1.5 bg-white text-indigo-700 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-50 transition-colors"
+        >
+          View
+        </button>
+        <button onClick={onDismiss} className="shrink-0 text-white/60 hover:text-white transition-colors ml-1">
+          <X size={14} />
+        </button>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading, onInitInterview, onAiCareerSearch, isAiCareerLoading, aiCareerSearchMessage, onNavigate, dashboardIntel, isDashboardIntelLoading, onResetToGlobal, onNavigateToScholarship }: { profile: UserProfile, onSelectPath: (id: string) => void, onSelectByTitle: (title: string) => void, careers: CareerPath[], isLoading: boolean, onInitInterview: (role: string, company?: string) => void, onAiCareerSearch: (query: string) => Promise<void>, isAiCareerLoading: boolean, aiCareerSearchMessage: string, onNavigate: (view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'resume' | 'interview') => void, dashboardIntel: DashboardIntelligence | null, isDashboardIntelLoading: boolean, onResetToGlobal: () => Promise<void>, onNavigateToScholarship: (id: string) => void }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedPath, setExpandedPath] = useState<string | null>(null);
   const [skillGapCache, setSkillGapCache] = useState<Record<string, CareerSkillGap[]>>({});
   const [skillGapLoading, setSkillGapLoading] = useState<Record<string, boolean>>({});
   const [skillGapError, setSkillGapError] = useState<Record<string, boolean>>({});
+
+  // ── Scholarship alert state (new-match notifications) ─────────────────────
+  const [scholarshipAlerts, setScholarshipAlerts] = useState<FundingOpportunity[]>([]);
+  const [alertDismissed, setAlertDismissed] = useState(false);
+  useEffect(() => {
+    if (alertDismissed) return;
+    const matched = computeScholarshipMatches(profile);
+    const seen = new Set<string>(JSON.parse(localStorage.getItem(CV_SEEN_KEY) || '[]'));
+    const fresh = matched.filter(o => !seen.has(o.id));
+    if (fresh.length > 0) setScholarshipAlerts(fresh);
+  // Re-run when relevant profile fields change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.targetCareerId, (profile.interests || []).join(','), profile.education, alertDismissed]);
+
+  const dismissAlerts = () => {
+    const seen = new Set<string>(JSON.parse(localStorage.getItem(CV_SEEN_KEY) || '[]'));
+    scholarshipAlerts.forEach(o => seen.add(o.id));
+    localStorage.setItem(CV_SEEN_KEY, JSON.stringify([...seen]));
+    setAlertDismissed(true);
+    setScholarshipAlerts([]);
+  };
 
   // Default to user's home country if it matches a COUNTRY_FILTERS entry, else 'Global'
   const defaultCountry = (() => {
@@ -1041,6 +2208,7 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
   const [jobDirError, setJobDirError] = useState(false);
   const [activeDirSector, setActiveDirSector] = useState<'Government' | 'Private'>('Government');
   const [expandedDirCategory, setExpandedDirCategory] = useState<string | null>(null);
+  const [centerTab, setCenterTab] = useState<'careers' | 'scholarships'>('careers');
 
   const fetchJobDirectory = async (country: string, attempt = 1) => {
     setIsJobDirLoading(true);
@@ -1273,7 +2441,15 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
   });
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 pb-12 animate-in fade-in duration-700">
+    <div className="pb-12 animate-in fade-in duration-700">
+      {/* ── Scholarship match notification banner ── */}
+      <ScholarshipAlertBanner
+        newMatches={scholarshipAlerts}
+        onDismiss={dismissAlerts}
+        onViewAll={() => { dismissAlerts(); onNavigate('expenses'); }}
+      />
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
 
       {/* ── LEFT SIDEBAR ── */}
       <div className="xl:col-span-3 space-y-5">
@@ -1483,6 +2659,61 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
             Full Budget Analysis <ArrowUpRight size={10} />
           </button>
         </div>
+
+        {/* Execution Sync — quick-action tiles */}
+        <div className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-sm">
+          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Execution Sync</h4>
+          <div className="space-y-3">
+            {execSync.some(item => item.urgent) && (
+              <div>
+                <p className="text-[8px] font-black uppercase tracking-[0.25em] text-amber-500 mb-2">Needs attention</p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {execSync.filter(item => item.urgent).map(item => {
+                    const Icon = item.icon;
+                    return (
+                      <button key={item.label} onClick={() => onNavigate(item.view)}
+                        className={`p-3.5 rounded-[1.5rem] border ${item.border} ${item.bg} flex flex-col items-start gap-1.5 transition-all group active:scale-95 hover:shadow-md text-left`}>
+                        <div className="flex items-start justify-between w-full">
+                          <div className={`w-8 h-8 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform shrink-0`}>
+                            <Icon size={14} className={item.iconColor} />
+                          </div>
+                          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0 mt-1" />
+                        </div>
+                        <div className="w-full min-w-0">
+                          <p className={`text-[13px] font-black leading-none mb-1 ${item.statusColor}`}>{item.kpi}</p>
+                          <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest leading-none">{item.label}</p>
+                          <p className={`text-[7px] font-medium mt-0.5 leading-snug ${item.statusColor} opacity-80`}>{item.sublabel}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            <div>
+              <p className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-500 mb-2">Live insights</p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {execSync.filter(item => !item.urgent).map(item => {
+                  const Icon = item.icon;
+                  return (
+                    <button key={item.label} onClick={() => onNavigate(item.view)}
+                      className={`p-3.5 rounded-[1.5rem] border ${item.border} ${item.bg} flex flex-col items-start gap-1.5 transition-all group active:scale-95 hover:shadow-md text-left`}>
+                      <div className={`w-8 h-8 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform mb-0.5`}>
+                        <Icon size={14} className={item.iconColor} />
+                      </div>
+                      <div className="w-full min-w-0">
+                        <p className={`text-[13px] font-black leading-none mb-1 ${item.statusColor}`}>{item.kpi}</p>
+                        <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest leading-none">{item.label}</p>
+                        <p className={`text-[7px] font-medium mt-0.5 leading-snug ${item.statusColor} opacity-80`}>{item.sublabel}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       {/* ── CENTER COLUMN ── */}
@@ -1569,8 +2800,36 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
           </div>
         </div>
 
-        {/* Career Directories */}
-        <div className="space-y-5">
+        {/* ── Center tab switcher ── */}
+        <div className="flex items-center gap-1 p-1 rounded-2xl border border-slate-200 bg-slate-50 shadow-sm">
+          {([
+            { id: 'careers',      label: 'Careers',      emoji: '🧭' },
+            { id: 'scholarships', label: 'Scholarships', emoji: '🎓' },
+          ] as const).map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setCenterTab(tab.id)}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+                centerTab === tab.id
+                  ? 'bg-white text-indigo-700 shadow-sm border border-slate-200'
+                  : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              <span className="text-base leading-none">{tab.emoji}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Tab content ── */}
+        {centerTab === 'scholarships' ? (
+          <ScholarshipAutoMatchWidget
+            profile={profile}
+            onViewAll={() => onNavigate('expenses')}
+            onViewScholarship={onNavigateToScholarship}
+          />
+        ) : (
+          <div className="space-y-5">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 px-1">
             <div>
               <h3 className="text-xl font-black text-slate-900 tracking-tight leading-none mb-1">Career Directories</h3>
@@ -1800,10 +3059,17 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
             );
           })()}
         </div>
+        )}
+
       </div>
 
       {/* ── RIGHT SIDEBAR ── */}
       <div className="xl:col-span-3 space-y-5">
+
+        {/* Deadline Countdown Tracker — top of right for immediate visibility */}
+        <DeadlineCountdownWidget
+          onViewAll={() => onNavigate('expenses')}
+        />
 
         {/* Sector Health Index with sparklines */}
         <div className="bg-indigo-900 rounded-[2.5rem] p-6 text-white relative overflow-hidden shadow-2xl">
@@ -1936,72 +3202,11 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
           </AnimatePresence>
         </div>
 
-        {/* Execution Sync — data-driven status */}
-        <div className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-sm">
-          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Execution Sync</h4>
-          <div className="space-y-3">
-            {execSync.some(item => item.urgent) && (
-              <div>
-                <p className="text-[8px] font-black uppercase tracking-[0.25em] text-amber-500 mb-2">Needs attention</p>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {execSync.filter(item => item.urgent).map(item => {
-                    const Icon = item.icon;
-                    return (
-                      <button
-                        key={item.label}
-                        onClick={() => onNavigate(item.view)}
-                        className={`p-3.5 rounded-[1.5rem] border ${item.border} ${item.bg} flex flex-col items-start gap-1.5 transition-all group active:scale-95 hover:shadow-md text-left`}
-                      >
-                        <div className="flex items-start justify-between w-full">
-                          <div className={`w-8 h-8 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform shrink-0`}>
-                            <Icon size={14} className={item.iconColor} />
-                          </div>
-                          {item.urgent && <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0 mt-1" />}
-                        </div>
-                        <div className="w-full min-w-0">
-                          <p className={`text-[13px] font-black leading-none mb-1 ${item.statusColor}`}>{item.kpi}</p>
-                          <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest leading-none">{item.label}</p>
-                          <p className={`text-[7px] font-medium mt-0.5 leading-snug ${item.statusColor} opacity-80`}>{item.sublabel}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            <div>
-              <p className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-500 mb-2">Live insights</p>
-              <div className="grid grid-cols-2 gap-2.5">
-                {execSync.filter(item => !item.urgent).map(item => {
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.label}
-                      onClick={() => onNavigate(item.view)}
-                      className={`p-3.5 rounded-[1.5rem] border ${item.border} ${item.bg} flex flex-col items-start gap-1.5 transition-all group active:scale-95 hover:shadow-md text-left`}
-                    >
-                      <div className="flex items-start justify-between w-full">
-                        <div className={`w-8 h-8 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform shrink-0`}>
-                          <Icon size={14} className={item.iconColor} />
-                        </div>
-                      </div>
-                      <div className="w-full min-w-0">
-                        <p className={`text-[13px] font-black leading-none mb-1 ${item.statusColor}`}>{item.kpi}</p>
-                        <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest leading-none">{item.label}</p>
-                        <p className={`text-[7px] font-medium mt-0.5 leading-snug ${item.statusColor} opacity-80`}>{item.sublabel}</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
+    </div>
     </div>
   );
 };
-
 
 const RoadmapView = ({ profile, pathId, careers, onNavigate, onInitInterview }: { profile: UserProfile, pathId?: string, careers: CareerPath[], onNavigate: (view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap', context?: { search?: string; roadmap?: InstitutionRoadmapContext | null }) => void, onInitInterview: (role: string, company?: string) => void }) => {
   const path = careers.find(p => p.id === pathId) || careers[0];
@@ -4476,14 +5681,31 @@ const ParentalDashboard = ({ profile, onBack, careers }: { profile: UserProfile,
   );
 };
 
-const FundingOpportunitiesView = ({ profile }: { profile: UserProfile }) => {
+const FundingOpportunitiesView = ({ profile, highlightId, onHighlightConsumed }: {
+  profile: UserProfile;
+  highlightId?: string | null;
+  onHighlightConsumed?: () => void;
+}) => {
   const [opportunities, setOpportunities] = useState<FundingOpportunity[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // start loading immediately
+  const [isLoading, setIsLoading] = useState(true);
   const [rateLimited, setRateLimited] = useState(false);
   const [retryIn, setRetryIn] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [showSavedOnly, setShowSavedOnly] = useState(false);
+  const highlightRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to and briefly ring-highlight the targeted scholarship card
+  useEffect(() => {
+    if (!highlightId || !highlightRef.current) return;
+    const t = setTimeout(() => {
+      highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Clear the highlight after 3.5s so it doesn’t persist
+      const clear = setTimeout(() => onHighlightConsumed?.(), 3500);
+      return () => clearTimeout(clear);
+    }, 600);
+    return () => clearTimeout(t);
+  }, [highlightId, opportunities]);
 
   const performMatch = async () => {
     setIsLoading(true);
@@ -4622,14 +5844,24 @@ const FundingOpportunitiesView = ({ profile }: { profile: UserProfile }) => {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <AnimatePresence mode="popLayout">
-                {filteredOpportunities.map((opp, i) => (
+                {filteredOpportunities.map((opp, i) => {
+                  const isHighlighted = highlightId === opp.id;
+                  return (
                   <motion.div
+                    ref={isHighlighted ? highlightRef : undefined}
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: i * 0.1 }}
                     key={opp.id}
-                    className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all relative overflow-hidden group flex flex-col justify-between"
+                    className={`bg-white border rounded-2xl p-4 shadow-sm hover:shadow-md transition-all relative overflow-hidden group flex flex-col justify-between ${
+                      isHighlighted
+                        ? 'border-indigo-400 ring-2 ring-indigo-300 ring-offset-2 shadow-indigo-100'
+                        : 'border-slate-200'
+                    }`}
                   >
+                    {isHighlighted && (
+                      <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl" style={{ background: 'linear-gradient(to right, #4f46e5, #7c3aed)' }} />
+                    )}
                     {/* ... rest of the card content ... */}
                 <div className="space-y-3">
                   <div className="flex justify-between items-start gap-4">
@@ -4705,18 +5937,29 @@ const FundingOpportunitiesView = ({ profile }: { profile: UserProfile }) => {
                   <ExternalLink size={12} /> Apply Now
                 </a>
               </motion.div>
-            ))}
+            );
+          })}
           </AnimatePresence>
-        </div>
+            </div>
+          )}
+        </>
       )}
-    </>
-  )}
-</div>
+    </div>
   );
 };
 
-const FinancialView = ({ profile, setProfile }: { profile: UserProfile, setProfile: React.Dispatch<React.SetStateAction<UserProfile>> }) => {
+const FinancialView = ({ profile, setProfile, highlightScholarshipId, onClearHighlight }: {
+  profile: UserProfile;
+  setProfile: React.Dispatch<React.SetStateAction<UserProfile>>;
+  highlightScholarshipId?: string | null;
+  onClearHighlight?: () => void;
+}) => {
   const [activeTab, setActiveTab] = useState<'planner' | 'projections' | 'calculator' | 'funding'>('planner');
+
+  // Auto-switch to the funding tab when arriving via a scholarship deep-link
+  useEffect(() => {
+    if (highlightScholarshipId) setActiveTab('funding');
+  }, [highlightScholarshipId]);
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const [showGoalNotification, setShowGoalNotification] = useState<string | null>(null);
   const [aiRecommendation, setAiRecommendation] = useState<string>("Based on your savings rate and target trajectory, I can generate a financial action plan with budget priorities, savings guidance, and next-step recommendations.");
@@ -5354,7 +6597,7 @@ Return a concise finance-first recommendation with:
             </div>
           )}
 
-          {activeTab === 'funding' && <FundingOpportunitiesView profile={profile} />}
+          {activeTab === 'funding' && <FundingOpportunitiesView profile={profile} highlightId={highlightScholarshipId} onHighlightConsumed={onClearHighlight} />}
         </div>
       </div>
     </div>
@@ -5467,6 +6710,7 @@ export default function App() {
 
 function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   const { t } = useTranslation();
+  const { language, setLanguage } = useAccessibility();
 
   // ── Admin check (used for pillar visibility + admin view) ──────────────────
   const isAdmin = !!(user?.email && import.meta.env.VITE_ADMIN_EMAIL && user.email === import.meta.env.VITE_ADMIN_EMAIL);
@@ -5552,8 +6796,17 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
     }
   };
   const activePillar = PILLAR_DEFS.find(p => p.views.includes(activeView)) || PILLAR_DEFS[0];
+  const LANG_OPTIONS = [
+    { code: 'en' as const, flag: '🇬🇧', label: 'EN' },
+    { code: 'es' as const, flag: '🇪🇸', label: 'ES' },
+    { code: 'fr' as const, flag: '🇫🇷', label: 'FR' },
+    { code: 'ar' as const, flag: '🇸🇦', label: 'AR' },
+    { code: 'zh' as const, flag: '🇨🇳', label: 'ZH' },
+  ];
   const [showMoreNav, setShowMoreNav] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
+  const [showLangPopup, setShowLangPopup] = useState(false);
+  const [scholarshipHighlightId, setScholarshipHighlightId] = useState<string | null>(null);
   const [selectedPathId, setSelectedPathId] = useState<string>("ai-engineer");
   const [institutionSearchQuery, setInstitutionSearchQuery] = useState("");
   const [institutionRoadmapContext, setInstitutionRoadmapContext] = useState<InstitutionRoadmapContext | null>(null);
@@ -5872,47 +7125,61 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] bg-blue-50/50 rounded-full blur-[100px] pointer-events-none" />
 
       {/* Header Navigation */}
-      <header className="flex items-center justify-between border-b border-slate-200/60 bg-white/70 backdrop-blur-xl px-5 py-3 z-20 shrink-0 sticky top-0">
-        <div className="flex items-center gap-2.5 cursor-pointer group shrink-0" onClick={() => onExit()}>
-          <Logo size={36} className="group-hover:scale-110 transition-transform rounded-xl shadow-xl shadow-indigo-200" />
-          <span className="text-xl font-black tracking-tighter text-slate-900 hidden sm:block">CareerVision<span className="text-indigo-600 italic">AI</span></span>
+      <header className="flex items-center justify-between border-b border-slate-200/60 bg-white/70 backdrop-blur-xl px-4 py-3 z-[200] shrink-0 sticky top-0 gap-2">
+        {/* Brand */}
+        <div className="flex items-center gap-2 cursor-pointer group shrink-0" onClick={() => onExit()}>
+          <Logo size={34} className="group-hover:scale-110 transition-transform rounded-xl shadow-xl shadow-indigo-200" />
+          <span className="text-lg font-black tracking-tighter text-slate-900 hidden lg:block">CareerVision<span className="text-indigo-600 italic">AI</span></span>
         </div>
-        <nav className="hidden md:flex items-center gap-1 relative bg-slate-100/70 rounded-2xl p-1" aria-label="Main navigation">
-          {PILLAR_DEFS.map(pillar => {
-            const isPillarActive = activePillar.id === pillar.id;
-            const PillarIcon = pillar.icon;
-            return (
-              <button
-                key={pillar.id}
-                onClick={() => handleNavigate(pillar.primaryView)}
-                aria-current={isPillarActive ? 'page' : undefined}
-                aria-label={pillar.label}
-                className={cn(
-                  'flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all duration-150',
-                  isPillarActive
-                    ? cn(pillar.accent.bg, pillar.accent.text, 'shadow-md shadow-black/10')
-                    : 'text-slate-500 hover:bg-slate-200/70 hover:text-slate-800'
-                )}
-              >
-                <PillarIcon size={13} aria-hidden="true" />
-                {pillar.label}
-              </button>
-            );
-          })}
+
+        {/* Desktop grouped nav — icon-only on md-xl, icon+label on xl+ */}
+        <nav className="hidden md:flex flex-1 items-center justify-center gap-0.5 relative" aria-label="Main navigation">
+          <div className="flex items-center gap-0.5 bg-slate-100/70 rounded-2xl p-1">
+            {PILLAR_DEFS.map((pillar, idx) => {
+              const isPillarActive = activePillar.id === pillar.id;
+              const PillarIcon = pillar.icon;
+              const showSeparator = idx > 0 && ['mobility', 'plans'].includes(pillar.id);
+              return (
+                <React.Fragment key={pillar.id}>
+                  {showSeparator && (
+                    <div className="w-px h-4 bg-slate-300/60 mx-0.5 self-center" aria-hidden="true" />
+                  )}
+                  <button
+                    onClick={() => handleNavigate(pillar.primaryView)}
+                    aria-current={isPillarActive ? 'page' : undefined}
+                    aria-label={pillar.label}
+                    title={pillar.label}
+                    className={cn(
+                      'flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-150 whitespace-nowrap',
+                      isPillarActive
+                        ? cn(pillar.accent.bg, pillar.accent.text, 'shadow-md shadow-black/10')
+                        : 'text-slate-500 hover:bg-slate-200/70 hover:text-slate-800'
+                    )}
+                  >
+                    <PillarIcon size={14} aria-hidden="true" />
+                    {/* Label hidden on md-xl, visible on xl+ */}
+                    <span className="hidden xl:block">{pillar.label}</span>
+                  </button>
+                </React.Fragment>
+              );
+            })}
+          </div>
         </nav>
-        <div className="flex items-center gap-2">
-          {/* Hamburger – mobile only (nav shows at md+) */}
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Hamburger — visible on md (tablet) as supplement, hidden on xl+ */}
           <button
-            className="md:hidden flex items-center justify-center w-9 h-9 rounded-xl bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 transition-colors"
+            className="xl:hidden flex items-center justify-center w-8 h-8 rounded-xl bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 transition-colors"
             onClick={() => setShowMobileNav(true)}
             aria-label="Open navigation"
             aria-expanded={showMobileNav}
             aria-controls="mobile-nav-drawer"
           >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect y="3" width="18" height="1.8" rx="0.9" fill="currentColor"/><rect y="8.1" width="18" height="1.8" rx="0.9" fill="currentColor"/><rect y="13.2" width="18" height="1.8" rx="0.9" fill="currentColor"/></svg>
+            <svg width="16" height="16" viewBox="0 0 18 18" fill="none"><rect y="3" width="18" height="1.8" rx="0.9" fill="currentColor"/><rect y="8.1" width="18" height="1.8" rx="0.9" fill="currentColor"/><rect y="13.2" width="18" height="1.8" rx="0.9" fill="currentColor"/></svg>
           </button>
-          {/* Auth + logout (compact) */}
-          <div className="hidden lg:flex flex-col items-end gap-0.5">
+
+          {/* Auth + logout — only on xl+ */}
+          <div className="hidden xl:flex flex-col items-end gap-0.5">
             <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1">
               <ShieldCheck size={9} className="text-emerald-600" />
               <span className="text-[7px] font-black text-emerald-700 uppercase tracking-widest">Secure</span>
@@ -5921,16 +7188,71 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
               <LogOut size={7} /> Sign out
             </button>
           </div>
-          {/* Profile button */}
-          <button className="flex items-center gap-2 bg-white pl-1 pr-3 py-1 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors group" onClick={() => setShowProfileModal(true)}>
-            <div className="h-7 w-7 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center group-hover:bg-indigo-600 transition-colors overflow-hidden">
+
+          {/* Language switcher popup — next to profile */}
+          <div className="relative">
+            <button
+              onClick={() => setShowLangPopup(v => !v)}
+              aria-label="Change language"
+              aria-expanded={showLangPopup}
+              className="flex items-center gap-1 h-8 px-2 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50 transition-colors shadow-sm"
+            >
+              <Globe size={13} className="text-slate-500" />
+              {/* Show lang text only on xl+ */}
+              <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest hidden xl:block">
+                {LANG_OPTIONS.find(l => l.code === language)?.flag ?? '🌐'} {language.toUpperCase()}
+              </span>
+              {/* Show just flag on md-xl */}
+              <span className="text-sm xl:hidden" aria-hidden="true">
+                {LANG_OPTIONS.find(l => l.code === language)?.flag ?? '🌐'}
+              </span>
+            </button>
+            <AnimatePresence>
+              {showLangPopup && (
+                <>
+                  <div className="fixed inset-0 z-[9000]" onClick={() => setShowLangPopup(false)} />
+                  <motion.div
+                    key="lang-popup"
+                    initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                    transition={{ duration: 0.15 }}
+                    className="fixed top-[64px] right-4 z-[9001] bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-200/60 p-2 min-w-[160px]"
+                  >
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 py-1">Language</p>
+                    {LANG_OPTIONS.map(lang => (
+                      <button
+                        key={lang.code}
+                        onClick={() => { setLanguage(lang.code); setShowLangPopup(false); }}
+                        className={cn(
+                          'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-bold transition-all',
+                          language === lang.code
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                        )}
+                      >
+                        <span className="text-base leading-none">{lang.flag}</span>
+                        <span className="font-black tracking-wider">{lang.label}</span>
+                        {language === lang.code && <span className="ml-auto text-[9px] text-indigo-200 uppercase font-black">Active</span>}
+                      </button>
+                    ))}
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Profile button — icon+name on xl+, icon-only on md-lg */}
+          <button className="flex items-center gap-1.5 bg-white pl-1 pr-1.5 xl:pr-3 py-1 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors group" onClick={() => setShowProfileModal(true)}>
+            <div className="h-7 w-7 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center group-hover:bg-indigo-600 transition-colors overflow-hidden shrink-0">
               {user.photoURL ? (
                 <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
               ) : (
                 <User size={14} className="text-indigo-600 group-hover:text-white transition-colors" />
               )}
             </div>
-            <div className="hidden sm:flex flex-col items-start">
+            {/* Name visible only on xl+ */}
+            <div className="hidden xl:flex flex-col items-start">
               <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight truncate max-w-[100px]">{profile.name}</span>
               <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest leading-none truncate max-w-[100px]">{profileStatusLabel}</span>
             </div>
@@ -5938,14 +7260,13 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
         </div>
       </header>
 
-      <div className="hidden md:flex items-center justify-between gap-4 border-b border-slate-200/60 bg-indigo-50/80 px-5 py-2 text-[11px] text-slate-700 font-black uppercase tracking-[0.18em] z-20 shrink-0">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+      <div className="hidden lg:flex items-center justify-between gap-4 border-b border-slate-200/60 bg-indigo-50/80 px-5 py-2 text-[11px] text-slate-700 font-black uppercase tracking-[0.18em] z-20 shrink-0">
+        <div className="flex flex-row items-center gap-3">
           <span className="text-slate-900">{profileCompletion}% profile complete</span>
-          <span className="text-slate-500">{profileStatusLabel} · {profile.targetLocation || 'Location pending'}</span>
+          <span className="hidden xl:block text-slate-500">{profileStatusLabel} · {profile.targetLocation || 'Location pending'}</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="bg-white border border-indigo-100 px-3 py-1 rounded-full text-[10px] text-indigo-600">{authProviderLabel}</span>
-          {/* LLM Model Badge — hidden */}
+          <span className="hidden xl:block bg-white border border-indigo-100 px-3 py-1 rounded-full text-[10px] text-indigo-600">{authProviderLabel}</span>
           <button
             onClick={() => handleNavigate(profile.targetCareerId ? 'roadmap' : 'dashboard')}
             className="px-3 py-1 rounded-full bg-indigo-600 text-white text-[10px] font-black uppercase tracking-[0.18em] hover:bg-indigo-500 transition-colors"
@@ -6021,18 +7342,18 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                   <X size={15} />
                 </button>
               </div>
-              {/* Nav items */}
-              <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-                {PILLAR_DEFS.map(pillar => {
-                  const isPillarActive = activePillar.id === pillar.id;
-                  const PillarIcon = pillar.icon;
-                  return (
-                    <div key={pillar.id}>
+              {/* Nav items — grouped */}
+              <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1" aria-label="Mobile navigation">
+                {/* Group: Core */}
+                <div className="mb-1">
+                  <p className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400 px-3 mb-1">Core</p>
+                  {PILLAR_DEFS.filter(p => p.id === 'dashboard' || p.id === 'admin').map(pillar => {
+                    const isPillarActive = activePillar.id === pillar.id;
+                    const PillarIcon = pillar.icon;
+                    return (
                       <button
-                        onClick={() => {
-                          handleNavigate(pillar.primaryView);
-                          if (pillar.subs.length === 0) setShowMobileNav(false);
-                        }}
+                        key={pillar.id}
+                        onClick={() => { handleNavigate(pillar.primaryView); setShowMobileNav(false); }}
                         className={cn(
                           'w-full flex items-center gap-3 px-3 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all',
                           isPillarActive ? cn(pillar.accent.bg, pillar.accent.text) : 'text-slate-600 hover:bg-slate-50'
@@ -6041,49 +7362,171 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                         <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center shrink-0', isPillarActive ? 'bg-white/20' : 'bg-slate-100')}>
                           <PillarIcon size={15} className={isPillarActive ? 'text-white' : 'text-slate-600'} />
                         </div>
-                        <div className="text-left flex-1 min-w-0">
-                          <p>{pillar.label}</p>
-                          {pillar.subs.length > 0 && (
-                            <p className={cn('text-[9px] font-medium normal-case tracking-normal mt-0.5 truncate', isPillarActive ? 'text-white/60' : 'text-slate-400')}>
-                              {pillar.subs.map(s => s.label).join(' · ')}
-                            </p>
-                          )}
-                        </div>
-                        {pillar.subs.length > 0 && (
-                          <ChevronRight size={12} className={cn('shrink-0 transition-transform', isPillarActive && 'rotate-90')} />
-                        )}
+                        <p className="flex-1 text-left">{pillar.label}</p>
                       </button>
-                      {isPillarActive && pillar.subs.length > 0 && (
-                        <div className="ml-4 pl-4 border-l border-slate-200 mt-0.5 mb-1 space-y-0.5">
-                          {pillar.subs.map(sub => {
-                            const SubIcon = sub.icon;
-                            const isSubActive = activeView === sub.view;
-                            return (
-                              <button
-                                key={sub.view}
-                                onClick={() => { handleNavigate(sub.view); setShowMobileNav(false); }}
-                                className={cn(
-                                  'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all',
-                                  isSubActive ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-                                )}
-                              >
-                                <SubIcon size={12} />
-                                <div className="text-left flex-1 min-w-0">
-                                  <p>{sub.label}</p>
-                                  <p className="text-[9px] font-medium normal-case tracking-normal mt-0.5 text-slate-400 truncate">{sub.desc}</p>
-                                </div>
-                                {isSubActive && <div className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+
+                <div className="h-px bg-slate-100 mx-2 my-2" />
+
+                {/* Group: Discover & Coaching & Mobility */}
+                <div className="mb-1">
+                  <p className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400 px-3 mb-1">Discover & Grow</p>
+                  {PILLAR_DEFS.filter(p => ['explore', 'ai-coach', 'mobility'].includes(p.id)).map(pillar => {
+                    const isPillarActive = activePillar.id === pillar.id;
+                    const PillarIcon = pillar.icon;
+                    return (
+                      <div key={pillar.id}>
+                        <button
+                          onClick={() => {
+                            handleNavigate(pillar.primaryView);
+                            if (pillar.subs.length === 0) setShowMobileNav(false);
+                          }}
+                          className={cn(
+                            'w-full flex items-center gap-3 px-3 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all',
+                            isPillarActive ? cn(pillar.accent.bg, pillar.accent.text) : 'text-slate-600 hover:bg-slate-50'
+                          )}
+                        >
+                          <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center shrink-0', isPillarActive ? 'bg-white/20' : 'bg-slate-100')}>
+                            <PillarIcon size={15} className={isPillarActive ? 'text-white' : 'text-slate-600'} />
+                          </div>
+                          <div className="text-left flex-1 min-w-0">
+                            <p>{pillar.label}</p>
+                            {pillar.subs.length > 0 && (
+                              <p className={cn('text-[9px] font-medium normal-case tracking-normal mt-0.5 truncate', isPillarActive ? 'text-white/60' : 'text-slate-400')}>
+                                {pillar.subs.slice(0, 3).map(s => s.label).join(' · ')}{pillar.subs.length > 3 ? ` +${pillar.subs.length - 3}` : ''}
+                              </p>
+                            )}
+                          </div>
+                          {pillar.subs.length > 0 && (
+                            <ChevronRight size={12} className={cn('shrink-0 transition-transform', isPillarActive && 'rotate-90')} />
+                          )}
+                        </button>
+                        {isPillarActive && pillar.subs.length > 0 && (
+                          <div className="ml-4 pl-4 border-l-2 border-slate-100 mt-0.5 mb-1 space-y-0.5">
+                            {pillar.subs.map(sub => {
+                              const SubIcon = sub.icon;
+                              const isSubActive = activeView === sub.view;
+                              return (
+                                <button
+                                  key={sub.view}
+                                  onClick={() => { handleNavigate(sub.view); setShowMobileNav(false); }}
+                                  className={cn(
+                                    'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all',
+                                    isSubActive ? cn(pillar.accent.bg, pillar.accent.text, 'shadow-sm') : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                                  )}
+                                >
+                                  <SubIcon size={12} />
+                                  <div className="text-left flex-1 min-w-0">
+                                    <p>{sub.label}</p>
+                                    <p className="text-[9px] font-medium normal-case tracking-normal mt-0.5 text-slate-400 truncate">{sub.desc}</p>
+                                  </div>
+                                  {isSubActive && <div className="w-1.5 h-1.5 rounded-full bg-white/60 shrink-0" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="h-px bg-slate-100 mx-2 my-2" />
+
+                {/* Group: Community, Analytics, Plans */}
+                <div className="mb-1">
+                  <p className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400 px-3 mb-1">Community & Plans</p>
+                  {PILLAR_DEFS.filter(p => ['network', 'analytics', 'plans'].includes(p.id)).map(pillar => {
+                    const isPillarActive = activePillar.id === pillar.id;
+                    const PillarIcon = pillar.icon;
+                    return (
+                      <div key={pillar.id}>
+                        <button
+                          onClick={() => {
+                            handleNavigate(pillar.primaryView);
+                            if (pillar.subs.length <= 1) setShowMobileNav(false);
+                          }}
+                          className={cn(
+                            'w-full flex items-center gap-3 px-3 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all',
+                            isPillarActive ? cn(pillar.accent.bg, pillar.accent.text) : 'text-slate-600 hover:bg-slate-50'
+                          )}
+                        >
+                          <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center shrink-0', isPillarActive ? 'bg-white/20' : 'bg-slate-100')}>
+                            <PillarIcon size={15} className={isPillarActive ? 'text-white' : 'text-slate-600'} />
+                          </div>
+                          <div className="text-left flex-1 min-w-0">
+                            <p>{pillar.label}</p>
+                            {pillar.subs.length > 0 && (
+                              <p className={cn('text-[9px] font-medium normal-case tracking-normal mt-0.5 truncate', isPillarActive ? 'text-white/60' : 'text-slate-400')}>
+                                {pillar.subs.map(s => s.label).join(' · ')}
+                              </p>
+                            )}
+                          </div>
+                          {pillar.subs.length > 1 && (
+                            <ChevronRight size={12} className={cn('shrink-0 transition-transform', isPillarActive && 'rotate-90')} />
+                          )}
+                        </button>
+                        {isPillarActive && pillar.subs.length > 1 && (
+                          <div className="ml-4 pl-4 border-l-2 border-slate-100 mt-0.5 mb-1 space-y-0.5">
+                            {pillar.subs.map(sub => {
+                              const SubIcon = sub.icon;
+                              const isSubActive = activeView === sub.view;
+                              return (
+                                <button
+                                  key={sub.view}
+                                  onClick={() => { handleNavigate(sub.view); setShowMobileNav(false); }}
+                                  className={cn(
+                                    'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all',
+                                    isSubActive ? cn(pillar.accent.bg, pillar.accent.text, 'shadow-sm') : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                                  )}
+                                >
+                                  <SubIcon size={12} />
+                                  <div className="text-left flex-1 min-w-0">
+                                    <p>{sub.label}</p>
+                                    <p className="text-[9px] font-medium normal-case tracking-normal mt-0.5 text-slate-400 truncate">{sub.desc}</p>
+                                  </div>
+                                  {isSubActive && <div className="w-1.5 h-1.5 rounded-full bg-white/60 shrink-0" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Language quick-switch in mobile drawer */}
+                <div className="h-px bg-slate-100 mx-2 my-2" />
+                <div className="px-3 pb-1">
+                  <p className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400 mb-2">Language</p>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {[
+                      { code: 'en' as const, flag: '🇬🇧', label: 'EN' },
+                      { code: 'es' as const, flag: '🇪🇸', label: 'ES' },
+                      { code: 'fr' as const, flag: '🇫🇷', label: 'FR' },
+                      { code: 'ar' as const, flag: '🇸🇦', label: 'AR' },
+                      { code: 'zh' as const, flag: '🇨🇳', label: 'ZH' },
+                    ].map(lang => (
+                      <button
+                        key={lang.code}
+                        onClick={() => setLanguage(lang.code)}
+                        className={cn(
+                          'flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-black transition-all',
+                          language === lang.code ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                        )}
+                      >
+                        <span>{lang.flag}</span>
+                        <span>{lang.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </nav>
               {/* Drawer footer */}
-              <div className="px-6 py-5 border-t border-slate-100 space-y-3">
+              <div className="px-5 py-4 border-t border-slate-100 space-y-2.5">
                 <button
                   onClick={() => setSparkEOpen(true)}
                   className="w-full flex items-center gap-3 px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all group"
@@ -6114,7 +7557,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
             transition={{ duration: 0.3, ease: "circOut" }}
             className={activeView === 'institutions' ? 'min-h-full' : 'h-full'}
           >
-            {activeView === 'dashboard' && <Dashboard profile={profile} onSelectPath={handleSelectPath} onSelectByTitle={handleSelectByTitle} careers={careers} isLoading={isCareersLoading} onInitInterview={initiateInterview} onAiCareerSearch={handleAiCareerSearch} isAiCareerLoading={isAiCareerLoading} aiCareerSearchMessage={aiCareerSearchMessage} onNavigate={handleNavigate} dashboardIntel={dashboardIntel} isDashboardIntelLoading={isDashboardIntelLoading} onResetToGlobal={fetchTopGlobalCareers} />}
+            {activeView === 'dashboard' && <Dashboard profile={profile} onSelectPath={handleSelectPath} onSelectByTitle={handleSelectByTitle} careers={careers} isLoading={isCareersLoading} onInitInterview={initiateInterview} onAiCareerSearch={handleAiCareerSearch} isAiCareerLoading={isAiCareerLoading} aiCareerSearchMessage={aiCareerSearchMessage} onNavigate={handleNavigate} dashboardIntel={dashboardIntel} isDashboardIntelLoading={isDashboardIntelLoading} onResetToGlobal={fetchTopGlobalCareers} onNavigateToScholarship={(id) => { setScholarshipHighlightId(id); handleNavigate('expenses'); }} />}
 
             {/* Admin view — full width, no sidebar */}
             {activeView === 'admin' && isAdmin && (
@@ -6130,7 +7573,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                    {activeView === 'heatmap' && <HeatmapView profile={profile} />}
                    {activeView === 'materials' && <MaterialsView materials={dynamicMaterials} isLoading={isMaterialsLoading} careerTitle={careers.find(c => c.id === selectedPathId)?.title || profile.targetCareerId?.replace(/-/g,' ') || 'Technology'} />}
                    {activeView === 'parent' && <ParentalDashboard profile={profile} onBack={() => setActiveView('dashboard')} careers={careers} />}
-                   {activeView === 'expenses' && <FinancialView profile={profile} setProfile={setProfile} />}
+                   {activeView === 'expenses' && <FinancialView profile={profile} setProfile={setProfile} highlightScholarshipId={scholarshipHighlightId} onClearHighlight={() => setScholarshipHighlightId(null)} />}
                    {activeView === 'resume' && <ResumeManager profile={profile} userId={user.id || user.uid} />}
                    {activeView === 'job-match' && <JobMatchView userId={user.id || user.uid} resumeContent={null} />}
                    {activeView === 'interview' && (

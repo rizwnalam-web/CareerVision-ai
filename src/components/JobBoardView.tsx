@@ -3,7 +3,8 @@ import {
   Search, MapPin, Briefcase, DollarSign, Clock, 
   ExternalLink, Building2, Filter, Loader2, Sparkles,
   ArrowUpRight, Tag, Bookmark, CheckCircle2, X,
-  ChevronDown, BrainCircuit, TrendingUp, Lightbulb
+  ChevronDown, BrainCircuit, TrendingUp, Lightbulb,
+  Zap, User, FileText, CheckCheck, AlertCircle, ChevronRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -111,8 +112,258 @@ function getSalaryDisplay(job: JobListing, preferredCurrency: string) {
   };
 }
 
-function inferMarketHeading(locationQuery: string, profile: UserProfile) {
-  const trimmed = locationQuery.trim();
+// ─────────────────────────────────────────────────────────────────────────────
+// Quick Apply — profile completeness + cover-letter helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface ProfileReadiness {
+  isReady: boolean;
+  score: number;        // 0-100
+  filled: number;
+  total: number;
+  missing: string[];
+}
+
+function getProfileReadiness(profile: UserProfile): ProfileReadiness {
+  const checks: { label: string; ok: boolean }[] = [
+    { label: 'Full name',       ok: !!profile.name?.trim() },
+    { label: 'Education level', ok: !!profile.education?.trim() },
+    { label: 'Target career',   ok: !!profile.targetCareerId?.trim() },
+    { label: 'Location / country', ok: !!profile.country?.trim() },
+    { label: 'Skills listed',   ok: (profile.skills?.length ?? 0) > 0 },
+  ];
+  const filled = checks.filter(c => c.ok).length;
+  const missing = checks.filter(c => !c.ok).map(c => c.label);
+  return {
+    isReady: filled >= 4,   // 4/5 = ready; all 5 = full unlock
+    score: Math.round((filled / checks.length) * 100),
+    filled,
+    total: checks.length,
+    missing,
+  };
+}
+
+function buildCoverLetter(job: JobListing, profile: UserProfile): string {
+  const skills = (profile.skills || []).slice(0, 3).join(', ') || 'relevant technologies';
+  const loc = profile.targetLocation || profile.country || 'my current location';
+  const roleNote = profile.currentRole ? ` currently working as ${profile.currentRole}` : '';
+  const remoteNote = /remote|global/i.test(job.location) ? ' I am fully set up for remote collaboration.' : '';
+  return (
+    `Dear Hiring Team at ${job.company},\n\n` +
+    `I am writing to express my strong interest in the ${job.title} position. ` +
+    `As a ${profile.education} graduate${roleNote} with expertise in ${skills}, ` +
+    `I am excited about the opportunity to contribute to ${job.company}.\n\n` +
+    `Based in ${loc}, I bring a results-driven mindset and a commitment to continuous growth.` +
+    `${remoteNote}\n\n` +
+    `I look forward to discussing how my background aligns with your needs.\n\n` +
+    `Best regards,\n${profile.name}`
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QuickApplyModal
+// ─────────────────────────────────────────────────────────────────────────────
+
+const QuickApplyModal = ({
+  job,
+  profile,
+  onClose,
+  onApplied,
+}: {
+  job: JobListing;
+  profile: UserProfile;
+  onClose: () => void;
+  onApplied: () => void;
+}) => {
+  const [step, setStep] = useState<'review' | 'success'>('review');
+  const [coverLetter, setCoverLetter] = useState(() => buildCoverLetter(job, profile));
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const readiness = getProfileReadiness(profile);
+
+  const handleSubmit = () => {
+    setIsSubmitting(true);
+    // Open the real job URL in a new tab — actual application happens there
+    window.open(job.url, '_blank', 'noopener,noreferrer');
+    setTimeout(() => {
+      setIsSubmitting(false);
+      setStep('success');
+      onApplied();
+    }, 600);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <motion.div
+        key="backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 backdrop-blur-sm"
+        style={{ backgroundColor: 'rgba(10,12,16,0.6)' }}
+        onClick={onClose}
+      />
+
+      {/* Modal */}
+      <motion.div
+        key="modal"
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        transition={{ duration: 0.22 }}
+        className="relative w-full max-w-xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
+      >
+        {step === 'review' ? (
+          <>
+            {/* Header */}
+            <div className="px-8 pt-8 pb-5 border-b border-slate-100">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)' }}>
+                    <Zap size={18} className="text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Quick Apply</h2>
+                    <p className="text-base font-black text-slate-900 leading-tight">{job.title}</p>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{job.company} · {job.location}</p>
+                  </div>
+                </div>
+                <button onClick={onClose} className="shrink-0 w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+
+            <div className="px-8 py-5 space-y-5 max-h-[60vh] overflow-y-auto">
+              {/* Profile completeness bar */}
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Profile Completeness</span>
+                  <span className={`text-[9px] font-black uppercase tracking-widest ${readiness.isReady ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {readiness.filled}/{readiness.total} fields · {readiness.score}%
+                  </span>
+                </div>
+                <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${readiness.score}%` }}
+                    transition={{ duration: 0.6 }}
+                    className={`h-full rounded-full ${readiness.isReady ? 'bg-emerald-500' : 'bg-amber-400'}`}
+                  />
+                </div>
+                {readiness.missing.length > 0 && (
+                  <p className="text-[9px] text-amber-600 font-bold mt-2 flex items-center gap-1.5">
+                    <AlertCircle size={10} />
+                    Missing: {readiness.missing.join(', ')}
+                  </p>
+                )}
+              </div>
+
+              {/* Pre-filled profile snapshot */}
+              <div>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2.5">Your Application Details</p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    { icon: User,     label: 'Name',       value: profile.name || '—' },
+                    { icon: Briefcase, label: 'Education', value: profile.education || '—' },
+                    { icon: MapPin,   label: 'Location',   value: profile.targetLocation || profile.country || '—' },
+                    { icon: Sparkles, label: 'Target Role', value: profile.targetCareerId || '—' },
+                  ].map(({ icon: Icon, label, value }) => (
+                    <div key={label} className="flex items-center gap-2.5 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                      <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shrink-0 shadow-sm">
+                        <Icon size={12} className="text-indigo-500" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                        <p className="text-[10px] font-black text-slate-800 truncate">{value}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {(profile.skills?.length ?? 0) > 0 && (
+                  <div className="mt-2.5 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                    <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Key Skills</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(profile.skills || []).slice(0, 6).map(s => (
+                        <span key={s} className="text-[8px] font-black text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full uppercase tracking-widest">{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Cover letter — editable */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <FileText size={11} className="text-slate-400" />
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cover Note <span className="text-[8px] font-bold normal-case text-slate-400">(editable)</span></p>
+                </div>
+                <textarea
+                  value={coverLetter}
+                  onChange={e => setCoverLetter(e.target.value)}
+                  rows={7}
+                  className="w-full text-[11px] font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-2xl p-4 resize-none outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all leading-relaxed"
+                />
+              </div>
+            </div>
+
+            {/* Footer actions */}
+            <div className="px-8 py-5 border-t border-slate-100 flex items-center justify-between gap-3">
+              <button onClick={onClose} className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="flex items-center gap-2.5 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white transition-all shadow-lg disabled:opacity-60"
+                style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)' }}
+              >
+                {isSubmitting ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Zap size={14} />
+                )}
+                {isSubmitting ? 'Opening Application…' : 'Submit & Open Application'}
+                <ChevronRight size={12} />
+              </button>
+            </div>
+          </>
+        ) : (
+          /* ── Success screen ── */
+          <div className="px-8 py-14 flex flex-col items-center text-center gap-5">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+              className="w-20 h-20 rounded-full flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)' }}
+            >
+              <CheckCheck size={36} className="text-white" />
+            </motion.div>
+            <div>
+              <h3 className="text-2xl font-black text-slate-900 mb-1">Application Sent!</h3>
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+                {job.title} at {job.company}
+              </p>
+            </div>
+            <p className="text-sm text-slate-600 font-medium max-w-xs leading-relaxed">
+              The application page has opened in a new tab. Your status has been updated to <strong>Applied</strong>.
+            </p>
+            <button
+              onClick={onClose}
+              className="mt-2 px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white"
+              style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)' }}
+            >
+              Done
+            </button>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+};
+
+function inferMarketHeading(locationQuery: string, profile: UserProfile) {  const trimmed = locationQuery.trim();
   if (!trimmed) return profile.targetLocation || profile.country || 'Global';
   if (/remote|global/i.test(trimmed)) return 'Remote / Global';
   const parts = trimmed.split(',').map(p => p.trim()).filter(Boolean);
@@ -216,6 +467,9 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(4);
+
+  // Quick Apply modal state
+  const [quickApplyJob, setQuickApplyJob] = useState<JobListing | null>(null);
 
   // Market Insights State
   const [marketInsights, setMarketInsights] = useState<MarketInsights | null>(null);
@@ -385,6 +639,20 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
 
   return (
     <div className="h-full flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {/* Quick Apply modal */}
+      <AnimatePresence>
+        {quickApplyJob && (
+          <QuickApplyModal
+            job={quickApplyJob}
+            profile={profile}
+            onClose={() => setQuickApplyJob(null)}
+            onApplied={() => {
+              updateJobStatus(quickApplyJob.id, 'Applied');
+              setSavedJobIds(prev => prev.includes(quickApplyJob.id) ? prev : [...prev, quickApplyJob.id]);
+            }}
+          />
+        )}
+      </AnimatePresence>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <div className="flex items-center gap-3 mb-2">
@@ -813,6 +1081,8 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
                 userCountry={profile.country}
                 preferredCurrency={preferredCurrency}
                 matchScore={calculateMatchScore(job, profile, searchQuery, locationQuery, activeCareer)}
+                profile={profile}
+                onQuickApply={() => setQuickApplyJob(job)}
               />
             ))}
             {filteredJobs.length === 0 && !isBaseJobsLoading && (
@@ -868,10 +1138,11 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
   );
 };
 
-const JobCard = ({ job, index, status, isSaved, onToggleSave, onChangeStatus, userCountry, preferredCurrency, matchScore }: { job: JobListing, index: number, status: JobStatus, isSaved: boolean, onToggleSave: () => void, onChangeStatus: (status: JobStatus) => void, userCountry: string, preferredCurrency: string, matchScore: number }) => {
+const JobCard = ({ job, index, status, isSaved, onToggleSave, onChangeStatus, userCountry, preferredCurrency, matchScore, profile, onQuickApply }: { job: JobListing, index: number, status: JobStatus, isSaved: boolean, onToggleSave: () => void, onChangeStatus: (status: JobStatus) => void, userCountry: string, preferredCurrency: string, matchScore: number, profile: UserProfile, onQuickApply: () => void }) => {
   const career = CAREER_PATHS.find(c => c.id === job.careerId);
   const visaBadge = inferVisaBadge(job.location, job.type, userCountry);
   const salaryDisplay = getSalaryDisplay(job, preferredCurrency);
+  const readiness = getProfileReadiness(profile);
   
   return (
     <motion.div
@@ -960,23 +1231,60 @@ const JobCard = ({ job, index, status, isSaved, onToggleSave, onChangeStatus, us
           ))}
         </div>
 
-        <div className="pt-2 flex items-center justify-between">
+        <div className="pt-2 flex items-center justify-between gap-2">
           <button 
             onClick={onToggleSave}
             className={cn(
-              "p-2 rounded-xl transition-all active:scale-90",
+              "p-2 rounded-xl transition-all active:scale-90 shrink-0",
               isSaved ? "text-rose-600 bg-rose-50 hover:bg-rose-100" : "text-slate-400 hover:text-rose-500 hover:bg-slate-50"
             )}
           >
              <Bookmark size={20} className={isSaved ? "fill-rose-600" : ""} />
           </button>
+
+          {/* Quick Apply button */}
+          {readiness.isReady ? (
+            <button
+              onClick={onQuickApply}
+              className="group relative flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest text-white shadow-lg shadow-indigo-500/20 overflow-hidden transition-all hover:shadow-indigo-500/30 hover:-translate-y-0.5 active:scale-95"
+              style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)' }}
+            >
+              <Zap size={13} className="shrink-0" />
+              Quick Apply
+              {status === 'Applied' && (
+                <span className="absolute top-1 right-2 text-[7px] font-black bg-white/20 px-1.5 py-0.5 rounded-full uppercase tracking-widest">Applied</span>
+              )}
+            </button>
+          ) : (
+            <div className="group relative flex-1">
+              <button
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-slate-100 text-slate-400 cursor-not-allowed"
+                title={`Complete your profile to unlock Quick Apply. Missing: ${readiness.missing.join(', ')}`}
+              >
+                <AlertCircle size={13} className="shrink-0 text-amber-500" />
+                Complete Profile ({readiness.score}%)
+              </button>
+              {/* Tooltip */}
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 hidden group-hover:block bg-slate-900 text-white text-[8px] font-bold rounded-xl p-3 shadow-xl z-20 leading-relaxed pointer-events-none">
+                <p className="font-black text-amber-400 uppercase tracking-widest mb-1">Profile incomplete</p>
+                {readiness.missing.map(m => (
+                  <p key={m} className="flex items-center gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-amber-400 inline-block shrink-0" />
+                    {m}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+
           <a 
             href={job.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-lg shadow-indigo-600/20"
+            className="shrink-0 flex items-center justify-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all"
+            title="View full job details"
           >
-            View Details <ArrowUpRight size={14} />
+            <ArrowUpRight size={14} />
           </a>
         </div>
       </div>

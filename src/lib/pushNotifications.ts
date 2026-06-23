@@ -103,6 +103,7 @@ export interface AlertPreferences {
   marketUpdates: boolean;
   interviewReminders: boolean;
   weeklyDigest: boolean;
+  scholarshipAlerts: boolean;
 }
 
 export async function updateAlertPreferences(
@@ -148,6 +149,7 @@ const DEFAULT_PREFS: AlertPreferences = {
   marketUpdates: false,
   interviewReminders: true,
   weeklyDigest: false,
+  scholarshipAlerts: true,
 };
 
 export function usePushNotifications(userId: string | undefined): PushNotificationState {
