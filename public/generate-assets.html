@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CareerVision AI — Export Logo & Banner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@700;900&display=swap" rel="stylesheet" />
+  <style>
+    
+    body { margin: 0; background: #0f172a; display: flex; flex-direction: column; align-items: center; gap: 32px; padding: 48px 24px; font-family: Inter, sans-serif; color: #e2e8f0; }
+    h1 { font-size: 1.5rem; font-weight: 900; letter-spacing: -0.03em; color: #818cf8; margin: 0; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 20px; padding: 28px; display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%; max-width: 900px; }
+    canvas { border-radius: 12px; max-width: 100%; }
+    button { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; border: none; border-radius: 12px; padding: 12px 32px; font-size: 0.85rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
+    button:hover { opacity: 0.88; }
+    p.note { font-size: 0.78rem; color: #64748b; margin: 0; text-align: center; }
+  </style>
+</head>
+<body>
+  <h1>CareerVision AI — Asset Generator</h1>
+
+  <div class="card">
+    <p class="note">LOGO — 800 × 800 px (LinkedIn profile / favicon)</p>
+    <canvas id="logo" width="800" height="800"></canvas>
+    <button onclick="download('logo','careervision-logo.png')">⬇ Download Logo PNG</button>
+  </div>
+
+  <div class="card">
+    <p class="note">BANNER — 1584 × 396 px (LinkedIn cover photo)</p>
+    <canvas id="banner" width="1584" height="396"></canvas>
+    <button onclick="download('banner','careervision-banner.png')">⬇ Download Banner PNG</button>
+  </div>
+
+  <script>
+  // ── helpers ──────────────────────────────────────────────────────────────
+  function mkLinear(ctx, x1,y1,x2,y2, stops) {
+    const g = ctx.createLinearGradient(x1,y1,x2,y2);
+    stops.forEach(([p,c]) => g.addColorStop(p,c));
+    return g;
+  }
+  function mkRadial(ctx, cx,cy,r, stops) {
+    const g = ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+    stops.forEach(([p,c]) => g.addColorStop(p,c));
+    return g;
+  }
+  function roundRect(ctx, x,y,w,h,r) {
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+    ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+    ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+    ctx.closePath();
+  }
+  function hexToRgba(hex, a) {
+    let h = hex.replace('#','');
+    if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+    const r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+    return `rgba(${r},${g},${b},${a})`;
+  }
+  function node(ctx, cx,cy, r1,c1, r2,c2, r3,c3, glowR,glowC) {
+    // glow (skip if radius is 0)
+    if (glowR > 0) {
+      const gl = mkRadial(ctx, cx,cy,glowR, [[0,hexToRgba(glowC,0.72)],[1,hexToRgba(glowC,0)]]);
+      ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(cx,cy,glowR,0,Math.PI*2); ctx.fill();
+    }
+    // rings
+    [[r1,c1],[r2,c2],[r3,c3]].forEach(([r,c]) => {
+      ctx.fillStyle=c; ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+    });
+  }
+
+  // ── LOGO CANVAS ───────────────────────────────────────────────────────────
+  (function drawLogo() {
+    const c = document.getElementById('logo');
+    const ctx = c.getContext('2d');
+    const W=800, H=800;
+
+    // Background
+    const bg = mkLinear(ctx,0,0,W,H, [[0,'#0a0f2e'],[1,'#1a1454']]);
+    roundRect(ctx,0,0,W,H,155);
+    ctx.fillStyle=bg; ctx.fill();
+
+    // Border ring
+    roundRect(ctx,3,3,W-6,H-6,153);
+    ctx.strokeStyle='rgba(67,56,202,0.45)'; ctx.lineWidth=3; ctx.stroke();
+
+    // Scatter dots
+    [[100,170,6,0.18],[195,105,4.5,0.14],[490,645,6,0.18],[650,590,4.5,0.14],[118,590,4.5,0.12],[680,210,4,0.16]].forEach(([x,y,r,o])=>{
+      ctx.fillStyle=`rgba(99,102,241,${o})`; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+    });
+
+    // Trajectory path
+    const pathGrad = mkLinear(ctx,148,634,648,184, [[0,'#4338ca'],[0.5,'#6366f1'],[1,'#a5b4fc']]);
+    ctx.strokeStyle=pathGrad; ctx.lineWidth=22; ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.shadowColor='rgba(99,102,241,0.4)'; ctx.shadowBlur=20;
+    ctx.beginPath();
+    ctx.moveTo(148,634);
+    ctx.bezierCurveTo(200,576, 248,530, 310,482);
+    ctx.bezierCurveTo(372,434, 422,394, 480,340);
+    ctx.bezierCurveTo(538,286, 582,246, 648,184);
+    ctx.stroke();
+    ctx.shadowBlur=0;
+
+    // Nodes
+    node(ctx,148,634, 25,'#4338ca', 13,'#6366f1', 5,'#c7d2fe', 50,'#4f46e5');
+    node(ctx,310,482, 28,'#4f46e5', 14,'#818cf8', 5.5,'#e0e7ff', 56,'#6366f1');
+    node(ctx,480,340, 31,'#6366f1', 16,'#a5b4fc', 6,'#eef2ff', 62,'#818cf8');
+
+    // Goal glow
+    const goalGlow = mkRadial(ctx,648,184,100, [[0,'rgba(110,231,183,0.95)'],[0.6,'rgba(16,185,129,0.5)'],[1,'rgba(5,150,105,0)']]);
+    ctx.fillStyle=goalGlow; ctx.beginPath(); ctx.arc(648,184,100,0,Math.PI*2); ctx.fill();
+    node(ctx,648,184, 36,'#10b981', 22,'#34d399', 9,'#6ee7b7', 0,'#fff');
+    ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(648,184,4,0,Math.PI*2); ctx.fill();
+
+    // AI spark at goal
+    const sx=692,sy=148;
+    ctx.fillStyle='rgba(10,15,46,0.75)'; ctx.beginPath(); ctx.arc(sx,sy,18,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#6ee7b7'; ctx.lineWidth=2.5; ctx.lineCap='round';
+    [[sx,sy-12,sx,sy-7],[sx,sy+7,sx,sy+12],[sx-12,sy,sx-7,sy],[sx+7,sy,sx+12,sy]].forEach(([x1,y1,x2,y2])=>{
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    });
+    ctx.fillStyle='#6ee7b7'; ctx.beginPath(); ctx.arc(sx,sy,4,0,Math.PI*2); ctx.fill();
+
+    // Wordmark
+    ctx.shadowColor='rgba(79,70,229,0.6)'; ctx.shadowBlur=30;
+    ctx.font='900 66px Arial Black, Arial, sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ctx.fillStyle='#ffffff'; ctx.fillText('CareerVision', 370,738);
+    const cw = ctx.measureText('CareerVision').width;
+    ctx.shadowColor='rgba(99,102,241,0.7)';
+    ctx.font='italic 900 66px Arial Black, Arial, sans-serif';
+    ctx.fillStyle='#818cf8';
+    const startX = 400 - ctx.measureText('CareerVisionAI').width/2 + cw;
+    ctx.fillText('AI', startX+8, 738);
+    ctx.shadowBlur=0;
+
+    // Tagline
+    ctx.font='700 20px Arial Black, Arial, sans-serif';
+    ctx.fillStyle='rgba(129,140,248,0.85)';
+    ctx.letterSpacing='6px';
+    ctx.fillText('GLOBAL CAREER INTELLIGENCE', 400, 778);
+  })();
+
+  // ── BANNER CANVAS ─────────────────────────────────────────────────────────
+  (function drawBanner() {
+    const c = document.getElementById('banner');
+    const ctx = c.getContext('2d');
+    const W=1584, H=396;
+
+    // Background
+    const bg = mkLinear(ctx,0,0,W,H, [[0,'#0a0f2e'],[0.5,'#1a1454'],[1,'#0d0f2e']]);
+    ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+
+    // Ambient orbs
+    const orb1 = mkRadial(ctx,260,H/2,320, [[0,'rgba(79,70,229,0.35)'],[1,'rgba(79,70,229,0)']]);
+    ctx.fillStyle=orb1; ctx.fillRect(0,0,W,H);
+    const orb2 = mkRadial(ctx,W-200,H/2,280, [[0,'rgba(16,185,129,0.2)'],[1,'rgba(16,185,129,0)']]);
+    ctx.fillStyle=orb2; ctx.fillRect(0,0,W,H);
+    const orb3 = mkRadial(ctx,W/2,H/2,240, [[0,'rgba(99,102,241,0.15)'],[1,'rgba(99,102,241,0)']]);
+    ctx.fillStyle=orb3; ctx.fillRect(0,0,W,H);
+
+    // Grid lines (subtle)
+    ctx.strokeStyle='rgba(99,102,241,0.06)'; ctx.lineWidth=1;
+    for(let x=0;x<W;x+=60){ ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke(); }
+    for(let y=0;y<H;y+=60){ ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke(); }
+
+    // Left: mini logo icon (trajectory only)
+    const lx=90, ly=H/2;
+    const pGrad = mkLinear(ctx,lx-60,ly+80,lx+80,ly-80, [[0,'#4338ca'],[0.5,'#6366f1'],[1,'#a5b4fc']]);
+    ctx.strokeStyle=pGrad; ctx.lineWidth=10; ctx.lineCap='round'; ctx.shadowColor='rgba(99,102,241,0.5)'; ctx.shadowBlur=16;
+    ctx.beginPath(); ctx.moveTo(lx-60,ly+80);
+    ctx.bezierCurveTo(lx-30,ly+40, lx,ly+10, lx+20,ly-10);
+    ctx.bezierCurveTo(lx+40,ly-30, lx+60,ly-55, lx+80,ly-80);
+    ctx.stroke(); ctx.shadowBlur=0;
+    // mini nodes
+    [[lx-60,ly+80,8,'#4338ca',4,'#6366f1'],[lx+20,ly-10,10,'#6366f1',5,'#a5b4fc'],[lx+80,ly-80,14,'#10b981',7,'#6ee7b7']].forEach(([x,y,r,c1,r2,c2])=>{
+      ctx.fillStyle=c1; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=c2; ctx.beginPath(); ctx.arc(x,y,r2,0,Math.PI*2); ctx.fill();
+    });
+
+    // Separator line
+    ctx.strokeStyle='rgba(99,102,241,0.25)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(220,48); ctx.lineTo(220,H-48); ctx.stroke();
+
+    // Brand name
+    ctx.shadowColor='rgba(99,102,241,0.7)'; ctx.shadowBlur=40;
+    ctx.font='900 96px Arial Black, Arial, sans-serif';
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    ctx.fillStyle='#ffffff'; ctx.fillText('CareerVision', 252, 188);
+    const bw = ctx.measureText('CareerVision').width;
+    ctx.font='italic 900 96px Arial Black, Arial, sans-serif';
+    ctx.fillStyle='#818cf8'; ctx.fillText('AI', 252+bw+6, 188);
+    ctx.shadowBlur=0;
+
+    // Tagline
+    ctx.font='700 22px Arial Black, Arial, sans-serif';
+    ctx.fillStyle='rgba(129,140,248,0.85)';
+    ctx.fillText('GLOBAL CAREER INTELLIGENCE', 252, 234);
+
+    // Divider
+    ctx.strokeStyle='rgba(99,102,241,0.3)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(252,256); ctx.lineTo(252+580,256); ctx.stroke();
+
+    // Feature pills
+    const features = ['AI Career Roadmaps','Live Market Data','Scholarship Match','Interview Simulator','Visa Pathways'];
+    let px=252, py=290;
+    features.forEach(f => {
+      ctx.font='700 16px Arial Black, Arial, sans-serif';
+      const tw = ctx.measureText(f).width;
+      const pw=tw+24, ph=34, pr=17;
+      roundRect(ctx,px,py-ph/2-4,pw,ph,pr);
+      ctx.fillStyle='rgba(79,70,229,0.22)'; ctx.fill();
+      ctx.strokeStyle='rgba(99,102,241,0.4)'; ctx.lineWidth=1; ctx.stroke();
+      ctx.fillStyle='#c7d2fe'; ctx.fillText(f, px+12, py+5);
+      px += pw+12;
+      if(px > W-300){ px=252; py+=48; }
+    });
+
+    // Right: stat blocks
+    const stats=[['12K+','Users Worldwide'],['4,000+','Data Points Daily'],['12','Countries Supported']];
+    stats.forEach(([val,lbl],i)=>{
+      const sx=W-360, sy=72+i*112;
+      ctx.font='900 42px Inter,"Helvetica Neue",Arial,sans-serif';
+      ctx.fillStyle='#ffffff'; ctx.textAlign='left'; ctx.shadowColor='rgba(99,102,241,0.5)'; ctx.shadowBlur=20;
+      ctx.fillText(val,sx,sy+42); ctx.shadowBlur=0;
+      ctx.font='700 16px Inter,"Helvetica Neue",Arial,sans-serif';
+      ctx.fillStyle='rgba(129,140,248,0.75)';
+      ctx.fillText(lbl,sx,sy+66);
+      if(i<2){ ctx.strokeStyle='rgba(99,102,241,0.18)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(sx,sy+86); ctx.lineTo(sx+200,sy+86); ctx.stroke(); }
+    });
+
+    // Bottom bar
+    ctx.fillStyle='rgba(79,70,229,0.12)';
+    ctx.fillRect(0,H-42,W,42);
+    ctx.font='700 13px Inter,"Helvetica Neue",Arial,sans-serif';
+    ctx.fillStyle='rgba(129,140,248,0.6)';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('careervision.ai  ·  Powered by Gemini AI  ·  Built for the future of work', W/2, H-21);
+  })();
+
+  // ── download helper ───────────────────────────────────────────────────────
+  function download(id, filename) {
+    const a = document.createElement('a');
+    a.href = document.getElementById(id).toDataURL('image/png');
+    a.download = filename;
+    a.click();
+  }
+  </script>
+</body>
+</html>
