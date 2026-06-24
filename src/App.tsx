@@ -210,6 +210,7 @@ const NavItem = ({ label, active, onClick, icon: Icon, view }: { label: string, 
 };
 
 import { NewsFlash } from './components/NewsFlash';
+import InternshipWidget from './components/InternshipWidget';
 import { JobBoardView } from './components/JobBoardView';
 import ResumeManager from './components/ResumeManager';
 import JobMatchView from './components/JobMatchView';
@@ -3209,7 +3210,17 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
         </div>
 
       </div>
-    </div>
+
+    </div>{/* end xl:grid-cols-12 */}
+
+      {/* ── INTERNSHIP WIDGET — full width below the 3-col grid ── */}
+      <div className="mt-8 bg-gradient-to-br from-slate-50 to-indigo-50/30 rounded-[2rem] border border-indigo-100/60 p-6 shadow-sm">
+        <InternshipWidget
+          profile={profile}
+          onNavigateToJobs={() => onNavigate('jobs')}
+        />
+      </div>
+
     </div>
   );
 };
@@ -5960,7 +5971,7 @@ const FinancialView = ({ profile, setProfile, highlightScholarshipId, onClearHig
   highlightScholarshipId?: string | null;
   onClearHighlight?: () => void;
 }) => {
-  const [activeTab, setActiveTab] = useState<'planner' | 'projections' | 'calculator' | 'funding'>('planner');
+  const [activeTab, setActiveTab] = useState<'planner' | 'projections' | 'calculator' | 'funding' | 'internships'>('planner');
 
   // Auto-switch to the funding tab when arriving via a scholarship deep-link
   useEffect(() => {
@@ -6135,17 +6146,27 @@ Return a concise finance-first recommendation with:
             ))}
           </select>
         </div>
-        <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
-           {['planner', 'projections', 'calculator', 'funding'].map((t) => (
+        <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm overflow-x-auto scrollbar-hide gap-0.5 shrink-0">
+           {[
+             { key: 'planner', label: 'Planner' },
+             { key: 'projections', label: 'Projections' },
+             { key: 'calculator', label: 'Calculator' },
+             { key: 'funding', label: 'Scholarship' },
+             { key: 'internships', label: '🎓 Internships' },
+           ].map(({ key, label }) => (
              <button
-               key={t}
-               onClick={() => setActiveTab(t as any)}
+               key={key}
+               onClick={() => setActiveTab(key as any)}
                className={cn(
-                 "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
-                 activeTab === t ? "bg-indigo-600 text-white shadow-md shadow-indigo-100" : "text-slate-500 hover:text-indigo-600"
+                 "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap shrink-0",
+                 activeTab === key
+                   ? key === 'internships'
+                     ? 'bg-purple-600 text-white shadow-md shadow-purple-100'
+                     : 'bg-indigo-600 text-white shadow-md shadow-indigo-100'
+                   : 'text-slate-500 hover:text-indigo-600'
                )}
              >
-               {t}
+               {label}
              </button>
            ))}
         </div>
@@ -6604,6 +6625,12 @@ Return a concise finance-first recommendation with:
           )}
 
           {activeTab === 'funding' && <FundingOpportunitiesView profile={profile} highlightId={highlightScholarshipId} onHighlightConsumed={onClearHighlight} />}
+
+          {activeTab === 'internships' && (
+            <div className="bg-gradient-to-br from-slate-50 to-purple-50/30 rounded-[2rem] border border-purple-100/60 p-6 shadow-sm">
+              <InternshipWidget profile={profile} />
+            </div>
+          )}
         </div>
       </div>
     </div>

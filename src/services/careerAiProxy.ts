@@ -379,3 +379,33 @@ export async function getNetworkReferrals(profile: UserProfile): Promise<any[]> 
 export async function getNetworkCompanies(profile: UserProfile, query?: string): Promise<any[]> {
   return callBackend<any[]>('/network-companies', 'POST', { profile, query });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Open Internships
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface OpenInternship {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  country: string;
+  countryTag: string;
+  type: 'Remote' | 'Hybrid' | 'On-site';
+  duration: string;
+  stipend: string;
+  skills: string[];
+  deadline: string;
+  applyUrl: string;
+  description: string;
+  isNew: boolean;
+}
+
+export async function getOpenInternships(params: {
+  homeCountry: string;
+  targetCountry: string;
+  careerTitle: string;
+  interests?: string[];
+}): Promise<OpenInternship[]> {
+  return callBackend<OpenInternship[]>('/open-internships', 'POST', params);
+}

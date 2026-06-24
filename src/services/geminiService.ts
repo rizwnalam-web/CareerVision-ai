@@ -33,9 +33,10 @@ export {
   getNetworkResumeReviews,
   getNetworkReferrals,
   getNetworkCompanies,
+  getOpenInternships,
 } from "./careerAiProxy.js";
 
-export type { GlobalInsight, CareerDirectoryEntry, CareerDirectoryResult, CountryCareerEntry, CareerMilestone, JobDirectory, JobDirectorySector, JobDirectoryCategory, CareerRequirements, EligibilityCriterion, SelectionStage, KeyExam, ArtifactItem, ArtifactCategory, PreparationPhase } from "./careerAiProxy.js";
+export type { GlobalInsight, CareerDirectoryEntry, CareerDirectoryResult, CountryCareerEntry, CareerMilestone, JobDirectory, JobDirectorySector, JobDirectoryCategory, CareerRequirements, EligibilityCriterion, SelectionStage, KeyExam, ArtifactItem, ArtifactCategory, PreparationPhase, OpenInternship } from "./careerAiProxy.js";
 /*
   const model = "gemini-2.0-flash";
   

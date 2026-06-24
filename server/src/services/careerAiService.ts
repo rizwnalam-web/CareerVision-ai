@@ -2329,3 +2329,93 @@ CONSTRAINTS:
     return [];
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Open Internships — AI-generated, country-aware
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface OpenInternship {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  country: string;            // "home" | "target" | country name
+  countryTag: string;         // display label
+  type: 'Remote' | 'Hybrid' | 'On-site';
+  duration: string;           // e.g. "3 months", "6 months"
+  stipend: string;            // e.g. "$2,000/mo", "Unpaid", "£1,500/mo"
+  skills: string[];
+  deadline: string;           // ISO date or "Rolling"
+  applyUrl: string;
+  description: string;
+  isNew: boolean;             // posted within last 7 days
+}
+
+export async function getOpenInternships(params: {
+  homeCountry: string;
+  targetCountry: string;
+  careerTitle: string;
+  interests?: string[];
+}): Promise<OpenInternship[]> {
+  const { homeCountry, targetCountry, careerTitle, interests = [] } = params;
+  const countries = [...new Set([homeCountry, targetCountry].filter(Boolean))].slice(0, 2);
+  const cacheKey = `internships:${countries.join(':')}:${careerTitle}`;
+
+  const cached = await getAiCache<OpenInternship[]>(cacheKey);
+  if (cached && cached.length > 0) return cached;
+
+  const systemInstruction = `You are CareerVision's Internship Intelligence Engine. Return ONLY a valid JSON array. No markdown, no explanation, no code fences.`;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const prompt = `Generate 8 realistic open internship listings for someone targeting "${careerTitle}" (interests: ${interests.slice(0, 4).join(', ') || 'general'}).
+Countries to cover: ${countries.map(c => `"${c}"`).join(' and ')} — include at least 3 from each country (or split evenly if only one country).
+Current date: ${today}.
+
+Return a JSON array of exactly 8 internship objects with this schema:
+{
+  "id": "intern-1",
+  "title": "Specific Internship Title",
+  "company": "Real Company Name",
+  "location": "City, Country",
+  "country": "${countries[0]}",
+  "countryTag": "Home Country" or "Target Country" or the country name,
+  "type": "Remote" | "Hybrid" | "On-site",
+  "duration": "3 months" | "6 months" | "12 months",
+  "stipend": "$X,XXX/mo" or "£X,XXX/mo" or "Unpaid" or "Competitive",
+  "skills": ["Skill1", "Skill2", "Skill3"],
+  "deadline": "YYYY-MM-DD" or "Rolling",
+  "applyUrl": "https://www.linkedin.com/jobs/internship-search/?keywords=TITLE&location=COUNTRY",
+  "description": "2-sentence internship summary",
+  "isNew": true or false
+}
+Rules:
+- Use real, well-known companies (Google, Microsoft, Deloitte, NHS, Unilever, etc.) where applicable
+- 3 listings should have isNew: true (deadline within 7 days of today or posted recently)
+- Mix Remote/Hybrid/On-site types
+- Use realistic stipend amounts for each country's currency
+- applyUrl must be a real LinkedIn or Indeed search URL
+- Distribute: first ${countries.length > 1 ? '4' : '8'} from ${countries[0]}${countries[1] ? `, next 4 from ${countries[1]}` : ''}
+Output ONLY the JSON array.`;
+
+  try {
+    const text = await callLLM(prompt, systemInstruction, { temperature: 0.6, maxTokens: 3000 });
+    const result = parseAIJson<OpenInternship[]>(text);
+    if (Array.isArray(result) && result.length > 0) {
+      const normalized = result.map((item, i) => ({
+        ...item,
+        id: item.id || `intern-${i + 1}`,
+        skills: Array.isArray(item.skills) ? item.skills.slice(0, 4) : [],
+        isNew: Boolean(item.isNew),
+        applyUrl: item.applyUrl?.startsWith('http')
+          ? item.applyUrl
+          : `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(item.title)}&location=${encodeURIComponent(item.location)}`,
+      }));
+      setAiCache(cacheKey, normalized, 6).catch(() => {}); // 6-hour cache
+      return normalized;
+    }
+    return [];
+  } catch (error) {
+    console.error('[Internships] getOpenInternships failed:', error);
+    return [];
+  }
+}

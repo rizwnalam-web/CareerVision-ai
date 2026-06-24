@@ -491,5 +491,25 @@ router.post("/network-companies", async (req: Request, res: Response) => {
   }
 });
 
+// ─── Open Internships ─────────────────────────────────────────────────────────
+router.post("/open-internships", async (req: Request, res: Response) => {
+  try {
+    const { homeCountry, targetCountry, careerTitle, interests } = req.body;
+    if (!homeCountry || !careerTitle) {
+      return res.status(400).json({ error: "homeCountry and careerTitle are required" });
+    }
+    const results = await careerAiService.getOpenInternships({
+      homeCountry,
+      targetCountry: targetCountry || homeCountry,
+      careerTitle,
+      interests,
+    });
+    res.json({ success: true, data: results });
+  } catch (error) {
+    console.error("[careers-ai] open-internships error:", error);
+    res.status(500).json({ error: "Failed to fetch internships" });
+  }
+});
+
 export default router;
 
