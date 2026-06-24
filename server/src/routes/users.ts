@@ -495,12 +495,12 @@ router.post("/auth/password/forgot", async (req, res) => {
 
     // In development, always include the token so the flow can be tested
     // even when email delivery is unavailable (e.g. sandbox sender restrictions)
-    if (process.env.NODE_ENV !== "production") {
-      response.token = token;
-      if (!emailSent) {
-        response.devNote = "Email delivery unavailable in this environment. Token returned for development use only.";
-      }
-    }
+    // if (process.env.NODE_ENV !== "production") {
+    //   response.token = token;
+    //   if (!emailSent) {
+    //     response.devNote = "Email delivery unavailable in this environment. Token returned for development use only.";
+    //   }
+    // }
 
     res.json(response);
   } catch (error) {
