@@ -2446,7 +2446,13 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
       <ScholarshipAlertBanner
         newMatches={scholarshipAlerts}
         onDismiss={dismissAlerts}
-        onViewAll={() => { dismissAlerts(); onNavigate('expenses'); }}
+        onViewAll={() => {
+          dismissAlerts();
+          // Navigate to Finance & Budget and auto-open the FUNDING tab.
+          // Passing the first matched scholarship ID sets scholarshipHighlightId in the parent,
+          // which causes FinancialView to switch to the 'funding' tab via its useEffect.
+          onNavigateToScholarship(scholarshipAlerts[0]?.id ?? '');
+        }}
       />
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
@@ -7180,12 +7186,15 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
 
           {/* Auth + logout — only on xl+ */}
           <div className="hidden xl:flex flex-col items-end gap-0.5">
-            <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1">
-              <ShieldCheck size={9} className="text-emerald-600" />
-              <span className="text-[7px] font-black text-emerald-700 uppercase tracking-widest">Secure</span>
+            <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-300 rounded-lg px-2.5 py-1.5">
+              <ShieldCheck size={11} className="text-emerald-600" />
+              <span className="text-[9px] font-black text-emerald-700 uppercase tracking-widest">Secure</span>
             </div>
-            <button onClick={handleLogout} className="text-[7px] font-bold text-slate-400 hover:text-rose-500 flex items-center gap-0.5 transition-colors">
-              <LogOut size={7} /> Sign out
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1 text-[9px] font-black text-rose-500 hover:text-white hover:bg-rose-500 border border-rose-200 hover:border-rose-500 bg-rose-50 rounded-md px-2 py-0.5 transition-all"
+            >
+              <LogOut size={9} /> Sign out
             </button>
           </div>
 
@@ -7195,15 +7204,15 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
               onClick={() => setShowLangPopup(v => !v)}
               aria-label="Change language"
               aria-expanded={showLangPopup}
-              className="flex items-center gap-1 h-8 px-2 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50 transition-colors shadow-sm"
+              className="flex items-center gap-1.5 h-9 px-3 rounded-xl border border-slate-300 bg-white hover:border-indigo-400 hover:bg-indigo-50 transition-colors shadow-sm"
             >
-              <Globe size={13} className="text-slate-500" />
-              {/* Show lang text only on xl+ */}
-              <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest hidden xl:block">
+              <Globe size={15} className="text-slate-600" />
+              {/* Show flag + lang text on xl+ */}
+              <span className="text-[11px] font-black text-slate-700 uppercase tracking-widest hidden xl:block">
                 {LANG_OPTIONS.find(l => l.code === language)?.flag ?? '🌐'} {language.toUpperCase()}
               </span>
               {/* Show just flag on md-xl */}
-              <span className="text-sm xl:hidden" aria-hidden="true">
+              <span className="text-base xl:hidden" aria-hidden="true">
                 {LANG_OPTIONS.find(l => l.code === language)?.flag ?? '🌐'}
               </span>
             </button>
@@ -7243,18 +7252,18 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
           </div>
 
           {/* Profile button — icon+name on xl+, icon-only on md-lg */}
-          <button className="flex items-center gap-1.5 bg-white pl-1 pr-1.5 xl:pr-3 py-1 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors group" onClick={() => setShowProfileModal(true)}>
-            <div className="h-7 w-7 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center group-hover:bg-indigo-600 transition-colors overflow-hidden shrink-0">
+          <button className="flex items-center gap-2 bg-white pl-1.5 pr-2 xl:pr-3 py-1.5 rounded-2xl border border-slate-300 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all group" onClick={() => setShowProfileModal(true)}>
+            <div className="h-8 w-8 rounded-xl bg-indigo-100 border border-indigo-200 flex items-center justify-center group-hover:bg-indigo-600 transition-colors overflow-hidden shrink-0">
               {user.photoURL ? (
                 <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
               ) : (
-                <User size={14} className="text-indigo-600 group-hover:text-white transition-colors" />
+                <User size={16} className="text-indigo-600 group-hover:text-white transition-colors" />
               )}
             </div>
             {/* Name visible only on xl+ */}
             <div className="hidden xl:flex flex-col items-start">
-              <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight truncate max-w-[100px]">{profile.name}</span>
-              <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest leading-none truncate max-w-[100px]">{profileStatusLabel}</span>
+              <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight truncate max-w-[110px]">{profile.name}</span>
+              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-none truncate max-w-[110px]">{profileStatusLabel}</span>
             </div>
           </button>
         </div>
@@ -7315,7 +7324,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden"
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 xl:hidden"
               onClick={() => setShowMobileNav(false)}
             />
             {/* Drawer panel */}
@@ -7326,7 +7335,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
               id="mobile-nav-drawer"
-              className="fixed top-0 right-0 bottom-0 w-72 bg-white z-50 flex flex-col shadow-2xl lg:hidden"
+              className="fixed top-0 right-0 bottom-0 w-72 bg-white z-50 flex flex-col shadow-2xl xl:hidden"
             >
               {/* Drawer header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-950">
@@ -7524,22 +7533,28 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                     ))}
                   </div>
                 </div>
+
+                {/* Actions — inside the scrollable nav so they're always reachable */}
+                <div className="h-px bg-slate-100 mx-2 my-2" />
+                <div className="px-3 pb-3 space-y-2">
+                  <button
+                    onClick={() => { setSparkEOpen(true); setShowMobileNav(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all"
+                  >
+                    <Sparkles size={15} />
+                    <span className="text-xs font-black uppercase tracking-widest">Ask Spark.E</span>
+                  </button>
+                  <button
+                    onClick={() => { handleLogout(); setShowMobileNav(false); }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-rose-200 bg-rose-50 text-xs font-black uppercase tracking-widest text-rose-600 hover:bg-rose-500 hover:text-white hover:border-rose-500 transition-all"
+                  >
+                    <LogOut size={13} /> Sign Out
+                  </button>
+                </div>
               </nav>
-              {/* Drawer footer */}
-              <div className="px-5 py-4 border-t border-slate-100 space-y-2.5">
-                <button
-                  onClick={() => setSparkEOpen(true)}
-                  className="w-full flex items-center gap-3 px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all group"
-                >
-                  <Sparkles size={15} />
-                  <span className="text-xs font-black uppercase tracking-widest">Ask Spark.E</span>
-                </button>
-                <button
-                  onClick={() => { handleLogout(); setShowMobileNav(false); }}
-                  className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-rose-500 transition-colors"
-                >
-                  <LogOut size={13} /> Disconnect
-                </button>
+              {/* Drawer footer — kept minimal now that actions live in the nav */}
+              <div className="px-5 py-3 border-t border-slate-100">
+                <p className="text-[9px] text-slate-400 text-center font-medium">CareerVision AI · easycareer-ai.decodflow.com</p>
               </div>
             </motion.div>
           </>

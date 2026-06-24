@@ -23,3 +23,9 @@ services:
         sync: false
       - key: PORT
         value: 3001
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        value: CareerVision AI <noreply@decodflow.com>
+      - key: RESEND_DEV_OVERRIDE_TO
+        value: ""

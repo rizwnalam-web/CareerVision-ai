@@ -150,6 +150,13 @@ async function startServer() {
     // Probe LLM providers — lock in the first available one
     probeProviders().catch(err => console.warn("[LLM] Startup probe failed:", err));
 
+    // Warn early if email delivery is not configured
+    if (!process.env.RESEND_API_KEY) {
+      console.warn("⚠  RESEND_API_KEY is not set — contact form and transactional emails will not be delivered.");
+    } else if (!process.env.RESEND_FROM) {
+      console.warn("⚠  RESEND_FROM is not set — using sandbox sender (onboarding@resend.dev). Auto-replies to users will fail unless the recipient is your verified Resend email.");
+    }
+
     const server = app.listen(PORT, "0.0.0.0", () => {
       console.log(`\n✓ CareerVision API Server running on http://localhost:${PORT}`);
       console.log(`✓ CORS enabled for: ${CORS_ORIGINS.join(", ")}`);
