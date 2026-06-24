@@ -130,9 +130,9 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
       // when email delivery is unavailable (e.g. sandbox/SMTP restrictions)
       if (response.token) {
         setResetToken(response.token);
-        setMessage((response as any).devNote
-          ? `Dev mode: email unavailable. Token pre-filled below.`
-          : (response.message || 'Token sent. Check your email.'));
+        // setMessage((response as any).devNote
+        //   ? `Dev mode: email unavailable. Token pre-filled below.`
+        //   : (response.message || 'Token sent. Check your email.'));
       } else {
         setMessage(response.message || 'If an account exists for that email, a password reset token has been sent. Please check your inbox.');
       }
@@ -451,7 +451,7 @@ export const LoginScreen = ({ onBack, onShowRegister, onLoginSuccess }: { onBack
                 <Lock size={20} className="text-white" />
               </div>
               <h1 className="text-2xl font-black text-white tracking-tight">Reset Password</h1>
-              <p className="text-slate-400 text-sm mt-1">Check your email for the reset token, then enter it below with your new password.</p>
+              <p className="text-slate-400 text-sm mt-1">Check your email or use the form below to request a reset token, then enter it below with your new password.</p>
             </div>
 
             {(error || message) && (
