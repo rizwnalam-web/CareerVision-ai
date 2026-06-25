@@ -138,13 +138,22 @@ async function startServer() {
       process.exit(0);
     }
 
-    await runMigrations();
+    // ── Database: attempt to connect; start in degraded mode if unavailable ──
+    let dbAvailable = false;
+    try {
+      await runMigrations();
+      dbAvailable = await testConnection();
+    } catch (dbErr: any) {
+      console.error("\n⚠  Database connection failed:", dbErr?.message ?? dbErr);
+      console.warn(
+        "⚠  Starting server in DEGRADED MODE — DB-backed routes will return 503.\n" +
+        "   Check your DATABASE_URL in server/.env and ensure the Neon project is\n" +
+        "   active at https://console.neon.tech\n"
+      );
+    }
 
-    // Test database connection post-migrations
-    const connected = await testConnection();
-    if (!connected) {
-      console.error("Cannot start server without database connection");
-      process.exit(1);
+    if (!dbAvailable) {
+      console.warn("⚠  DB unavailable — AI/LLM features are still fully operational.");
     }
 
     // Probe LLM providers — lock in the first available one

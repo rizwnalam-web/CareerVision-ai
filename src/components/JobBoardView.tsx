@@ -395,8 +395,16 @@ function calculateMatchScore(job: JobListing, profile: UserProfile, searchQuery:
     score += 10;
   }
 
-  if (activeCareer !== 'All' && job.careerId === CAREER_PATHS.find(c => c.title === activeCareer)?.id) {
-    score += 10;
+  if (activeCareer !== 'All') {
+    const careerIdMatch = CAREER_PATHS.find(c => c.title === activeCareer)?.id;
+    if (
+      job.careerId === careerIdMatch ||
+      job.careerId?.toLowerCase() === activeCareer.toLowerCase() ||
+      job.careerId?.toLowerCase().includes(activeCareer.toLowerCase()) ||
+      job.title?.toLowerCase().includes(activeCareer.toLowerCase())
+    ) {
+      score += 10;
+    }
   }
 
   return Math.min(100, score);
@@ -579,7 +587,11 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
       const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            job.company.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesLocation = job.location.toLowerCase().includes(locationQuery.toLowerCase());
-      const matchesCareer = activeCareer === "All" || career?.title === activeCareer;
+      const matchesCareer = activeCareer === "All"
+        || career?.title === activeCareer
+        || job.careerId?.toLowerCase() === activeCareer.toLowerCase()
+        || job.careerId?.toLowerCase().includes(activeCareer.toLowerCase())
+        || job.title?.toLowerCase().includes(activeCareer.toLowerCase());
       const matchesType = activeType === "All" || job.type === activeType;
       const matchesSaved = !showSavedOnly || savedJobIds.includes(job.id);
 

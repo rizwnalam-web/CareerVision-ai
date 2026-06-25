@@ -325,10 +325,21 @@ function MarketTab({ profile }: { profile: UserProfile }) {
           {/* Summary banner */}
           <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4 flex gap-3 items-start">
             <Sparkles size={18} className="text-indigo-600 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-indigo-800">
-                {data.careerTitle} in {data.country}
-              </p>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-sm font-semibold text-indigo-800">
+                  {data.careerTitle} in {data.country}
+                </p>
+                <span className={cn(
+                  "text-[10px] font-bold px-2 py-0.5 rounded-full border",
+                  data.generatedAt && (Date.now() - new Date(data.generatedAt).getTime()) < 3600000
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-slate-100 text-slate-500 border-slate-200"
+                )}>
+                  {data.generatedAt && (Date.now() - new Date(data.generatedAt).getTime()) < 3600000
+                    ? "● Live AI" : "● Cached"}
+                </span>
+              </div>
               <p className="text-xs text-indigo-700 mt-0.5 leading-relaxed">{data.summary}</p>
             </div>
           </div>
@@ -429,11 +440,14 @@ function PredictionTab({ userId, profile }: { userId: string; profile: UserProfi
   const [data, setData] = useState<CareerPrediction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const careerTitle = profile.targetCareerId?.replace(/-/g, " ") || "Software Engineer";
 
-  const load = useCallback(() => {
+  const load = useCallback((force = false) => {
     setLoading(true);
     setError(null);
-    getCareerPrediction(userId, profile)
+    // Append cache-bust param on force refresh so backend regenerates
+    const profileWithBust = force ? { ...profile, _bust: Date.now() } : profile;
+    getCareerPrediction(userId, profileWithBust as any)
       .then(setData)
       .catch(() => setError("Failed to generate prediction. Please try again."))
       .finally(() => setLoading(false));
@@ -441,8 +455,8 @@ function PredictionTab({ userId, profile }: { userId: string; profile: UserProfi
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <LoadingPane label="Running predictive models…" />;
-  if (error || !data) return <ErrorPane message={error ?? "No prediction data."} onRetry={load} />;
+  if (loading) return <LoadingPane label={`Running predictive models for ${careerTitle}…`} />;
+  if (error || !data) return <ErrorPane message={error ?? "No prediction data."} onRetry={() => load(true)} />;
 
   const levelColors: Record<string, string> = {
     entry: "bg-blue-100 text-blue-700",
@@ -474,9 +488,19 @@ function PredictionTab({ userId, profile }: { userId: string; profile: UserProfi
               {data.currentLevelEstimate.charAt(0).toUpperCase() + data.currentLevelEstimate.slice(1)}-level estimate
             </span>
           </div>
-          <div className="text-right">
-            <p className="text-xs opacity-80">Confidence Score</p>
-            <p className="text-2xl font-bold">{data.confidenceScore}%</p>
+          <div className="flex flex-col items-end gap-2">
+            <div className="text-right">
+              <p className="text-xs opacity-80">Confidence Score</p>
+              <p className="text-2xl font-bold">{data.confidenceScore}%</p>
+            </div>
+            <button
+              onClick={() => load(true)}
+              disabled={loading}
+              className="flex items-center gap-1 bg-white/15 hover:bg-white/25 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+              title="Regenerate prediction"
+            >
+              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
+            </button>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-3 gap-3">
@@ -622,10 +646,30 @@ function PredictionTab({ userId, profile }: { userId: string; profile: UserProfi
 // Company Intel Tab
 // ─────────────────────────────────────────────────────────────────────────────
 
-const POPULAR_COMPANIES = ["Google", "Microsoft", "Amazon", "Meta", "Apple", "Netflix", "Salesforce", "Stripe"];
+// Returns a set of companies relevant to the user's target career
+function getRelevantCompanies(careerTitle: string): string[] {
+  const ct = careerTitle.toLowerCase();
+  if (/civil|structural|construction|infrastructure/i.test(ct))
+    return ["AECOM", "WSP Global", "Arup", "Turner Construction", "Bechtel"];
+  if (/nurse|doctor|health|medical|pharmacist/i.test(ct))
+    return ["HCA Healthcare", "Mayo Clinic", "Kaiser Permanente", "Johnson & Johnson", "Pfizer"];
+  if (/accountant|finance|auditor|banker/i.test(ct))
+    return ["Deloitte", "PwC", "KPMG", "EY", "Goldman Sachs"];
+  if (/lawyer|legal|solicitor/i.test(ct))
+    return ["Baker McKenzie", "Clifford Chance", "Allen & Overy", "Latham & Watkins", "DLA Piper"];
+  if (/teacher|educator|lecturer/i.test(ct))
+    return ["Pearson", "Coursera", "Duolingo", "Chegg", "Khan Academy"];
+  if (/designer|creative|marketer|writer/i.test(ct))
+    return ["Adobe", "Canva", "Publicis", "WPP", "Ogilvy"];
+  if (/data|analyst|scientist/i.test(ct))
+    return ["Databricks", "Palantir", "Snowflake", "IBM", "Accenture"];
+  // Default: big tech
+  return ["Google", "Microsoft", "Amazon", "Meta", "Apple"];
+}
 
 function CompaniesTab({ profile }: { profile: UserProfile }) {
   const country = profile.targetLocation || profile.country || "United States";
+  const relevantCompanies = getRelevantCompanies(profile.targetCareerId?.replace(/-/g, ' ') || '');
   const [selectedCompany, setSelectedCompany] = useState<string>("");
   const [inputCompany, setInputCompany] = useState("");
   const [insight, setInsight] = useState<CompanyInsight | null>(null);
@@ -634,14 +678,14 @@ function CompaniesTab({ profile }: { profile: UserProfile }) {
   const [batchData, setBatchData] = useState<CompanyInsight[]>([]);
   const [batchLoading, setBatchLoading] = useState(true);
 
-  // Load a batch of popular companies on mount
+  // Load relevant companies on mount
   useEffect(() => {
     setBatchLoading(true);
-    getMultipleCompanyInsights(POPULAR_COMPANIES.slice(0, 5), country)
+    getMultipleCompanyInsights(relevantCompanies, country)
       .then(setBatchData)
       .catch(() => {})
       .finally(() => setBatchLoading(false));
-  }, [country]);
+  }, [country, relevantCompanies.join(',')]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadCompany = useCallback((company: string) => {
     if (!company.trim()) return;
@@ -691,7 +735,7 @@ function CompaniesTab({ profile }: { profile: UserProfile }) {
 
       {/* Quick-select */}
       <div className="flex flex-wrap gap-2">
-        {POPULAR_COMPANIES.map(c => (
+        {relevantCompanies.map(c => (
           <button
             key={c}
             onClick={() => { setInputCompany(c); loadCompany(c); }}

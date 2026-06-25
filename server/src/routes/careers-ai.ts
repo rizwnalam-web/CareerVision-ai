@@ -491,6 +491,142 @@ router.post("/network-companies", async (req: Request, res: Response) => {
   }
 });
 
+// ─── Network Q&A Posts ────────────────────────────────────────────────────────
+
+/**
+ * GET /qa-posts?career=civil-engineer&country=USA&limit=30
+ * Returns posts from the DB for the given career/country context.
+ * If the table is empty for this career, seeds with AI-generated posts.
+ */
+router.get("/qa-posts", async (req: Request, res: Response) => {
+  try {
+    const career = String(req.query.career || 'career').replace(/-/g, ' ');
+    const country = String(req.query.country || 'Global');
+    const limit = Math.min(50, parseInt(String(req.query.limit || '30'), 10));
+
+    const { db } = await import("../db/database.js");
+
+    const rows = await db.manyOrNone(
+      `SELECT id, author, avatar, role, career_tag, country_tag, title, body, tags, votes,
+              answers, top_answer, top_answer_author, created_at
+       FROM network_qa_posts
+       WHERE career_tag ILIKE $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [`%${career}%`, limit]
+    );
+
+    // If no posts exist yet, seed the table with AI-generated ones
+    if (rows.length === 0) {
+      const seeded = await careerAiService.generateQAPosts(career, country);
+      if (seeded.length > 0) {
+        for (const p of seeded) {
+          await db.none(
+            `INSERT INTO network_qa_posts
+               (id, author, avatar, role, career_tag, country_tag, title, body, tags, votes, answers, top_answer, top_answer_author)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+             ON CONFLICT (id) DO NOTHING`,
+            [p.id, p.author, p.avatar, p.role, career, country,
+             p.title, p.body || '', p.tags || [], p.votes || 0, p.answers || 0,
+             p.topAnswer || null, p.topAnswerAuthor || null]
+          );
+        }
+        const fresh = await db.manyOrNone(
+          `SELECT id, author, avatar, role, career_tag, country_tag, title, body, tags, votes,
+                  answers, top_answer, top_answer_author, created_at
+           FROM network_qa_posts WHERE career_tag ILIKE $1 ORDER BY created_at DESC LIMIT $2`,
+          [`%${career}%`, limit]
+        );
+        return res.json({ success: true, data: mapQARows(fresh) });
+      }
+    }
+
+    res.json({ success: true, data: mapQARows(rows) });
+  } catch (error) {
+    console.error("Q&A fetch error:", error);
+    res.status(500).json({ error: "Failed to fetch Q&A posts" });
+  }
+});
+
+/**
+ * POST /qa-posts
+ * Body: { author, avatar?, role?, careerTag, countryTag, title, body?, tags? }
+ */
+router.post("/qa-posts", async (req: Request, res: Response) => {
+  try {
+    const { author, avatar, role, careerTag, countryTag, title, body, tags } = req.body;
+    if (!author || !title || !careerTag) {
+      return res.status(400).json({ error: "author, title, and careerTag are required" });
+    }
+
+    const { db } = await import("../db/database.js");
+    const id = `q-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+    const row = await db.one(
+      `INSERT INTO network_qa_posts
+         (id, author, avatar, role, career_tag, country_tag, title, body, tags)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       RETURNING id, author, avatar, role, career_tag, country_tag, title, body, tags,
+                 votes, answers, top_answer, top_answer_author, created_at`,
+      [id, author, avatar || '🙋', role || 'Member',
+       careerTag, countryTag || 'Global', title, body || '',
+       tags || []]
+    );
+
+    res.status(201).json({ success: true, data: mapQARow(row) });
+  } catch (error) {
+    console.error("Q&A create error:", error);
+    res.status(500).json({ error: "Failed to create Q&A post" });
+  }
+});
+
+/**
+ * POST /qa-posts/:id/vote
+ * Body: { direction: 'up' | 'down' }
+ */
+router.post("/qa-posts/:id/vote", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const direction = req.body.direction === 'down' ? -1 : 1;
+
+    const { db } = await import("../db/database.js");
+    await db.none(
+      `UPDATE network_qa_posts SET votes = votes + $1 WHERE id = $2`,
+      [direction, id]
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Q&A vote error:", error);
+    res.status(500).json({ error: "Failed to vote" });
+  }
+});
+
+function mapQARow(row: any) {
+  return {
+    id: row.id,
+    author: row.author,
+    avatar: row.avatar,
+    role: row.role,
+    careerTag: row.career_tag,
+    countryTag: row.country_tag,
+    title: row.title,
+    body: row.body,
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    votes: row.votes,
+    answers: row.answers,
+    topAnswer: row.top_answer || undefined,
+    topAnswerAuthor: row.top_answer_author || undefined,
+    createdAt: row.created_at,
+    voted: false,
+    answered: false,
+  };
+}
+
+function mapQARows(rows: any[]) {
+  return rows.map(mapQARow);
+}
+
 // ─── Open Internships ─────────────────────────────────────────────────────────
 router.post("/open-internships", async (req: Request, res: Response) => {
   try {

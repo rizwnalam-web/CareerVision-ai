@@ -19,7 +19,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, ChevronDown, ArrowUpRight, CheckCircle2 } from "lucide-react";
+import { Sparkles, ChevronDown, ArrowUpRight, CheckCircle2, Star, ClipboardList, FileText, MessageSquare, Link } from "lucide-react";
 import { cn } from "../lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -49,6 +49,13 @@ export interface WhyThisMatchProps {
   defaultOpen?: boolean;
   /** Extra wrapper class. */
   className?: string;
+  /**
+   * When true (and score >= 75), shows an "Application Advantage" section
+   * with positive competitive framing + a "Prepare My Application" checklist.
+   */
+  showAdvantage?: boolean;
+  /** Documents/steps required — auto-populated with sensible defaults if not provided. */
+  applicationChecklist?: string[];
 }
 
 // ─── Highlight helper ─────────────────────────────────────────────────────────
@@ -95,10 +102,25 @@ export default function WhyThisMatch({
   label = "Why this recommendation?",
   defaultOpen = false,
   className,
+  showAdvantage = false,
+  applicationChecklist,
 }: WhyThisMatchProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const [checklistOpen, setChecklistOpen] = useState(false);
+  const [checkedItems, setCheckedItems] = useState<Set<number>>(new Set());
 
   const showImprove = score !== undefined && score < 70;
+  const showAppAdvantage = showAdvantage && score !== undefined && score >= 75;
+
+  const defaultChecklist = [
+    "Personal statement / motivation letter",
+    "Latest CV / resume (updated)",
+    "Official academic transcripts",
+    "2× letters of recommendation",
+    "Proof of eligibility (ID / enrollment)",
+    "Portfolio or work samples (if required)",
+  ];
+  const checklist = applicationChecklist ?? defaultChecklist;
 
   return (
     <div className={cn("rounded-xl border overflow-hidden", accentClass.includes("indigo") ? "border-indigo-100" : "border-slate-200", className)}>
@@ -184,6 +206,85 @@ export default function WhyThisMatch({
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {/* Application Advantage — positive framing for high-score matches */}
+              {showAppAdvantage && (
+                <div className="space-y-2 pt-1 border-t border-emerald-100">
+                  <div className="flex items-center gap-1.5">
+                    <Star size={10} className="text-emerald-500 shrink-0" fill="currentColor" />
+                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700">Your Application Advantage</p>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-100">
+                    <p className="text-[10px] text-emerald-800 leading-relaxed font-medium">
+                      {score !== undefined && score >= 90
+                        ? "🏆 You're in the top tier of applicants. Your profile closely matches all key criteria — apply with confidence."
+                        : score !== undefined && score >= 80
+                          ? "✦ Strong match. Your background gives you a competitive edge. Highlight your relevant experience in your statement."
+                          : "✦ Good match. Emphasise your matching skills and interests to stand out from other applicants."}
+                    </p>
+                  </div>
+
+                  {/* Prepare My Application checklist */}
+                  <button
+                    onClick={() => setChecklistOpen(v => !v)}
+                    className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:border-indigo-200 transition-all group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <ClipboardList size={11} className="text-indigo-500 shrink-0" />
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-700">Prepare My Application</span>
+                      <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-600">{checkedItems.size}/{checklist.length}</span>
+                    </div>
+                    <ChevronDown size={11} className={cn("text-slate-400 transition-transform", checklistOpen && "rotate-180")} />
+                  </button>
+
+                  <AnimatePresence>
+                    {checklistOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="space-y-1.5 pt-1">
+                          {checklist.map((item, i) => {
+                            const done = checkedItems.has(i);
+                            const ICONS = [FileText, FileText, FileText, MessageSquare, Link, FileText];
+                            const Icon = ICONS[i] ?? FileText;
+                            return (
+                              <button
+                                key={i}
+                                onClick={() => setCheckedItems(prev => {
+                                  const next = new Set(prev);
+                                  done ? next.delete(i) : next.add(i);
+                                  return next;
+                                })}
+                                className={cn(
+                                  "w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border text-left transition-all",
+                                  done ? "bg-emerald-50 border-emerald-200" : "bg-white border-slate-100 hover:border-indigo-100"
+                                )}
+                              >
+                                <div className={cn("w-5 h-5 rounded-lg flex items-center justify-center shrink-0", done ? "bg-emerald-500" : "bg-slate-100")}>
+                                  {done
+                                    ? <CheckCircle2 size={11} className="text-white" />
+                                    : <Icon size={9} className="text-slate-400" />}
+                                </div>
+                                <span className={cn("text-[10px] font-bold leading-snug flex-1", done ? "text-emerald-700 line-through" : "text-slate-600")}>{item}</span>
+                              </button>
+                            );
+                          })}
+                          {checkedItems.size === checklist.length && (
+                            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-600 text-white">
+                              <CheckCircle2 size={12} className="shrink-0" />
+                              <p className="text-[9px] font-black uppercase tracking-widest">All documents ready — apply now! 🎉</p>
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               )}
 

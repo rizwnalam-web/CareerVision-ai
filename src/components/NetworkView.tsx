@@ -19,6 +19,9 @@ import {
   getNetworkResumeReviews,
   getNetworkReferrals,
   getNetworkCompanies,
+  getQAPosts,
+  createQAPost,
+  voteQAPost,
 } from "../services/geminiService";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1237,63 +1240,22 @@ const FETCHERS: Record<NetworkTab, (profile: UserProfile) => Promise<any[]>> = {
   "resume-review": getNetworkResumeReviews,
   referrals:       getNetworkReferrals,
   companies:       getNetworkCompanies,
-  "q-and-a":       async (profile) => generateQAContent(profile),
+  "q-and-a":       async (profile) => {
+    const career = profile.targetCareerId?.replace(/-/g, ' ') || 'career';
+    const country = profile.targetLocation || profile.country || 'Global';
+    return getQAPosts(career, country);
+  },
   "success-wall":  async (profile) => generateSuccessStories(profile),
 };
 
-const API_BASE = (
-  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL) ||
-  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_BASE) ||
-  'http://localhost:3001'
-).replace(/\/+$|\/api$/, '');
-
-async function llmGenerate<T>(prompt: string, fallback: T): Promise<T> {
-  try {
-    const res = await fetch(`${API_BASE}/api/llm/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, systemInstruction: 'Return only valid JSON array, no markdown.' }),
-    });
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    const text: string = data.text ?? data.content ?? '';
-    const match = text.match(/\[[\s\S]*\]/);
-    if (!match) throw new Error();
-    return JSON.parse(match[0]) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-async function generateQAContent(profile: UserProfile): Promise<QAPost[]> {
-  const career = profile.targetCareerId?.replace(/-/g, ' ') || 'tech';
-  const country = profile.targetLocation || profile.country || 'Global';
-  return llmGenerate<QAPost[]>(
-    `Generate 6 realistic Q&A forum posts from students/job-hunters in the ${career} field targeting ${country}. Each post is JSON: { "id": "q1", "title": "...", "body": "...", "author": "...", "avatar": "🧑", "role": "...", "tags": ["..."], "votes": 12, "answers": 3, "createdAt": "2 hours ago", "voted": false, "answered": false, "topAnswer": "...", "topAnswerAuthor": "..." }`,
-    SEED_QA_POSTS(career, country)
-  );
-}
+// ─── Success Wall seed generator (still AI via backend) ──────────────────────
 
 async function generateSuccessStories(profile: UserProfile): Promise<SuccessStory[]> {
   const career = profile.targetCareerId?.replace(/-/g, ' ') || 'tech';
   const country = profile.targetLocation || profile.country || 'Global';
-  return llmGenerate<SuccessStory[]>(
-    `Generate 5 inspiring success stories from real-sounding students who used an AI career platform to land jobs in ${career} in ${country}. JSON: { "id": "s1", "author": "...", "avatar": "🌟", "headline": "...", "story": "...", "careerBefore": "...", "careerAfter": "...", "country": "${country}", "timeframe": "6 months", "likes": 45, "liked": false, "verified": true, "proGranted": false }`,
-    SEED_SUCCESS_STORIES(career, country)
-  );
-}
-
-function SEED_QA_POSTS(career: string, country: string): QAPost[] {
+  // Fallback seed data — returned when backend is unavailable
   return [
-    { id: 'q1', title: `Best way to break into ${career} with no experience?`, body: `I've been self-studying for 6 months and have built 3 portfolio projects. How do I land my first role in ${country}?`, author: 'Alex M.', avatar: '🧑', role: 'Career Changer', tags: [career, 'beginner', 'portfolio'], votes: 34, answers: 7, createdAt: '3 hours ago', voted: false, answered: false, topAnswer: `Start by targeting companies with internship-to-hire pipelines. Your portfolio matters more than your degree for ${career} roles.`, topAnswerAuthor: 'Priya S. · Senior Engineer' },
-    { id: 'q2', title: `Visa process for ${career} jobs in ${country} — where to start?`, body: 'Has anyone successfully applied for a work visa for tech roles? What documents did you prepare first?', author: 'Fatima K.', avatar: '👩', role: 'International Applicant', tags: ['visa', country, 'immigration'], votes: 28, answers: 5, createdAt: '1 day ago', voted: false, answered: false, topAnswer: `First secure a job offer — most ${country} employers will sponsor your visa from there.`, topAnswerAuthor: 'James W. · Immigration Specialist' },
-    { id: 'q3', title: 'How important is a Master\'s degree for salary negotiation?', body: 'Comparing two offers — one from a startup and one from a big tech firm. Does the MSc actually help?', author: 'Chen L.', avatar: '🧑‍💻', role: 'MSc Student', tags: ['salary', 'education', 'negotiation'], votes: 19, answers: 4, createdAt: '2 days ago', voted: false, answered: false, topAnswer: 'In big tech, an MSc typically adds 15–25% to your starting offer. In startups it matters less than your portfolio.', topAnswerAuthor: 'Rachel T. · Tech Recruiter' },
-  ];
-}
-
-function SEED_SUCCESS_STORIES(career: string, country: string): SuccessStory[] {
-  return [
-    { id: 's1', author: 'Amara O.', avatar: '🌟', headline: `Landed a ${career} role in ${country} in under 4 months!`, story: `I started with CareerVision AI knowing nothing about ${country}\'s job market. The AI roadmap showed me exactly which certifications mattered, and the scholarship matching found me $8,000 in funding I didn't know existed. I'm now working at a top firm in ${country}.`, careerBefore: 'Customer Support Agent', careerAfter: `${career} Specialist`, country, timeframe: '4 months', likes: 142, liked: false, verified: true, proGranted: true },
+    { id: 's1', author: 'Amara O.', avatar: '🌟', headline: `Landed a ${career} role in ${country} in under 4 months!`, story: `I started with CareerVision AI knowing nothing about ${country}'s job market. The AI roadmap showed me exactly which certifications mattered, and the scholarship matching found me $8,000 in funding I didn't know existed. I'm now working at a top firm in ${country}.`, careerBefore: 'Customer Support Agent', careerAfter: `${career} Specialist`, country, timeframe: '4 months', likes: 142, liked: false, verified: true, proGranted: true },
     { id: 's2', author: 'Daniel R.', avatar: '🏆', headline: 'From dropout to Software Engineer — my CareerVision story', story: 'I dropped out at 19 with no degree and no connections. The skill gap analysis showed me exactly what I was missing. 8 months of focused upskilling later, I have an offer letter.', careerBefore: 'Retail Associate', careerAfter: 'Junior Software Engineer', country, timeframe: '8 months', likes: 98, liked: false, verified: true, proGranted: false },
   ];
 }
@@ -1427,6 +1389,22 @@ const NetworkView: React.FC<Props> = ({ profile }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Q&A Tab
 // ─────────────────────────────────────────────────────────────────────────────
+
+function formatRelativeQA(ts: string): string {
+  if (!ts || ts === 'just now') return ts || 'just now';
+  const date = new Date(ts);
+  if (isNaN(date.getTime())) return ts; // pass through "3 hours ago"-style strings
+  const diffMs = Date.now() - date.getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return date.toLocaleDateString();
+}
+
 const QAndATab: React.FC<{ initialData: QAPost[]; profile: UserProfile }> = ({ initialData, profile }) => {
   const [posts, setPosts] = useState<QAPost[]>(initialData);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -1434,32 +1412,71 @@ const QAndATab: React.FC<{ initialData: QAPost[]; profile: UserProfile }> = ({ i
   const [newQuestion, setNewQuestion] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const handleVote = (id: string) => {
-    setPosts(prev => prev.map(p => p.id === id ? { ...p, votes: p.voted ? p.votes - 1 : p.votes + 1, voted: !p.voted } : p));
+  // Keep in sync if parent re-fetches
+  useEffect(() => { setPosts(initialData); }, [initialData]);
+
+  const handleVote = async (id: string) => {
+    const post = posts.find(p => p.id === id);
+    if (!post) return;
+    const direction = post.voted ? 'down' : 'up';
+    // Optimistic update
+    setPosts(prev => prev.map(p =>
+      p.id === id ? { ...p, votes: p.voted ? p.votes - 1 : p.votes + 1, voted: !p.voted } : p
+    ));
+    try {
+      await voteQAPost(id, direction);
+    } catch {
+      // Revert on failure
+      setPosts(prev => prev.map(p =>
+        p.id === id ? { ...p, votes: p.voted ? p.votes - 1 : p.votes + 1, voted: !p.voted } : p
+      ));
+    }
   };
 
   const handleAsk = async () => {
     if (!newQuestion.trim()) return;
     setSubmitting(true);
-    await new Promise(r => setTimeout(r, 600));
-    const newPost: QAPost = {
+    const careerTag = profile.targetCareerId?.replace(/-/g, ' ') || 'career';
+    const countryTag = profile.targetLocation || profile.country || 'Global';
+    const optimisticPost: QAPost = {
       id: `q${Date.now()}`,
       title: newQuestion,
       body: '',
       author: profile.name.split(' ')[0],
       avatar: '🙋',
-      role: profile.targetCareerId?.replace(/-/g, ' ') || 'Explorer',
-      tags: [profile.targetCareerId || 'career'],
+      role: careerTag,
+      tags: [careerTag],
       votes: 0,
       answers: 0,
       createdAt: 'just now',
       voted: false,
       answered: false,
     };
-    setPosts(prev => [newPost, ...prev]);
+    setPosts(prev => [optimisticPost, ...prev]);
     setNewQuestion('');
     setShowAskModal(false);
     setSubmitting(false);
+
+    // Persist to backend (replace optimistic entry with real one on success)
+    try {
+      const saved = await createQAPost({
+        author: profile.name.split(' ')[0],
+        avatar: '🙋',
+        role: careerTag,
+        careerTag,
+        countryTag,
+        title: optimisticPost.title,
+      });
+      if (saved?.id) {
+        setPosts(prev => prev.map(p =>
+          p.id === optimisticPost.id
+            ? { ...p, id: saved.id, createdAt: saved.createdAt || p.createdAt }
+            : p
+        ));
+      }
+    } catch {
+      // Keep optimistic post — it's visible but not persisted
+    }
   };
 
   return (
@@ -1536,7 +1553,7 @@ const QAndATab: React.FC<{ initialData: QAPost[]; profile: UserProfile }> = ({ i
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
                     <span className="text-[9px] font-bold text-slate-400">{post.avatar} {post.author} · {post.role}</span>
                     <span className="text-[9px] text-slate-300">·</span>
-                    <span className="text-[9px] text-slate-400 flex items-center gap-0.5"><Clock size={8} /> {post.createdAt}</span>
+                    <span className="text-[9px] text-slate-400 flex items-center gap-0.5"><Clock size={8} /> {formatRelativeQA(post.createdAt)}</span>
                     <span className="text-[9px] text-slate-400 flex items-center gap-0.5"><Reply size={8} /> {post.answers} answers</span>
                     {post.tags.slice(0, 2).map(t => (
                       <span key={t} className="text-[8px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">#{t}</span>

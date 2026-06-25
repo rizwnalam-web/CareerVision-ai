@@ -141,6 +141,8 @@ import CareerDigitalTwin from './components/CareerDigitalTwin';
 import CoachingHub from './components/CoachingHub';
 import WhyThisMatch from './components/WhyThisMatch';
 import ImpactLab from './components/ImpactLab';
+import OpportunitiesFeed from './components/OpportunitiesFeed';
+import CareerSpark, { SPARK_DONE_KEY } from './components/CareerSpark';
 import { trackView } from './services/analyticsService';
 import { prefetchVariants } from './lib/abTesting';
 import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
@@ -2061,6 +2063,7 @@ const ScholarshipAutoMatchWidget = ({
                                           scoreBreakdown={opp.breakdown?.map((b: any) => ({ label: b.label, points: b.points, max: b.max }))}
                                           label="Why Spark.E matched this"
                                           accentColor={cfg.ringColor}
+                                          showAdvantage
                                         />
                                       )}
 
@@ -2400,6 +2403,54 @@ const MyMarketCard: React.FC<{
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Digital Twin Teaser — compact dashboard widget with live salary slider
+// ─────────────────────────────────────────────────────────────────────────────
+const DigitalTwinTeaser = ({ baseSalary, careerTitle, onExpand }: { baseSalary: number; careerTitle: string; onExpand: () => void }) => {
+  const [simYears, setSimYears] = useState(5);
+  const projected = Math.round(baseSalary * (1 + simYears * 0.12));
+  const growth = baseSalary > 0 ? Math.round(((projected - baseSalary) / baseSalary) * 100) : 0;
+  return (
+    <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-slate-950 to-indigo-950 p-5 text-white">
+      <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-500/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
+      <div className="relative z-10 flex items-start justify-between gap-4 mb-4">
+        <div>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-[8px] font-black uppercase tracking-widest text-indigo-300 mb-2">
+            <GitBranch size={9} />Digital Twin Simulator
+          </div>
+          <h3 className="text-base font-black leading-tight">Simulate Your Future</h3>
+          <p className="text-[10px] text-slate-400 mt-0.5">{careerTitle} · drag to project salary</p>
+        </div>
+        <button onClick={onExpand} className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest hover:bg-indigo-500 transition-all whitespace-nowrap">
+          Full Sim <ChevronRight size={10} />
+        </button>
+      </div>
+      <div className="relative z-10 space-y-3">
+        <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-widest">
+          <span className="text-slate-400">Years of experience</span>
+          <span className="text-indigo-300">{simYears} years</span>
+        </div>
+        <input type="range" min={1} max={15} step={1} value={simYears} onChange={e => setSimYears(Number(e.target.value))}
+          className="w-full h-1.5 rounded-full appearance-none bg-slate-700 accent-indigo-500 cursor-pointer" />
+        <div className="flex items-end gap-3 pt-1">
+          <div className="flex-1 bg-white/5 rounded-2xl p-3 border border-white/10">
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Today</p>
+            <p className="text-lg font-black text-white leading-none">${baseSalary.toLocaleString()}</p>
+          </div>
+          <div className="w-7 h-7 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center shrink-0 mb-1">
+            <ChevronRight size={11} className="text-indigo-300" />
+          </div>
+          <div className="flex-1 bg-indigo-500/20 rounded-2xl p-3 border border-indigo-400/30">
+            <p className="text-[8px] font-black text-indigo-300 uppercase tracking-widest mb-0.5">In {simYears}yr</p>
+            <p className="text-lg font-black text-indigo-200 leading-none">${projected.toLocaleString()}</p>
+            <p className="text-[9px] text-emerald-400 font-black mt-0.5">+{growth}% growth</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading, onInitInterview, onAiCareerSearch, isAiCareerLoading, aiCareerSearchMessage, onNavigate, dashboardIntel, isDashboardIntelLoading, onResetToGlobal, onNavigateToScholarship, onUpdateProfile }: { profile: UserProfile, onSelectPath: (id: string) => void, onSelectByTitle: (title: string) => void, careers: CareerPath[], isLoading: boolean, onInitInterview: (role: string, company?: string) => void, onAiCareerSearch: (query: string) => Promise<void>, isAiCareerLoading: boolean, aiCareerSearchMessage: string, onNavigate: (view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'resume' | 'interview') => void, dashboardIntel: DashboardIntelligence | null, isDashboardIntelLoading: boolean, onResetToGlobal: () => Promise<void>, onNavigateToScholarship: (id: string) => void, onUpdateProfile?: (updates: Partial<UserProfile>) => void }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -2407,6 +2458,39 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
   const [skillGapCache, setSkillGapCache] = useState<Record<string, CareerSkillGap[]>>({});
   const [skillGapLoading, setSkillGapLoading] = useState<Record<string, boolean>>({});
   const [skillGapError, setSkillGapError] = useState<Record<string, boolean>>({});
+
+  // ── CareerSpark onboarding quiz ────────────────────────────────────────────
+  const [showSpark, setShowSpark] = useState<boolean>(() => !localStorage.getItem(SPARK_DONE_KEY));
+  const dismissSpark = () => { localStorage.setItem(SPARK_DONE_KEY, '1'); setShowSpark(false); };
+  const completeSpark = (data: { skills: string[]; location: string; impact: string }) => {
+    localStorage.setItem(SPARK_DONE_KEY, '1');
+    setShowSpark(false);
+    if (data.location && !profile.targetLocation) onUpdateProfile?.({ targetLocation: data.location });
+    if (data.skills.length > 0 && (!profile.skills || profile.skills.length === 0)) onUpdateProfile?.({ skills: data.skills });
+  };
+
+  // ── Career Streak (localStorage) ─────────────────────────────────────────
+  const [streak] = useState<number>(() => {
+    try {
+      const last = localStorage.getItem('cv_streak_date');
+      const count = parseInt(localStorage.getItem('cv_streak_count') || '0', 10);
+      const today = new Date().toDateString();
+      const yesterday = new Date(Date.now() - 86400000).toDateString();
+      if (last === today) return count;
+      if (last === yesterday) {
+        const next = count + 1;
+        localStorage.setItem('cv_streak_date', today);
+        localStorage.setItem('cv_streak_count', String(next));
+        return next;
+      }
+      localStorage.setItem('cv_streak_date', today);
+      localStorage.setItem('cv_streak_count', '1');
+      return 1;
+    } catch { return 1; }
+  });
+  const streakXP = streak * 10;
+  const xpLevel = streak < 5 ? 'Starter' : streak < 15 ? 'Explorer' : streak < 30 ? 'Achiever' : 'Champion';
+  const xpLevelColor = streak < 5 ? 'text-slate-500 bg-slate-100' : streak < 15 ? 'text-indigo-600 bg-indigo-50' : streak < 30 ? 'text-emerald-600 bg-emerald-50' : 'text-amber-600 bg-amber-50';
 
   // ── Geo-detection ──────────────────────────────────────────────────────────
   const [detectedRegion] = useState<string>(() => detectUserRegion());
@@ -2745,6 +2829,13 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
 
   return (
     <div className="pb-12 animate-in fade-in duration-700">
+      {/* ── CareerSpark onboarding quiz (first-run only) ── */}
+      <AnimatePresence>
+        {showSpark && (
+          <CareerSpark onComplete={completeSpark} onDismiss={dismissSpark} />
+        )}
+      </AnimatePresence>
+
       {/* ── Scholarship match notification banner ── */}
       <ScholarshipAlertBanner
         newMatches={scholarshipAlerts}
@@ -3023,6 +3114,55 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
           </div>
         </div>
 
+        {/* ── Career Streak & XP ── */}
+        <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-5 overflow-hidden relative">
+          <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full bg-amber-400/10 blur-2xl pointer-events-none" />
+          <div className="flex items-center justify-between mb-4 relative z-10">
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Career Streak</h4>
+            <span className={`text-[7px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest ${xpLevelColor}`}>{xpLevel}</span>
+          </div>
+          <div className="flex items-center gap-4 relative z-10">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex flex-col items-center justify-center shadow-lg shadow-amber-200/60 shrink-0">
+              <span className="text-2xl leading-none">🔥</span>
+              <span className="text-[8px] font-black text-white uppercase tracking-widest mt-0.5">Streak</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-1 mb-1">
+                <span className="text-3xl font-black text-slate-900 leading-none">{streak}</span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">day{streak !== 1 ? 's' : ''}</span>
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">+{streakXP} XP</span>
+                <span className="text-[9px] font-medium text-slate-400">Keep it going!</span>
+              </div>
+              {/* Mini streak dots */}
+              <div className="flex gap-1">
+                {Array.from({ length: 7 }).map((_, i) => (
+                  <div key={i} className={`w-4 h-1.5 rounded-full ${i < Math.min(streak, 7) ? 'bg-amber-400' : 'bg-slate-100'}`} />
+                ))}
+              </div>
+            </div>
+          </div>
+          {/* Badges row */}
+          <div className="mt-4 pt-4 border-t border-slate-100 relative z-10">
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">Badges Earned</p>
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { emoji: '🚀', label: 'First Login',  unlocked: true  },
+                { emoji: '🎯', label: 'Goal Set',     unlocked: !!profile.targetCareerId },
+                { emoji: '📍', label: 'Location Set', unlocked: !!profile.targetLocation },
+                { emoji: '📄', label: 'Resume',       unlocked: false },
+                { emoji: '🏆', label: '7-Day Streak', unlocked: streak >= 7 },
+              ].map(b => (
+                <div key={b.label} className={`flex flex-col items-center gap-0.5 p-2 rounded-xl border transition-all ${b.unlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-100 opacity-40'}`}>
+                  <span className="text-lg leading-none">{b.emoji}</span>
+                  <span className="text-[6px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">{b.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
       </div>
 
       {/* ── CENTER COLUMN ── */}
@@ -3108,6 +3248,13 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
             <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-600/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-[60px]" />
           </div>
         </div>
+
+        {/* ── Digital Twin Teaser Widget ── */}
+        <DigitalTwinTeaser
+          baseSalary={dashboardIntel?.salaryRange ? parseInt(dashboardIntel.salaryRange.replace(/[^0-9]/g,'').slice(0,6)) || 60000 : 60000}
+          careerTitle={profile.targetCareerId || 'Your Career'}
+          onExpand={() => onNavigate('roadmap')}
+        />
 
         {/* ── Scholarship funding teaser ── */}
         {centerTab === 'scholarships' && (() => {
@@ -3394,6 +3541,74 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
           })()}
         </div>
         )}
+
+        {/* ── Salary Trajectory Chart ── */}
+        {salaryTrendData.length >= 2 && (
+          <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-6">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h4 className="text-base font-black text-slate-900 tracking-tight">Salary Trajectory</h4>
+                <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mt-0.5">
+                  {profile.targetCareerId || 'Your Career'} · AI Projection
+                </p>
+              </div>
+              <span className="text-[8px] font-black bg-emerald-50 text-emerald-600 border border-emerald-100 px-2 py-1 rounded-lg flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" /> AI Live
+              </span>
+            </div>
+            <ResponsiveContainer width="100%" height={130}>
+              <AreaChart data={salaryTrendData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="salaryGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#6366f1" stopOpacity={0.18} />
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="year" tick={{ fontSize: 9, fill: '#94a3b8', fontWeight: 700 }} axisLine={false} tickLine={false} />
+                <YAxis hide />
+                <RechartsTooltip
+                  contentStyle={{ background: '#1e293b', border: 'none', borderRadius: 12, padding: '8px 14px' }}
+                  labelStyle={{ color: '#94a3b8', fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}
+                  itemStyle={{ color: '#a5b4fc', fontSize: 11, fontWeight: 800 }}
+                  formatter={(v: number) => [`$${v.toLocaleString()}`, 'Salary']}
+                />
+                <Area type="monotone" dataKey="salary" stroke="#6366f1" strokeWidth={2.5} fill="url(#salaryGrad)" dot={{ fill: '#6366f1', r: 3 }} activeDot={{ r: 5 }} />
+              </AreaChart>
+            </ResponsiveContainer>
+            {/* Min/max callout */}
+            {(() => {
+              const vals = salaryTrendData.map(d => d.salary as number).filter(Boolean);
+              const min = Math.min(...vals);
+              const max = Math.max(...vals);
+              return vals.length > 1 ? (
+                <div className="flex gap-4 mt-3">
+                  <div className="flex-1 bg-slate-50 rounded-2xl p-3">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Starting</p>
+                    <p className="text-sm font-black text-slate-700">${min.toLocaleString()}</p>
+                  </div>
+                  <div className="flex-1 bg-indigo-50 rounded-2xl p-3">
+                    <p className="text-[8px] font-black text-indigo-400 uppercase tracking-widest">Potential</p>
+                    <p className="text-sm font-black text-indigo-700">${max.toLocaleString()}</p>
+                  </div>
+                  <div className="flex-1 bg-emerald-50 rounded-2xl p-3">
+                    <p className="text-[8px] font-black text-emerald-400 uppercase tracking-widest">Growth</p>
+                    <p className="text-sm font-black text-emerald-700">{min > 0 ? `+${Math.round(((max - min) / min) * 100)}%` : '—'}</p>
+                  </div>
+                </div>
+              ) : null;
+            })()}
+          </div>
+        )}
+
+        {/* ── My Opportunities Feed ── */}
+        <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-6">
+          <OpportunitiesFeed
+            profile={profile}
+            careers={careers}
+            onNavigate={(view) => onNavigate(view as Parameters<typeof onNavigate>[0])}
+          />
+        </div>
 
       </div>
 
@@ -3762,6 +3977,28 @@ const RoadmapView = ({ profile, pathId, careers, onNavigate, onInitInterview }: 
           </button>
         </div>
       </div>
+
+      {/* ── "Feeling stuck?" Coach Nudge ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
+        className="flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-200/60"
+      >
+        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-md shadow-violet-200">
+          <Users size={16} className="text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-black text-slate-800 leading-snug">Feeling stuck on your roadmap?</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">Book a free 15-min strategy session with an expert career coach.</p>
+        </div>
+        <button
+          onClick={() => onNavigate('heatmap')}
+          className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-600 text-white text-[9px] font-black uppercase tracking-widest hover:bg-violet-500 transition-all shadow-sm shadow-violet-200 whitespace-nowrap"
+        >
+          Book a Coach <ChevronRight size={11} />
+        </button>
+      </motion.div>
 
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit overflow-x-auto">
@@ -6330,6 +6567,7 @@ const FundingOpportunitiesView = ({ profile, highlightId, onHighlightConsumed }:
                       explanation={opp.matchReasoning}
                       score={opp.matchScore}
                       label="Why Spark.E matched this scholarship"
+                      showAdvantage
                     />
                   )}
                 </div>

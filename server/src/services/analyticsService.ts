@@ -344,8 +344,19 @@ Rules:
   try {
     parsed = JSON.parse(raw);
   } catch {
-    // Fallback minimal structure
-    parsed = buildFallbackTrendData(country, careerTitle);
+    // LLM returned unparseable JSON — serve most recent stored data (ignore TTL)
+    const stale = await db.oneOrNone<{ trend_data: JobMarketTrendData }>(
+      `SELECT trend_data FROM market_trend_cache WHERE cache_key = $1`,
+      [cacheKey]
+    ).catch(() => null);
+    if (stale) return { ...stale.trend_data, generatedAt: new Date().toISOString() };
+    // Absolutely no cached data — return empty shell so UI shows retry state
+    return {
+      country, careerTitle,
+      trends: [], salaryTrend: [], demandForecast: [], topHiringCities: [], skillsGrowth: [],
+      summary: `Market data for ${careerTitle} in ${country} is temporarily unavailable. Please try again in a few minutes.`,
+      generatedAt: new Date().toISOString(),
+    };
   }
 
   parsed.generatedAt = new Date().toISOString();
@@ -363,54 +374,6 @@ Rules:
     .catch(() => {});
 
   return parsed;
-}
-
-function buildFallbackTrendData(
-  country: string,
-  careerTitle: string
-): JobMarketTrendData {
-  return {
-    country,
-    careerTitle,
-    trends: [
-      { skill: "Python", demandChange: 18, avgSalaryUSD: 115000, openRoles: 4200, trend: "rising" },
-      { skill: "Cloud Computing", demandChange: 22, avgSalaryUSD: 125000, openRoles: 5800, trend: "rising" },
-      { skill: "Data Analysis", demandChange: 14, avgSalaryUSD: 95000, openRoles: 3100, trend: "stable" },
-      { skill: "Machine Learning", demandChange: 30, avgSalaryUSD: 140000, openRoles: 2900, trend: "rising" },
-    ],
-    salaryTrend: Array.from({ length: 12 }, (_, i) => {
-      const d = new Date(2025, i, 1);
-      return {
-        month: d.toLocaleString("default", { month: "short", year: "numeric" }),
-        avgSalary: 90000 + i * 1200,
-      };
-    }),
-    demandForecast: [
-      { quarter: "Q1 2025", demandIndex: 72 },
-      { quarter: "Q2 2025", demandIndex: 76 },
-      { quarter: "Q3 2025", demandIndex: 80 },
-      { quarter: "Q4 2025", demandIndex: 83 },
-      { quarter: "Q1 2026", demandIndex: 85 },
-      { quarter: "Q2 2026", demandIndex: 88 },
-    ],
-    topHiringCities: [
-      { city: "San Francisco", openings: 1800, avgSalary: 160000 },
-      { city: "New York", openings: 1400, avgSalary: 140000 },
-      { city: "Seattle", openings: 1100, avgSalary: 145000 },
-      { city: "Austin", openings: 900, avgSalary: 120000 },
-      { city: "Boston", openings: 750, avgSalary: 130000 },
-    ],
-    skillsGrowth: [
-      { skill: "LLM Fine-tuning", growth: 45, category: "technical" },
-      { skill: "Kubernetes", growth: 28, category: "technical" },
-      { skill: "System Design", growth: 20, category: "domain" },
-      { skill: "Communication", growth: 12, category: "soft" },
-    ],
-    summary:
-      `${careerTitle} roles in ${country} show strong upward momentum driven by AI adoption and cloud migration. ` +
-      `Demand is expected to grow 20-30% over the next 18 months with premium salaries for specialized skills.`,
-    generatedAt: new Date().toISOString(),
-  };
 }
 
 // ── Predictive Career Analytics ──────────────────────────────────────────────
@@ -477,7 +440,19 @@ Rules:
   try {
     prediction = JSON.parse(raw);
   } catch {
-    prediction = buildFallbackPrediction(careerTitle, profile);
+    // LLM returned unparseable JSON — serve most recent stored prediction (ignore TTL)
+    const stale = await db.oneOrNone<{ prediction_data: CareerPrediction }>(
+      `SELECT prediction_data FROM career_prediction_cache WHERE user_identifier = $1 AND career_title = $2`,
+      [userIdentifier, careerTitle]
+    ).catch(() => null);
+    if (stale) return stale.prediction_data;
+    // No stored data at all — return empty shell
+    return {
+      careerTitle, currentLevelEstimate: 'entry',
+      predictedSalaryIn1Yr: 0, predictedSalaryIn3Yr: 0, predictedSalaryIn5Yr: 0,
+      probabilityOfPromotion: 0, suggestedSkills: [], alternativeCareerPaths: [],
+      riskFactors: [], growthDrivers: [], confidenceScore: 0, timeline: [],
+    };
   }
 
   // Cache it
@@ -494,51 +469,6 @@ Rules:
 
   return prediction;
 }
-
-function buildFallbackPrediction(
-  careerTitle: string,
-  profile: UserProfile
-): CareerPrediction {
-  return {
-    careerTitle,
-    currentLevelEstimate: "entry",
-    predictedSalaryIn1Yr: 75000,
-    predictedSalaryIn3Yr: 100000,
-    predictedSalaryIn5Yr: 140000,
-    probabilityOfPromotion: 65,
-    suggestedSkills: [
-      "Cloud Architecture",
-      "System Design",
-      "Python",
-      "Data Pipelines",
-      "Leadership",
-      "Communication",
-    ],
-    alternativeCareerPaths: [
-      { title: "Data Engineer", similarity: 80, salaryBoost: 15000 },
-      { title: "DevOps Engineer", similarity: 70, salaryBoost: 10000 },
-      { title: "ML Engineer", similarity: 65, salaryBoost: 25000 },
-    ],
-    riskFactors: [
-      "AI automation of routine tasks",
-      "Rapidly evolving tech stack requires continuous upskilling",
-    ],
-    growthDrivers: [
-      "High global demand",
-      "Strong remote work availability",
-      "Multiple career progression paths",
-    ],
-    confidenceScore: 55,
-    timeline: [
-      { year: 1, milestone: "Junior to Mid-level", expectedSalary: 75000 },
-      { year: 2, milestone: "Lead first project", expectedSalary: 90000 },
-      { year: 3, milestone: "Senior role", expectedSalary: 110000 },
-      { year: 4, milestone: "Team lead / Specialist", expectedSalary: 125000 },
-      { year: 5, milestone: "Staff / Principal", expectedSalary: 145000 },
-    ],
-  };
-}
-
 // ── Company-specific Insights ────────────────────────────────────────────────
 
 export async function getCompanyInsights(
@@ -595,7 +525,21 @@ Rules:
   try {
     insight = JSON.parse(raw);
   } catch {
-    insight = buildFallbackCompanyInsight(company, country);
+    // LLM returned unparseable JSON — serve most recent stored insight (ignore TTL)
+    const stale = await db.oneOrNone<{ insights: CompanyInsight }>(
+      `SELECT insights FROM company_insights_cache WHERE company_name = $1 AND country = $2`,
+      [company, country]
+    ).catch(() => null);
+    if (stale) return stale.insights;
+    // No stored data — return empty shell
+    return {
+      company, country, industry: '', employeeCount: '', hiringVolume: 'medium',
+      avgSalaryUSD: 0, techStack: [], openRoles: [], cultureScore: 0,
+      workLifeBalance: 0, careerGrowth: 0, diversity: 0,
+      hiringTrend: 'stable', benefits: [],
+      interviewProcess: '',
+      summary: `Company data for ${company} is temporarily unavailable. Please try again shortly.`,
+    };
   }
 
   await db
@@ -610,41 +554,6 @@ Rules:
     .catch(() => {});
 
   return insight;
-}
-
-function buildFallbackCompanyInsight(
-  company: string,
-  country: string
-): CompanyInsight {
-  return {
-    company,
-    country,
-    industry: "Technology",
-    employeeCount: "1,000–10,000",
-    hiringVolume: "medium",
-    avgSalaryUSD: 110000,
-    techStack: ["Python", "AWS", "React", "Node.js", "Kubernetes", "PostgreSQL", "Kafka", "Terraform"],
-    openRoles: ["Software Engineer", "Data Scientist", "Product Manager", "DevOps Engineer", "UX Designer"],
-    cultureScore: 72,
-    workLifeBalance: 68,
-    careerGrowth: 75,
-    diversity: 65,
-    recentFunding: "Series C – $80M (2024)",
-    glassdoorRating: 3.9,
-    linkedInFollowers: 45000,
-    hiringTrend: "stable",
-    benefits: [
-      "Remote-first policy",
-      "Equity/stock options",
-      "Health & dental insurance",
-      "Learning & development budget",
-      "401k matching",
-      "Flexible PTO",
-    ],
-    interviewProcess:
-      "Typically 4-5 rounds: phone screen, technical assessment, system design, and cultural fit. Process takes 2-4 weeks.",
-    summary: `${company} is a growing technology company in ${country} known for its collaborative culture and strong engineering practices. They prioritise innovation and offer competitive compensation packages.`,
-  };
 }
 
 // ── Multi-company batch ───────────────────────────────────────────────────────

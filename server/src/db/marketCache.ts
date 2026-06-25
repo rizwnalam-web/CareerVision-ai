@@ -808,6 +808,22 @@ export async function getAiCache<T = any>(cacheKey: string): Promise<T | null> {
   }
 }
 
+/**
+ * Like getAiCache but ignores expiry — returns the most recently stored value
+ * even if it has expired. Used as a last-resort fallback when the LLM is down.
+ */
+export async function getAiCacheStale<T = any>(cacheKey: string): Promise<T | null> {
+  try {
+    const row = await db.oneOrNone<{ data_json: T }>(
+      `SELECT data_json FROM ai_response_cache WHERE cache_key = $1 ORDER BY expires_at DESC LIMIT 1`,
+      [cacheKey]
+    );
+    return row?.data_json ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function setAiCache(cacheKey: string, data: any, ttlHours = 24): Promise<void> {
   try {
     await db.none(

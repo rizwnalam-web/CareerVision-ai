@@ -380,6 +380,32 @@ export async function getNetworkCompanies(profile: UserProfile, query?: string):
   return callBackend<any[]>('/network-companies', 'POST', { profile, query });
 }
 
+// ─── Network Q&A ─────────────────────────────────────────────────────────────
+
+export interface QAPostPayload {
+  author: string;
+  avatar?: string;
+  role?: string;
+  careerTag: string;
+  countryTag?: string;
+  title: string;
+  body?: string;
+  tags?: string[];
+}
+
+export async function getQAPosts(career: string, country: string): Promise<any[]> {
+  const params = new URLSearchParams({ career, country, limit: '40' });
+  return callBackend<any[]>(`/qa-posts?${params}`, 'GET');
+}
+
+export async function createQAPost(payload: QAPostPayload): Promise<any> {
+  return callBackend<any>('/qa-posts', 'POST', payload);
+}
+
+export async function voteQAPost(id: string, direction: 'up' | 'down'): Promise<void> {
+  await callBackend<any>(`/qa-posts/${id}/vote`, 'POST', { direction });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Open Internships
 // ─────────────────────────────────────────────────────────────────────────────

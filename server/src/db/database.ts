@@ -30,13 +30,18 @@ const connection = {
 
 export const db = pgp(connection);
 
-export async function testConnection() {
+export async function testConnection(timeoutMs = 8000): Promise<boolean> {
   try {
-    const result = await db.one("SELECT NOW()");
+    const result = await Promise.race([
+      db.one("SELECT NOW()"),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Connection timed out after ${timeoutMs}ms`)), timeoutMs)
+      ),
+    ]);
     console.log("✓ Database connected:", result);
     return true;
-  } catch (error) {
-    console.error("✗ Database connection failed:", error);
+  } catch (error: any) {
+    console.error("✗ Database connection failed:", error?.message ?? error);
     return false;
   }
 }

@@ -26,6 +26,7 @@ import {
   saveScholarshipsCache,
   getAiCache,
   setAiCache,
+  getAiCacheStale,
   type CountryCareerEntry,
   type CachedMilestone,
 } from "../db/marketCache.js";
@@ -229,6 +230,10 @@ async function callLLM(prompt: string, systemInstruction: string, options: DeepS
 
   if (result.source === "error") {
     const errorMessage = result.error || "LLM request failed";
+    const isCooldown = /cooling down|rate.limit/i.test(errorMessage);
+    if (isCooldown) {
+      console.warn(`[LLM] All providers cooling down — falling back to seed data`);
+    }
     const error = new Error(errorMessage);
     if (isInsufficientBalanceError(error)) {
       error.name = "InsufficientBalanceError";
@@ -476,9 +481,7 @@ export async function getAiJobSuggestions(profile: UserProfile): Promise<JobList
   const career = profile.targetCareerId || 'software engineer';
   const location = profile.targetLocation || profile.country || 'USA';
 
-  const systemInstruction = `You are Spark.E, a Career Opportunity Analyst. Generate 10 highly relevant real-world job openings. Return ONLY valid JSON — no markdown, no explanation, no code fences.`;
-
-  const prompt = `Generate 10 current (2026) job listings for:
+  const prompt = `You are Spark.E, a Career Opportunity Analyst. Generate 10 current (2026) job listings for:
 - Career Target: ${career}
 - Location: ${location}
 - Education: ${profile.education || 'Bachelor\'s Degree'}
@@ -495,20 +498,13 @@ Return a JSON array of exactly 10 job objects matching this schema exactly:
   "salary": { "min": <integer USD>, "max": <integer USD>, "currency": "USD", "period": "yearly" },
   "postedAt": "<ISO date string within the last 30 days from 2026-06-16>",
   "description": "<2-sentence job summary>",
-  "url": "<LinkedIn or Indeed search URL — use https://www.linkedin.com/jobs/search/?keywords=JOBTITLE&location=LOCATION or https://www.indeed.com/jobs?q=JOBTITLE&l=LOCATION with real values URL-encoded>"
+  "url": "<LinkedIn search URL e.g. https://www.linkedin.com/jobs/search/?keywords=JOBTITLE&location=LOCATION>"
 }
 
-IMPORTANT for the url field: Use real job search portal URLs. Examples:
-- LinkedIn: https://www.linkedin.com/jobs/search/?keywords=Software+Engineer&location=New+York
-- Indeed: https://www.indeed.com/jobs?q=Data+Analyst&l=London
-- Glassdoor: https://www.glassdoor.com/Job/jobs.htm?sc.keyword=Product+Manager&locT=C&locId=1
-
-Output ONLY the JSON array. No extra text.`;
+Output ONLY the JSON array. No extra text, no markdown, no code fences.`;
 
   try {
-    // Bypass the serial queue so this call doesn't wait behind other concurrent LLM calls
     const llmResult = await generateDeepSeekResponse(prompt, {
-      systemInstruction,
       temperature: 0.4,
       maxTokens: 3000,
     });
@@ -2149,10 +2145,10 @@ Rules: first community matches user's career; 1 community is private; each commu
       setAiCache(cacheKey, result, 12).catch(() => {});
       return result;
     }
-    return [];
+    return await getAiCacheStale<any[]>(cacheKey) ?? [];
   } catch (error) {
-    console.error('[Network] getNetworkCommunities failed:', error);
-    return [];
+    console.warn('[Network] getNetworkCommunities unavailable, serving stale cache:', error instanceof Error ? error.message : String(error));
+    return await getAiCacheStale<any[]>(cacheKey) ?? [];
   }
 }
 
@@ -2175,10 +2171,10 @@ Rules: availability values are available|limited|full; mix all three; at least 2
       setAiCache(cacheKey, result, 24).catch(() => {});
       return result;
     }
-    return [];
+    return await getAiCacheStale<any[]>(cacheKey) ?? [];
   } catch (error) {
-    console.error('[Network] getNetworkMentors failed:', error);
-    return [];
+    console.warn('[Network] getNetworkMentors unavailable, serving stale cache:', error instanceof Error ? error.message : String(error));
+    return await getAiCacheStale<any[]>(cacheKey) ?? [];
   }
 }
 
@@ -2201,10 +2197,10 @@ Rules: 1 object has status "completed" and reviewed true; at least 2 relate to $
       setAiCache(cacheKey, result, 6).catch(() => {});
       return result;
     }
-    return [];
+    return await getAiCacheStale<any[]>(cacheKey) ?? [];
   } catch (error) {
-    console.error('[Network] getNetworkResumeReviews failed:', error);
-    return [];
+    console.warn('[Network] getNetworkResumeReviews unavailable, serving stale cache:', error instanceof Error ? error.message : String(error));
+    return await getAiCacheStale<any[]>(cacheKey) ?? [];
   }
 }
 
@@ -2227,10 +2223,10 @@ Rules: connectionStrength values are strong|medium|weak; 2 are connected true; 1
       setAiCache(cacheKey, result, 12).catch(() => {});
       return result;
     }
-    return [];
+    return await getAiCacheStale<any[]>(cacheKey) ?? [];
   } catch (error) {
-    console.error('[Network] getNetworkReferrals failed:', error);
-    return [];
+    console.warn('[Network] getNetworkReferrals unavailable, serving stale cache:', error instanceof Error ? error.message : String(error));
+    return await getAiCacheStale<any[]>(cacheKey) ?? [];
   }
 }
 
@@ -2257,10 +2253,11 @@ Rules: 2 companies have followed true; each company has exactly 2 alumni; use to
         setAiCache(cacheKey, result, 24).catch(() => {});
         return result;
       }
+      return await getAiCacheStale<any[]>(cacheKey) ?? [];
     } catch (error) {
-      console.error('[Network] getNetworkCompanies (default) failed:', error);
+      console.warn('[Network] getNetworkCompanies (default) unavailable, serving stale cache:', error instanceof Error ? error.message : String(error));
+      return await getAiCacheStale<any[]>(cacheKey) ?? [];
     }
-    return [];
   }
 
   // ── Search query path — NEVER use cache so results are always fresh & accurate ──
@@ -2326,6 +2323,38 @@ CONSTRAINTS:
     return result;
   } catch (error) {
     console.error('[Network] getNetworkCompanies (search) failed:', error);
+    return [];
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Network Q&A — AI seed generation
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function generateQAPosts(career: string, country: string): Promise<any[]> {
+  const prompt = `Generate 8 realistic Q&A forum posts from students/job-hunters in the "${career}" field targeting ${country}.
+Return a JSON array only — no markdown, no code fences.
+Each element:
+{
+  "id": "q<n>",
+  "title": "<question headline>",
+  "body": "<1-2 sentence detail>",
+  "author": "<realistic first name + initial>",
+  "avatar": "🧑",
+  "role": "<e.g. Career Changer | MSc Student | Recent Graduate>",
+  "tags": ["${career}", "<tag2>"],
+  "votes": <5-80>,
+  "answers": <1-10>,
+  "topAnswer": "<1-2 sentence helpful answer>",
+  "topAnswerAuthor": "<Name · Title>"
+}`;
+
+  try {
+    const result = await generateDeepSeekResponse(prompt, { temperature: 0.7, maxTokens: 2000 });
+    if (!result.text) return [];
+    const parsed = parseAIJson<any[]>(result.text);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
     return [];
   }
 }
@@ -2413,9 +2442,11 @@ Output ONLY the JSON array.`;
       setAiCache(cacheKey, normalized, 6).catch(() => {}); // 6-hour cache
       return normalized;
     }
-    return [];
+    return await getAiCacheStale<OpenInternship[]>(cacheKey) ?? [];
   } catch (error) {
-    console.error('[Internships] getOpenInternships failed:', error);
-    return [];
+    console.warn('[Internships] LLM unavailable, serving stale cache:', error instanceof Error ? error.message : String(error));
+    return await getAiCacheStale<OpenInternship[]>(cacheKey) ?? [];
   }
 }
+
+
