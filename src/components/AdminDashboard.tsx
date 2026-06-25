@@ -5,8 +5,13 @@ import {
   Calendar, Mail, MapPin, Target, Crown, BarChart3,
   UserCheck, Clock, AlertCircle, MessageSquare,
   CheckCircle, XCircle, Star, Hourglass,
+  BookOpen, FileText, Bell, Edit2, Trash2, Save, X,
 } from "lucide-react";
 import { cn } from "../lib/utils";
+import ScholarshipManager from "./admin/ScholarshipManager";
+import ApplicationManager from "./admin/ApplicationManager";
+import ScholarshipAnalytics from "./admin/ScholarshipAnalytics";
+import NotificationCenter from "./admin/NotificationCenter";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 interface AdminFeedback {
@@ -40,6 +45,19 @@ interface AdminUser {
 
 type SortKey = keyof AdminUser;
 type SortDir = "asc" | "desc";
+
+interface UserEditForm {
+  name: string;
+  age: string;
+  education: string;
+  country: string;
+  targetLocation: string;
+  targetCareerId: string;
+  subscriptionPlan: string;
+  budget: string;
+  annualIncome: string;
+  currentSavings: string;
+}
 
 const API_BASE = (
   import.meta.env.VITE_API_BASE ||
@@ -99,7 +117,15 @@ export default function AdminDashboard({ adminEmail }: {
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<"users" | "activity" | "feedback">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "activity" | "feedback" | "scholarships" | "applications" | "analytics" | "communications">("users");
+
+  // ── User edit/delete state ───────────────────────────────────────────────
+  const [editUser, setEditUser] = useState<AdminUser | null>(null);
+  const [editForm, setEditForm] = useState<UserEditForm | null>(null);
+  const [savingUser, setSavingUser] = useState(false);
+  const [confirmDeleteUserId, setConfirmDeleteUserId] = useState<number | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
+  const [userActionError, setUserActionError] = useState<string | null>(null);
 
   // ── Feedback state ───────────────────────────────────────────────────────
   const [feedbacks, setFeedbacks] = useState<AdminFeedback[]>([]);
@@ -200,6 +226,96 @@ export default function AdminDashboard({ adminEmail }: {
       : <ChevronDown size={12} className="text-indigo-400" />;
   }
 
+  // ── User update / delete ──────────────────────────────────────────────────
+  function openEdit(u: AdminUser) {
+    setEditUser(u);
+    setEditForm({
+      name: u.name ?? "",
+      age: u.age != null ? String(u.age) : "",
+      education: u.education ?? "",
+      country: u.country ?? "",
+      targetLocation: u.target_location ?? "",
+      targetCareerId: u.target_career_id ?? "",
+      subscriptionPlan: u.subscription_plan ?? "free",
+      budget: u.budget != null ? String(u.budget) : "",
+      annualIncome: u.annual_income != null ? String(u.annual_income) : "",
+      currentSavings: u.current_savings != null ? String(u.current_savings) : "",
+    });
+    setUserActionError(null);
+  }
+
+  async function handleUpdateUser(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editUser || !editForm) return;
+    setSavingUser(true);
+    setUserActionError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/users/${editUser.id}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editForm.name || undefined,
+          age: editForm.age ? Number(editForm.age) : undefined,
+          education: editForm.education || undefined,
+          country: editForm.country || undefined,
+          targetLocation: editForm.targetLocation || undefined,
+          targetCareerId: editForm.targetCareerId || undefined,
+          budget: editForm.budget ? Number(editForm.budget) : undefined,
+          annualIncome: editForm.annualIncome ? Number(editForm.annualIncome) : undefined,
+          currentSavings: editForm.currentSavings ? Number(editForm.currentSavings) : undefined,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      // Patch local state
+      setUsers(prev => prev.map(u =>
+        u.id === editUser.id
+          ? {
+              ...u,
+              name: editForm.name || u.name,
+              age: editForm.age ? Number(editForm.age) : u.age,
+              education: editForm.education || u.education,
+              country: editForm.country || u.country,
+              target_location: editForm.targetLocation || u.target_location,
+              target_career_id: editForm.targetCareerId || u.target_career_id,
+              subscription_plan: editForm.subscriptionPlan || u.subscription_plan,
+              budget: editForm.budget ? Number(editForm.budget) : u.budget,
+              annual_income: editForm.annualIncome ? Number(editForm.annualIncome) : u.annual_income,
+              current_savings: editForm.currentSavings ? Number(editForm.currentSavings) : u.current_savings,
+            }
+          : u
+      ));
+      setEditUser(null);
+      setEditForm(null);
+    } catch (err: any) {
+      setUserActionError(err.message ?? "Failed to update user.");
+    } finally {
+      setSavingUser(false);
+    }
+  }
+
+  async function handleDeleteUser(id: number) {
+    setDeletingUserId(id);
+    setUserActionError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/users/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setUsers(prev => prev.filter(u => u.id !== id));
+      setConfirmDeleteUserId(null);
+      if (expandedId === id) setExpandedId(null);
+    } catch (err: any) {
+      setUserActionError(err.message ?? "Failed to delete user.");
+    } finally {
+      setDeletingUserId(null);
+    }
+  }
+
   // ── Activity breakdown ────────────────────────────────────────────────────
   const careerCounts = users.reduce<Record<string, number>>((acc, u) => {
     const k = u.target_career_id || "Not set";
@@ -247,6 +363,83 @@ export default function AdminDashboard({ adminEmail }: {
         </button>
       </div>
 
+      {/* ── Edit User Modal ── */}
+      {editUser && editForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center">
+                  <Edit2 size={14} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">Edit User</h3>
+                  <p className="text-[10px] text-slate-400">{editUser.email}</p>
+                </div>
+              </div>
+              <button onClick={() => { setEditUser(null); setEditForm(null); setUserActionError(null); }}
+                className="w-8 h-8 rounded-xl bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-600 transition-colors">
+                <X size={14} />
+              </button>
+            </div>
+
+            {userActionError && (
+              <div className="mx-6 mt-4 flex items-center gap-2 bg-rose-900 border border-rose-700 text-rose-200 text-xs px-4 py-2.5 rounded-xl">
+                <AlertCircle size={13} /> {userActionError}
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateUser} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {([
+                  { key: "name",           label: "Full Name",        type: "text",   placeholder: "Jane Doe" },
+                  { key: "age",            label: "Age",              type: "number", placeholder: "25" },
+                  { key: "education",      label: "Education Level",  type: "text",   placeholder: "Bachelor's" },
+                  { key: "country",        label: "Country",          type: "text",   placeholder: "Nigeria" },
+                  { key: "targetLocation", label: "Target Location",  type: "text",   placeholder: "Canada" },
+                  { key: "targetCareerId", label: "Target Career",    type: "text",   placeholder: "ai-engineer" },
+                  { key: "budget",         label: "Budget (USD)",     type: "number", placeholder: "20000" },
+                  { key: "annualIncome",   label: "Annual Income (USD)", type: "number", placeholder: "15000" },
+                  { key: "currentSavings",label: "Current Savings (USD)", type: "number", placeholder: "5000" },
+                ] as { key: keyof UserEditForm; label: string; type: string; placeholder: string }[]).map(f => (
+                  <div key={f.key}>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{f.label}</label>
+                    <input
+                      type={f.type}
+                      value={editForm[f.key]}
+                      onChange={e => setEditForm(prev => prev ? { ...prev, [f.key]: e.target.value } : prev)}
+                      placeholder={f.placeholder}
+                      className="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                ))}
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Subscription Plan</label>
+                  <select value={editForm.subscriptionPlan}
+                    onChange={e => setEditForm(prev => prev ? { ...prev, subscriptionPlan: e.target.value } : prev)}
+                    className="w-full bg-slate-700 border border-slate-600 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    {["free", "basic", "pro", "premium", "enterprise"].map(p => (
+                      <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-2 border-t border-slate-700">
+                <button type="button" onClick={() => { setEditUser(null); setEditForm(null); setUserActionError(null); }}
+                  className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-bold rounded-xl transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" disabled={savingUser}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-xl transition-colors disabled:opacity-60">
+                  {savingUser ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={Users}     label="Total Users"    value={totalUsers}  sub="all-time registrations"  color="bg-indigo-600" />
@@ -256,17 +449,21 @@ export default function AdminDashboard({ adminEmail }: {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-slate-700">
+      <div className="flex gap-1 border-b border-slate-700 overflow-x-auto">
         {([
-          { key: "users",    label: "Users",    icon: <Users size={12} /> },
-          { key: "activity", label: "Activity", icon: <BarChart3 size={12} /> },
-          { key: "feedback", label: "Feedback", icon: <MessageSquare size={12} />, badge: feedbacks.filter(f => f.status === "pending").length },
+          { key: "users",          label: "Users",          icon: <Users size={12} /> },
+          { key: "activity",       label: "Activity",       icon: <BarChart3 size={12} /> },
+          { key: "scholarships",   label: "Scholarships",   icon: <BookOpen size={12} /> },
+          { key: "applications",   label: "Applications",   icon: <FileText size={12} /> },
+          { key: "analytics",      label: "Analytics",      icon: <BarChart3 size={12} /> },
+          { key: "communications", label: "Communications", icon: <Bell size={12} /> },
+          { key: "feedback",       label: "Feedback",       icon: <MessageSquare size={12} />, badge: feedbacks.filter(f => f.status === "pending").length },
         ] as const).map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={cn(
-              "px-4 py-2.5 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors flex items-center gap-1.5",
+              "px-4 py-2.5 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors flex items-center gap-1.5 shrink-0",
               activeTab === tab.key
                 ? "border-indigo-400 text-indigo-300"
                 : "border-transparent text-slate-500 hover:text-slate-200"
@@ -319,8 +516,14 @@ export default function AdminDashboard({ adminEmail }: {
                       <SortIcon k={k} />
                     </button>
                   ))}
-                  <span>Details</span>
+                  <span>Actions</span>
                 </div>
+
+                {userActionError && (
+                  <div className="flex items-center gap-2 bg-rose-900 border border-rose-700 text-rose-200 text-xs px-4 py-2.5">
+                    <AlertCircle size={12} /> {userActionError}
+                  </div>
+                )}
 
                 {filtered.length === 0 && (
                   <div className="px-4 py-8 text-center text-slate-400 text-sm bg-slate-800/50">No users match your search.</div>
@@ -359,13 +562,47 @@ export default function AdminDashboard({ adminEmail }: {
                       <span className="text-slate-400 text-xs flex items-center gap-1">
                         <Calendar size={11} className="shrink-0" /> {fmtDate(u.created_at)}
                       </span>
-                      <button
-                        onClick={() => setExpandedId(expandedId === u.id ? null : u.id)}
-                        className="text-slate-400 hover:text-indigo-300 transition-colors"
-                        aria-label="Expand user"
-                      >
-                        {expandedId === u.id ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => openEdit(u)}
+                          className="p-1.5 rounded-lg bg-slate-700 hover:bg-indigo-700 text-slate-400 hover:text-white transition-colors"
+                          title="Edit user"
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                        {confirmDeleteUserId === u.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleDeleteUser(u.id)}
+                              disabled={deletingUserId === u.id}
+                              className="px-2 py-1 bg-rose-700 hover:bg-rose-600 text-white text-[10px] font-black rounded-lg disabled:opacity-60"
+                            >
+                              {deletingUserId === u.id ? <RefreshCw size={10} className="animate-spin" /> : "Confirm"}
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteUserId(null)}
+                              className="px-2 py-1 bg-slate-700 text-slate-300 text-[10px] font-black rounded-lg"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteUserId(u.id)}
+                            className="p-1.5 rounded-lg bg-slate-700 hover:bg-rose-800/60 text-slate-400 hover:text-rose-300 transition-colors"
+                            title="Delete user"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setExpandedId(expandedId === u.id ? null : u.id)}
+                          className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-400 hover:text-indigo-300 transition-colors"
+                          aria-label="Expand user"
+                        >
+                          {expandedId === u.id ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Expanded row */}
@@ -602,6 +839,26 @@ export default function AdminDashboard({ adminEmail }: {
               </div>
             )}
           </div>
+        )}
+
+        {/* ── SCHOLARSHIPS TAB ── */}
+        {activeTab === "scholarships" && (
+          <ScholarshipManager adminEmail={adminEmail} />
+        )}
+
+        {/* ── APPLICATIONS TAB ── */}
+        {activeTab === "applications" && (
+          <ApplicationManager adminEmail={adminEmail} />
+        )}
+
+        {/* ── ANALYTICS TAB ── */}
+        {activeTab === "analytics" && (
+          <ScholarshipAnalytics />
+        )}
+
+        {/* ── COMMUNICATIONS TAB ── */}
+        {activeTab === "communications" && (
+          <NotificationCenter adminEmail={adminEmail} />
         )}
       </div>
     </div>

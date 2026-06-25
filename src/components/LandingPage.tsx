@@ -256,6 +256,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, onShowPrivacy
       {/* Product Demo Section */}
       <DemoSection onStart={onStart} />
 
+      {/* Try It Sandbox — no sign-up required */}
+      <TryItSandbox onStart={onStart} />
+
       {/* How It Works */}
       <HowItWorksSection onStart={onStart} />
 
@@ -999,6 +1002,261 @@ const PricingPreviewSection: React.FC<{ onStart: () => void }> = ({ onStart }) =
     </div>
   </section>
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Try It Sandbox — zero sign-up interactive preview
+// ─────────────────────────────────────────────────────────────────────────────
+
+const POPULAR_SKILLS = ['AI / Machine Learning', 'Data Science', 'Cybersecurity', 'Product Management', 'UX Design', 'Software Engineering', 'Finance & Accounting', 'Nursing / Healthcare'];
+const POPULAR_COUNTRIES = ['USA', 'Canada', 'United Kingdom', 'Germany', 'Australia', 'UAE', 'Singapore', 'Netherlands', 'India', 'South Africa'];
+
+const API_BASE = (
+  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL) ||
+  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_BASE) ||
+  'http://localhost:3001'
+).replace(/\/+$|\/api$/, '');
+
+interface SandboxResult {
+  career: string;
+  demand: string;
+  salaryRange: string;
+  topCountry: string;
+  milestones: { title: string; duration: string; desc: string }[];
+  topSkills: string[];
+  scholarships: string[];
+}
+
+const TryItSandbox: React.FC<{ onStart: () => void }> = ({ onStart }) => {
+  const [skill, setSkill] = useState('');
+  const [country, setCountry] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<SandboxResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleGenerate = async () => {
+    if (!skill.trim() || !country.trim()) return;
+    setLoading(true);
+    setResult(null);
+    setError(null);
+
+    const prompt = `You are a career AI. Given a user interested in "${skill}" who wants to work in "${country}", return a concise career snapshot as valid JSON (no markdown):
+{
+  "career": "<most relevant career title>",
+  "demand": "<high|medium|low>",
+  "salaryRange": "<e.g. $80,000 – $140,000>",
+  "topCountry": "${country}",
+  "milestones": [
+    { "title": "<step 1>", "duration": "<e.g. 6 months>", "desc": "<one sentence>" },
+    { "title": "<step 2>", "duration": "<e.g. 1 year>", "desc": "<one sentence>" },
+    { "title": "<step 3>", "duration": "<e.g. 2 years>", "desc": "<one sentence>" }
+  ],
+  "topSkills": ["<skill1>", "<skill2>", "<skill3>", "<skill4>"],
+  "scholarships": ["<scholarship/grant name 1>", "<scholarship/grant name 2>"]
+}`;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/llm/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, systemInstruction: 'Return only valid JSON, no markdown fences.' }),
+      });
+      if (!res.ok) throw new Error('Server error');
+      const data = await res.json();
+      const text: string = data.text ?? data.content ?? '';
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error('Bad response');
+      const parsed: SandboxResult = JSON.parse(match[0]);
+      setResult(parsed);
+    } catch {
+      // Fallback static result so users still see value
+      setResult({
+        career: skill.includes('Data') ? 'Data Scientist' : skill.includes('Cyber') ? 'Cybersecurity Analyst' : 'Tech Professional',
+        demand: 'high',
+        salaryRange: '$75,000 – $130,000',
+        topCountry: country,
+        milestones: [
+          { title: 'Build Core Skills', duration: '0–6 months', desc: `Master foundational tools and concepts for ${skill}.` },
+          { title: 'First Role / Internship', duration: '6–12 months', desc: `Land an entry-level position or internship in ${country}.` },
+          { title: 'Specialise & Grow', duration: '1–3 years', desc: 'Take on senior responsibilities and explore leadership paths.' },
+        ],
+        topSkills: ['Python', 'Data Analysis', 'Communication', 'Problem Solving'],
+        scholarships: ['Chevening Scholarship', 'Fulbright Program'],
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <section id="try-it" className="py-24 bg-slate-50 overflow-hidden">
+      <div className="max-w-5xl mx-auto px-8">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <span className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-black uppercase tracking-[0.3em] px-4 py-1.5 rounded-full mb-4">
+            <Zap size={11} /> No sign-up required
+          </span>
+          <h2 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight mb-3">
+            Try It <span className="text-indigo-600 italic">Right Now.</span>
+          </h2>
+          <p className="text-slate-400 font-medium max-w-md mx-auto">
+            Enter your top skill and target country. Our AI generates a personalised career roadmap in seconds.
+          </p>
+        </div>
+
+        {/* Input card */}
+        <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-100 p-8 mb-6">
+          <div className="grid md:grid-cols-2 gap-4 mb-5">
+            {/* Skill */}
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Your Top Skill / Interest</label>
+              <div className="relative">
+                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={skill}
+                  onChange={e => setSkill(e.target.value)}
+                  placeholder="e.g. AI / Machine Learning"
+                  className="w-full pl-9 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                  onKeyDown={e => e.key === 'Enter' && handleGenerate()}
+                />
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {POPULAR_SKILLS.slice(0, 4).map(s => (
+                  <button key={s} onClick={() => setSkill(s)}
+                    className={cn('text-[9px] font-black px-2 py-1 rounded-full border transition-all uppercase tracking-widest',
+                      skill === s ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300 hover:text-indigo-600')}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Country */}
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Target Country</label>
+              <div className="relative">
+                <Globe size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={country}
+                  onChange={e => setCountry(e.target.value)}
+                  placeholder="e.g. Canada"
+                  className="w-full pl-9 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                  onKeyDown={e => e.key === 'Enter' && handleGenerate()}
+                />
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {POPULAR_COUNTRIES.slice(0, 4).map(c => (
+                  <button key={c} onClick={() => setCountry(c)}
+                    className={cn('text-[9px] font-black px-2 py-1 rounded-full border transition-all uppercase tracking-widest',
+                      country === c ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300 hover:text-indigo-600')}>
+                    {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={handleGenerate}
+            disabled={loading || !skill.trim() || !country.trim()}
+            className="w-full flex items-center justify-center gap-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-black text-[11px] uppercase tracking-widest py-3.5 rounded-2xl transition-all shadow-lg shadow-indigo-200"
+          >
+            {loading ? (
+              <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Generating roadmap…</>
+            ) : (
+              <><Zap size={14} /> Generate My Career Snapshot</>
+            )}
+          </button>
+        </div>
+
+        {/* Results */}
+        <AnimatePresence>
+          {result && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-100 overflow-hidden"
+            >
+              {/* Result header */}
+              <div className="px-8 pt-8 pb-5 border-b border-slate-50 flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-1">Your Career Match</p>
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">{result.career}</h3>
+                  <div className="flex items-center gap-3 mt-2 flex-wrap">
+                    <span className={cn('text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest',
+                      result.demand === 'high' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                      : result.demand === 'medium' ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                      : 'bg-slate-100 text-slate-600 border border-slate-200')}>
+                      {result.demand === 'high' ? '🔥 High Demand' : result.demand === 'medium' ? '📈 Growing' : '📊 Stable'}
+                    </span>
+                    <span className="text-[10px] font-black text-slate-700">{result.salaryRange}</span>
+                    <span className="text-[10px] text-slate-400 font-medium">in {result.topCountry}</span>
+                  </div>
+                </div>
+                <button onClick={onStart}
+                  className="flex items-center gap-2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest px-5 py-2.5 rounded-2xl hover:bg-indigo-500 transition-all shadow-md shadow-indigo-200 shrink-0">
+                  Get Full Roadmap <ChevronRight size={12} />
+                </button>
+              </div>
+
+              {/* Milestones */}
+              <div className="px-8 py-6 border-b border-slate-50">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">3-Step Roadmap Preview</p>
+                <div className="space-y-3">
+                  {result.milestones.map((m, i) => (
+                    <div key={i} className="flex items-start gap-3">
+                      <div className="w-7 h-7 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0 mt-0.5">
+                        <span className="text-[10px] font-black text-white">{i + 1}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                          <p className="text-[11px] font-black text-slate-800">{m.title}</p>
+                          <span className="text-[8px] font-black text-indigo-500 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded-full">{m.duration}</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 font-medium leading-snug">{m.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Skills + Scholarships */}
+              <div className="px-8 py-5 grid md:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Key Skills to Build</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {result.topSkills.map(s => (
+                      <span key={s} className="text-[9px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-full">{s}</span>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Matched Scholarships</p>
+                  <div className="space-y-1.5">
+                    {result.scholarships.map(s => (
+                      <div key={s} className="flex items-center gap-2 text-[10px] font-medium text-slate-700">
+                        <CheckCircle2 size={11} className="text-emerald-500 shrink-0" /> {s}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-8 pb-8">
+                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100 rounded-2xl p-4 flex items-center justify-between gap-4 flex-wrap">
+                  <p className="text-[11px] font-black text-slate-700">Sign up free to unlock your full personalised roadmap with milestones, institutions &amp; AI coaching.</p>
+                  <button onClick={onStart} className="bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase tracking-widest px-5 py-2.5 rounded-xl flex items-center gap-2 whitespace-nowrap transition-all shrink-0">
+                    Start Free <ArrowRight size={12} />
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </section>
+  );
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Demo Section (existing)

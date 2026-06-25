@@ -39,7 +39,7 @@ export default function CareerCoachChat({ profile }: { profile?: any }) {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6 flex flex-col h-[calc(100vh-160px)]">
+    <div className="max-w-3xl mx-auto px-4 py-6 flex flex-col" style={{ minHeight: 'min(calc(100vh - 200px), 700px)' }}>
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg">
@@ -57,7 +57,7 @@ export default function CareerCoachChat({ profile }: { profile?: any }) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+      <div className="flex-1 overflow-y-auto space-y-4 pr-1" style={{ maxHeight: 'calc(100vh - 340px)', minHeight: '300px' }}>
         {messages.length === 0 && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-center py-8">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-100 to-indigo-100 flex items-center justify-center mx-auto mb-4">

@@ -9,6 +9,7 @@ import {
   CheckCircle, Share2,
   ArrowRight, Hash, Lock,
   FileText, Plus, X, Loader2, RefreshCw, Sparkles,
+  Trophy, HelpCircle, ThumbsUp, ChevronDown, ChevronUp, Gift,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { UserProfile } from "../types/career";
@@ -24,7 +25,7 @@ import {
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-type NetworkTab = "communities" | "mentorship" | "resume-review" | "referrals" | "companies";
+type NetworkTab = "communities" | "mentorship" | "resume-review" | "referrals" | "companies" | "q-and-a" | "success-wall";
 
 interface CommunityPost {
   id: string;
@@ -1178,6 +1179,8 @@ interface Props { profile: UserProfile }
 const TABS: { id: NetworkTab; label: string; icon: React.ElementType; desc: string }[] = [
   { id: "communities",    label: "Communities",     icon: Hash,          desc: "Industry channels & discussions" },
   { id: "mentorship",     label: "Mentorship",      icon: GraduationCap, desc: "Find & connect with mentors" },
+  { id: "q-and-a",        label: "Q&A",             icon: HelpCircle,    desc: "Ask questions, share answers" },
+  { id: "success-wall",   label: "Success Wall",    icon: Trophy,        desc: "Community wins & UGC stories" },
   { id: "resume-review",  label: "Resume Review",   icon: FileText,      desc: "Peer feedback on your resume" },
   { id: "referrals",      label: "Job Referrals",   icon: Handshake,     desc: "Get referred at target companies" },
   { id: "companies",      label: "Companies",       icon: Building2,     desc: "Research & alumni connections" },
@@ -1189,7 +1192,44 @@ type TabData = {
   "resume-review": ResumeReviewRequest[];
   referrals: ReferralConnection[];
   companies: CompanyProfile[];
+  "q-and-a": QAPost[];
+  "success-wall": SuccessStory[];
 };
+
+// ── Q&A types ──
+interface QAPost {
+  id: string;
+  title: string;
+  body: string;
+  author: string;
+  avatar: string;
+  role: string;
+  tags: string[];
+  votes: number;
+  answers: number;
+  createdAt: string;
+  voted: boolean;
+  answered: boolean;
+  topAnswer?: string;
+  topAnswerAuthor?: string;
+}
+
+// ── Success story types ──
+interface SuccessStory {
+  id: string;
+  author: string;
+  avatar: string;
+  headline: string;
+  story: string;
+  careerBefore: string;
+  careerAfter: string;
+  country: string;
+  timeframe: string;
+  likes: number;
+  liked: boolean;
+  verified: boolean;
+  proGranted: boolean;
+}
 
 const FETCHERS: Record<NetworkTab, (profile: UserProfile) => Promise<any[]>> = {
   communities:     getNetworkCommunities,
@@ -1197,7 +1237,66 @@ const FETCHERS: Record<NetworkTab, (profile: UserProfile) => Promise<any[]>> = {
   "resume-review": getNetworkResumeReviews,
   referrals:       getNetworkReferrals,
   companies:       getNetworkCompanies,
+  "q-and-a":       async (profile) => generateQAContent(profile),
+  "success-wall":  async (profile) => generateSuccessStories(profile),
 };
+
+const API_BASE = (
+  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL) ||
+  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_BASE) ||
+  'http://localhost:3001'
+).replace(/\/+$|\/api$/, '');
+
+async function llmGenerate<T>(prompt: string, fallback: T): Promise<T> {
+  try {
+    const res = await fetch(`${API_BASE}/api/llm/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, systemInstruction: 'Return only valid JSON array, no markdown.' }),
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    const text: string = data.text ?? data.content ?? '';
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error();
+    return JSON.parse(match[0]) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+async function generateQAContent(profile: UserProfile): Promise<QAPost[]> {
+  const career = profile.targetCareerId?.replace(/-/g, ' ') || 'tech';
+  const country = profile.targetLocation || profile.country || 'Global';
+  return llmGenerate<QAPost[]>(
+    `Generate 6 realistic Q&A forum posts from students/job-hunters in the ${career} field targeting ${country}. Each post is JSON: { "id": "q1", "title": "...", "body": "...", "author": "...", "avatar": "🧑", "role": "...", "tags": ["..."], "votes": 12, "answers": 3, "createdAt": "2 hours ago", "voted": false, "answered": false, "topAnswer": "...", "topAnswerAuthor": "..." }`,
+    SEED_QA_POSTS(career, country)
+  );
+}
+
+async function generateSuccessStories(profile: UserProfile): Promise<SuccessStory[]> {
+  const career = profile.targetCareerId?.replace(/-/g, ' ') || 'tech';
+  const country = profile.targetLocation || profile.country || 'Global';
+  return llmGenerate<SuccessStory[]>(
+    `Generate 5 inspiring success stories from real-sounding students who used an AI career platform to land jobs in ${career} in ${country}. JSON: { "id": "s1", "author": "...", "avatar": "🌟", "headline": "...", "story": "...", "careerBefore": "...", "careerAfter": "...", "country": "${country}", "timeframe": "6 months", "likes": 45, "liked": false, "verified": true, "proGranted": false }`,
+    SEED_SUCCESS_STORIES(career, country)
+  );
+}
+
+function SEED_QA_POSTS(career: string, country: string): QAPost[] {
+  return [
+    { id: 'q1', title: `Best way to break into ${career} with no experience?`, body: `I've been self-studying for 6 months and have built 3 portfolio projects. How do I land my first role in ${country}?`, author: 'Alex M.', avatar: '🧑', role: 'Career Changer', tags: [career, 'beginner', 'portfolio'], votes: 34, answers: 7, createdAt: '3 hours ago', voted: false, answered: false, topAnswer: `Start by targeting companies with internship-to-hire pipelines. Your portfolio matters more than your degree for ${career} roles.`, topAnswerAuthor: 'Priya S. · Senior Engineer' },
+    { id: 'q2', title: `Visa process for ${career} jobs in ${country} — where to start?`, body: 'Has anyone successfully applied for a work visa for tech roles? What documents did you prepare first?', author: 'Fatima K.', avatar: '👩', role: 'International Applicant', tags: ['visa', country, 'immigration'], votes: 28, answers: 5, createdAt: '1 day ago', voted: false, answered: false, topAnswer: `First secure a job offer — most ${country} employers will sponsor your visa from there.`, topAnswerAuthor: 'James W. · Immigration Specialist' },
+    { id: 'q3', title: 'How important is a Master\'s degree for salary negotiation?', body: 'Comparing two offers — one from a startup and one from a big tech firm. Does the MSc actually help?', author: 'Chen L.', avatar: '🧑‍💻', role: 'MSc Student', tags: ['salary', 'education', 'negotiation'], votes: 19, answers: 4, createdAt: '2 days ago', voted: false, answered: false, topAnswer: 'In big tech, an MSc typically adds 15–25% to your starting offer. In startups it matters less than your portfolio.', topAnswerAuthor: 'Rachel T. · Tech Recruiter' },
+  ];
+}
+
+function SEED_SUCCESS_STORIES(career: string, country: string): SuccessStory[] {
+  return [
+    { id: 's1', author: 'Amara O.', avatar: '🌟', headline: `Landed a ${career} role in ${country} in under 4 months!`, story: `I started with CareerVision AI knowing nothing about ${country}\'s job market. The AI roadmap showed me exactly which certifications mattered, and the scholarship matching found me $8,000 in funding I didn't know existed. I'm now working at a top firm in ${country}.`, careerBefore: 'Customer Support Agent', careerAfter: `${career} Specialist`, country, timeframe: '4 months', likes: 142, liked: false, verified: true, proGranted: true },
+    { id: 's2', author: 'Daniel R.', avatar: '🏆', headline: 'From dropout to Software Engineer — my CareerVision story', story: 'I dropped out at 19 with no degree and no connections. The skill gap analysis showed me exactly what I was missing. 8 months of focused upskilling later, I have an offer letter.', careerBefore: 'Retail Associate', careerAfter: 'Junior Software Engineer', country, timeframe: '8 months', likes: 98, liked: false, verified: true, proGranted: false },
+  ];
+}
 
 const NetworkView: React.FC<Props> = ({ profile }) => {
   const [activeTab, setActiveTab] = useState<NetworkTab>("communities");
@@ -1312,6 +1411,8 @@ const NetworkView: React.FC<Props> = ({ profile }) => {
             <>
               {activeTab === "communities"   && <CommunitiesTab   initialData={data.communities   ?? []} />}
               {activeTab === "mentorship"    && <MentorshipTab    initialData={data.mentorship    ?? []} />}
+              {activeTab === "q-and-a"       && <QAndATab         initialData={(data as any)["q-and-a"] ?? []} profile={profile} />}
+              {activeTab === "success-wall"  && <SuccessWallTab   initialData={(data as any)["success-wall"] ?? []} profile={profile} />}
               {activeTab === "resume-review" && <ResumeReviewTab  initialData={data["resume-review"] ?? []} />}
               {activeTab === "referrals"     && <ReferralsTab     initialData={data.referrals     ?? []} />}
               {activeTab === "companies"     && <CompaniesTab     initialData={data.companies     ?? []} profile={profile} />}
@@ -1322,5 +1423,321 @@ const NetworkView: React.FC<Props> = ({ profile }) => {
     </div>
   );
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Q&A Tab
+// ─────────────────────────────────────────────────────────────────────────────
+const QAndATab: React.FC<{ initialData: QAPost[]; profile: UserProfile }> = ({ initialData, profile }) => {
+  const [posts, setPosts] = useState<QAPost[]>(initialData);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showAskModal, setShowAskModal] = useState(false);
+  const [newQuestion, setNewQuestion] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleVote = (id: string) => {
+    setPosts(prev => prev.map(p => p.id === id ? { ...p, votes: p.voted ? p.votes - 1 : p.votes + 1, voted: !p.voted } : p));
+  };
+
+  const handleAsk = async () => {
+    if (!newQuestion.trim()) return;
+    setSubmitting(true);
+    await new Promise(r => setTimeout(r, 600));
+    const newPost: QAPost = {
+      id: `q${Date.now()}`,
+      title: newQuestion,
+      body: '',
+      author: profile.name.split(' ')[0],
+      avatar: '🙋',
+      role: profile.targetCareerId?.replace(/-/g, ' ') || 'Explorer',
+      tags: [profile.targetCareerId || 'career'],
+      votes: 0,
+      answers: 0,
+      createdAt: 'just now',
+      voted: false,
+      answered: false,
+    };
+    setPosts(prev => [newPost, ...prev]);
+    setNewQuestion('');
+    setShowAskModal(false);
+    setSubmitting(false);
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-slate-500 font-medium">Community Q&amp;A — ask anything about careers, visas, or study abroad.</p>
+        <button
+          onClick={() => setShowAskModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black uppercase tracking-widest rounded-2xl transition-all shadow-md shadow-indigo-200"
+        >
+          <Plus size={13} /> Ask Question
+        </button>
+      </div>
+
+      {/* Ask modal */}
+      <AnimatePresence>
+        {showAskModal && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="bg-white border border-indigo-100 rounded-[2rem] p-5 shadow-xl shadow-indigo-100"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-black text-slate-700 uppercase tracking-widest">Your Question</p>
+              <button onClick={() => setShowAskModal(false)} className="text-slate-400 hover:text-slate-700 transition-colors"><X size={14} /></button>
+            </div>
+            <textarea
+              value={newQuestion}
+              onChange={e => setNewQuestion(e.target.value)}
+              placeholder="What's your career question? Be specific for better answers…"
+              rows={3}
+              className="w-full text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 placeholder-slate-400 mb-3"
+            />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowAskModal(false)} className="px-4 py-2 text-xs font-bold text-slate-500 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">Cancel</button>
+              <button onClick={handleAsk} disabled={submitting || !newQuestion.trim()}
+                className="flex items-center gap-2 px-4 py-2 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl transition-all disabled:opacity-50">
+                {submitting ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                Post Question
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Posts */}
+      {posts.length === 0 && (
+        <div className="text-center py-16 text-slate-400">
+          <HelpCircle size={32} className="mx-auto mb-3 opacity-30" />
+          <p className="text-sm font-medium">No questions yet. Be the first to ask!</p>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {posts.map(post => (
+          <div key={post.id} className="bg-white border border-slate-100 rounded-[2rem] overflow-hidden hover:border-indigo-100 transition-colors">
+            <div className="p-5">
+              <div className="flex items-start gap-3">
+                {/* Vote */}
+                <div className="flex flex-col items-center gap-1 shrink-0 min-w-[36px]">
+                  <button onClick={() => handleVote(post.id)} className={cn('p-1 rounded-lg transition-colors', post.voted ? 'text-indigo-600 bg-indigo-50' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50')}>
+                    <ChevronUp size={14} />
+                  </button>
+                  <span className={cn('text-[11px] font-black leading-none', post.voted ? 'text-indigo-600' : 'text-slate-500')}>{post.votes}</span>
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <button className="text-left w-full" onClick={() => setExpandedId(expandedId === post.id ? null : post.id)}>
+                    <p className="text-sm font-black text-slate-800 leading-snug hover:text-indigo-600 transition-colors">{post.title}</p>
+                  </button>
+
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <span className="text-[9px] font-bold text-slate-400">{post.avatar} {post.author} · {post.role}</span>
+                    <span className="text-[9px] text-slate-300">·</span>
+                    <span className="text-[9px] text-slate-400 flex items-center gap-0.5"><Clock size={8} /> {post.createdAt}</span>
+                    <span className="text-[9px] text-slate-400 flex items-center gap-0.5"><Reply size={8} /> {post.answers} answers</span>
+                    {post.tags.slice(0, 2).map(t => (
+                      <span key={t} className="text-[8px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">#{t}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <AnimatePresence>
+                {expandedId === post.id && post.topAnswer && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-4 pl-9 border-l-2 border-indigo-100 ml-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <BadgeCheck size={12} className="text-indigo-500" />
+                        <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Top Answer · {post.topAnswerAuthor}</span>
+                      </div>
+                      <p className="text-xs text-slate-600 font-medium leading-relaxed">{post.topAnswer}</p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Success Wall Tab + UGC Campaign
+// ─────────────────────────────────────────────────────────────────────────────
+const SuccessWallTab: React.FC<{ initialData: SuccessStory[]; profile: UserProfile }> = ({ initialData, profile }) => {
+  const [stories, setStories] = useState<SuccessStory[]>(initialData);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareForm, setShareForm] = useState({ headline: '', story: '', careerBefore: '', careerAfter: '', timeframe: '' });
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleLike = (id: string) => {
+    setStories(prev => prev.map(s => s.id === id ? { ...s, likes: s.liked ? s.likes - 1 : s.likes + 1, liked: !s.liked } : s));
+  };
+
+  const handleSubmitStory = async () => {
+    if (!shareForm.headline.trim() || !shareForm.story.trim()) return;
+    setSubmitting(true);
+    await new Promise(r => setTimeout(r, 800));
+    const newStory: SuccessStory = {
+      id: `s${Date.now()}`,
+      author: profile.name.split(' ')[0],
+      avatar: '🌟',
+      headline: shareForm.headline,
+      story: shareForm.story,
+      careerBefore: shareForm.careerBefore,
+      careerAfter: shareForm.careerAfter,
+      country: profile.targetLocation || profile.country || '',
+      timeframe: shareForm.timeframe || '6 months',
+      likes: 0,
+      liked: false,
+      verified: false,
+      proGranted: false,
+    };
+    setStories(prev => [newStory, ...prev]);
+    setShareForm({ headline: '', story: '', careerBefore: '', careerAfter: '', timeframe: '' });
+    setShowShareModal(false);
+    setSubmitted(true);
+    setSubmitting(false);
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* UGC Campaign Banner */}
+      <div className="rounded-[2rem] p-5 flex items-start gap-4 overflow-hidden relative" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)' }}>
+        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ background: 'radial-gradient(circle at 80% 50%, white, transparent 60%)' }} />
+        <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
+          <Gift size={18} className="text-white" />
+        </div>
+        <div className="flex-1 min-w-0 relative z-10">
+          <p className="text-[10px] font-black text-white/70 uppercase tracking-widest mb-0.5">🎁 UGC Campaign — Limited Time</p>
+          <p className="text-sm font-black text-white leading-tight mb-1">Share your success story and get 1 month Pro free</p>
+          <p className="text-[10px] text-white/70 font-medium">Verified, detailed success stories earn you a free Pro upgrade. Help inspire 50,000+ students!</p>
+        </div>
+        <button
+          onClick={() => setShowShareModal(true)}
+          className="shrink-0 px-4 py-2 bg-white text-violet-700 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-50 transition-colors whitespace-nowrap"
+        >
+          Share Story
+        </button>
+      </div>
+
+      {submitted && (
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-3 text-sm font-medium text-emerald-700">
+          <CheckCircle size={16} className="text-emerald-500 shrink-0" />
+          Your story has been submitted for verification. Pro access will be granted within 24 hours if approved.
+        </motion.div>
+      )}
+
+      {/* Share Modal */}
+      <AnimatePresence>
+        {showShareModal && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            className="bg-white border border-violet-100 rounded-[2rem] p-6 shadow-xl shadow-violet-50"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Trophy size={16} className="text-violet-600" />
+                <p className="text-sm font-black text-slate-800">Share Your Success Story</p>
+              </div>
+              <button onClick={() => setShowShareModal(false)}><X size={14} className="text-slate-400" /></button>
+            </div>
+            <div className="space-y-3">
+              {[
+                { key: 'headline', label: 'Headline', placeholder: 'e.g. "Landed my dream job in Canada in 6 months!"', multiline: false },
+                { key: 'careerBefore', label: 'Career Before', placeholder: 'e.g. "Retail Associate"', multiline: false },
+                { key: 'careerAfter', label: 'Career After', placeholder: 'e.g. "Software Engineer at Google"', multiline: false },
+                { key: 'timeframe', label: 'Timeframe', placeholder: 'e.g. "6 months"', multiline: false },
+                { key: 'story', label: 'Your Story', placeholder: 'Tell the community how you got there…', multiline: true },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{f.label}</label>
+                  {f.multiline ? (
+                    <textarea
+                      value={(shareForm as any)[f.key]}
+                      onChange={e => setShareForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                      placeholder={f.placeholder}
+                      rows={3}
+                      className="w-full text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-violet-400 placeholder-slate-400"
+                    />
+                  ) : (
+                    <input
+                      value={(shareForm as any)[f.key]}
+                      onChange={e => setShareForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                      placeholder={f.placeholder}
+                      className="w-full text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-violet-400 placeholder-slate-400"
+                    />
+                  )}
+                </div>
+              ))}
+              <div className="flex justify-end gap-2 pt-2">
+                <button onClick={() => setShowShareModal(false)} className="px-4 py-2 text-xs font-bold text-slate-500 bg-slate-100 rounded-xl">Cancel</button>
+                <button onClick={handleSubmitStory} disabled={submitting || !shareForm.headline.trim() || !shareForm.story.trim()}
+                  className="flex items-center gap-2 px-5 py-2 text-xs font-black text-white rounded-xl transition-all disabled:opacity-50"
+                  style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)' }}>
+                  {submitting ? <Loader2 size={12} className="animate-spin" /> : <Trophy size={12} />}
+                  Submit Story
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Stories */}
+      <div className="space-y-4">
+        {stories.map(story => (
+          <div key={story.id} className="bg-white border border-slate-100 rounded-[2rem] p-6 hover:border-violet-100 transition-colors">
+            <div className="flex items-start justify-between gap-4 mb-3">
+              <div className="flex items-start gap-3 flex-1 min-w-0">
+                <span className="text-2xl leading-none shrink-0 mt-0.5">{story.avatar}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                    <p className="text-sm font-black text-slate-800">{story.author}</p>
+                    {story.verified && (
+                      <span className="flex items-center gap-1 text-[8px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full uppercase tracking-widest">
+                        <BadgeCheck size={8} /> Verified
+                      </span>
+                    )}
+                    {story.proGranted && (
+                      <span className="text-[8px] font-black text-violet-600 bg-violet-50 border border-violet-200 px-1.5 py-0.5 rounded-full uppercase tracking-widest">
+                        ✦ Pro Granted
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[9px] text-slate-400 font-medium">{story.careerBefore} → {story.careerAfter} · {story.country} · {story.timeframe}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleLike(story.id)}
+                className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black transition-all border shrink-0', story.liked ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-white text-slate-400 border-slate-200 hover:border-rose-200 hover:text-rose-500')}
+              >
+                <Heart size={11} fill={story.liked ? 'currentColor' : 'none'} /> {story.likes}
+              </button>
+            </div>
+            <p className="text-[11px] font-black text-violet-700 mb-2">"{story.headline}"</p>
+            <p className="text-sm text-slate-600 leading-relaxed">{story.story}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default NetworkView;

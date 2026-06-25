@@ -12,6 +12,7 @@ import {
   CareerDirectoryEntry,
   CareerDirectoryResult,
 } from '../services/geminiService';
+import WhyThisMatch from './WhyThisMatch';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const GROWTH_COLOR: Record<string, string> = {
@@ -143,11 +144,17 @@ const EntryCard: React.FC<EntryCardProps> = ({ entry, rank, onSelect }) => (
       </span>
     </div>
 
-    {/* Match reason */}
+    {/* Match reason — Explainable AI badge */}
     {entry.matchReason && (
-      <p className="text-[9px] text-slate-400 italic mt-2 leading-relaxed line-clamp-2">
-        "{entry.matchReason}"
-      </p>
+      <div className="mt-2">
+        <WhyThisMatch
+          explanation={entry.matchReason}
+          score={entry.matchScore}
+          profileSignals={entry.tags?.slice(0, 3) ?? []}
+          label="Why this career match?"
+          accentColor={entry.matchScore >= 80 ? '#6366f1' : entry.matchScore >= 60 ? '#f59e0b' : '#94a3b8'}
+        />
+      </div>
     )}
   </motion.button>
 );
@@ -206,7 +213,13 @@ const DetailDrawer: React.FC<DetailDrawerProps> = ({ entry, onClose }) => (
           />
         </div>
         {entry.matchReason && (
-          <p className="text-[10px] text-indigo-700/70 italic leading-relaxed">"{entry.matchReason}"</p>
+          <WhyThisMatch
+            explanation={entry.matchReason}
+            score={entry.matchScore}
+            profileSignals={entry.topSkills?.slice(0, 3) ?? entry.tags?.slice(0, 3) ?? []}
+            label="Why Spark.E recommends this"
+            defaultOpen
+          />
         )}
       </div>
 

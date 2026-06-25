@@ -64,7 +64,8 @@ import {
   Building2,
   Bell,
   CalendarDays,
-  GraduationCap
+  GraduationCap,
+  GitBranch
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle } from 'react-leaflet';
@@ -96,7 +97,12 @@ import {
   BarChart,
   Bar,
   Legend,
-  Tooltip as RechartsTooltip
+  Tooltip as RechartsTooltip,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  Radar,
+  ResponsiveContainer as RC2,
 } from 'recharts';
 import { cn } from './lib/utils';
 // mock data removed — all data is loaded from the AI/backend
@@ -131,6 +137,10 @@ import SalaryNegotiationCoach from './components/SalaryNegotiationCoach';
 import SideHustleAdvisor from './components/SideHustleAdvisor';
 import BurnoutPrevention from './components/BurnoutPrevention';
 import AdminDashboard from './components/AdminDashboard';
+import CareerDigitalTwin from './components/CareerDigitalTwin';
+import CoachingHub from './components/CoachingHub';
+import WhyThisMatch from './components/WhyThisMatch';
+import ImpactLab from './components/ImpactLab';
 import { trackView } from './services/analyticsService';
 import { prefetchVariants } from './lib/abTesting';
 import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
@@ -1766,6 +1776,7 @@ const ScholarshipAutoMatchWidget = ({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<'All' | 'Merit' | 'Need' | 'Interest'>('All');
 
   const toggleTier = (t: ScholarshipTier) =>
     setOpenTiers(prev => { const s = new Set(prev); s.has(t) ? s.delete(t) : s.add(t); return s; });
@@ -1807,6 +1818,12 @@ const ScholarshipAutoMatchWidget = ({
 
   const totalCount = Object.values(tieredMatches).reduce((s, arr) => s + arr.length, 0);
 
+  // Total potential funding from matches with score >= 40
+  const totalPotential = Object.values(tieredMatches)
+    .flat()
+    .filter(m => (m.matchScore ?? m.localScore) >= 40)
+    .reduce((sum, m) => sum + m.amount, 0);
+
   return (
     <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
       {/* ── Widget header ── */}
@@ -1832,6 +1849,43 @@ const ScholarshipAutoMatchWidget = ({
         </button>
       </div>
 
+      {/* ── Potential funding meter ── */}
+      {!loading && totalPotential > 0 && (
+        <div className="mx-4 mb-3 flex items-center gap-3 rounded-2xl px-4 py-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100">
+          <div className="w-8 h-8 rounded-xl bg-emerald-500 flex items-center justify-center shrink-0">
+            <DollarSign size={14} className="text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Potential Funding Unlocked</p>
+            <p className="text-base font-black text-emerald-700 leading-tight">${totalPotential.toLocaleString()}</p>
+          </div>
+          <span className="text-[8px] font-black text-emerald-600 bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-lg uppercase tracking-widest shrink-0">This month</span>
+        </div>
+      )}
+
+      {/* ── Category filter pills ── */}
+      <div className="px-4 pb-3 flex gap-1.5 flex-wrap">
+        {(['All', 'Merit', 'Need', 'Interest'] as const).map(cat => (
+          <button
+            key={cat}
+            onClick={() => setCategoryFilter(cat)}
+            className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border transition-all ${
+              categoryFilter === cat
+                ? cat === 'Merit' ? 'bg-blue-600 text-white border-blue-700'
+                  : cat === 'Need' ? 'bg-amber-600 text-white border-amber-700'
+                  : cat === 'Interest' ? 'bg-violet-600 text-white border-violet-700'
+                  : 'bg-indigo-600 text-white border-indigo-700'
+                : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            {cat === 'All' ? `All (${totalCount})` :
+             cat === 'Merit' ? '🎓 Merit' :
+             cat === 'Need' ? '💰 Need-Based' :
+             '✨ Interest'}
+          </button>
+        ))}
+      </div>
+
       {/* ── Three tier sections ── */}
       <div className="px-4 pb-5 space-y-3">
         {loading ? (
@@ -1840,7 +1894,9 @@ const ScholarshipAutoMatchWidget = ({
           (['Merit', 'Need', 'Interest'] as ScholarshipTier[]).map(tier => {
             const cfg = TIER_CONFIG[tier];
             const TierIcon = TIER_ICONS[tier];
-            const opps = tieredMatches[tier].slice(0, 2);
+            const opps = tieredMatches[tier]
+              .filter(m => categoryFilter === 'All' || m.category === categoryFilter)
+              .slice(0, 3);
             const isOpen = openTiers.has(tier);
             const topSignals = opps[0]?.profileSignals ?? [];
 
@@ -1926,11 +1982,30 @@ const ScholarshipAutoMatchWidget = ({
 
                                 {/* Info */}
                                 <div className="flex-1 min-w-0">
-                                  {idx === 0 && (
-                                    <span className={`text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${cfg.badgeClass} inline-block mb-0.5`}>
-                                      Best Match
-                                    </span>
-                                  )}
+                                  {/* Smart badges */}
+                                  {(() => {
+                                    const score = opp.matchScore ?? opp.localScore;
+                                    const daysLeft = Math.ceil((new Date(opp.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                                    return (
+                                      <div className="flex flex-wrap gap-1 mb-1">
+                                        {idx === 0 && (
+                                          <span className={`text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${cfg.badgeClass}`}>
+                                            Best Match
+                                          </span>
+                                        )}
+                                        {score >= 80 && (
+                                          <span className="text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                            ✓ Auto-Match · High Fit
+                                          </span>
+                                        )}
+                                        {daysLeft >= 0 && daysLeft <= 30 && (
+                                          <span className="text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-200 flex items-center gap-0.5">
+                                            ⏰ {daysLeft}d left
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
                                   <p className="text-[11px] font-black text-slate-800 leading-tight truncate">{opp.name}</p>
                                   <p className="text-[8px] text-slate-400 font-medium truncate">{opp.provider}</p>
                                 </div>
@@ -1977,11 +2052,16 @@ const ScholarshipAutoMatchWidget = ({
                                         ))}
                                       </div>
 
-                                      {/* AI reasoning */}
+                                      {/* AI Reasoning — Explainable AI */}
                                       {opp.matchReasoning && (
-                                        <p className="text-[9px] text-slate-500 italic leading-snug border-l-2 pl-2" style={{ borderColor: cfg.ringColor }}>
-                                          "{opp.matchReasoning}"
-                                        </p>
+                                        <WhyThisMatch
+                                          explanation={opp.matchReasoning}
+                                          score={opp.matchScore ?? opp.localScore}
+                                          profileSignals={opp.profileSignals ?? []}
+                                          scoreBreakdown={opp.breakdown?.map((b: any) => ({ label: b.label, points: b.points, max: b.max }))}
+                                          label="Why Spark.E matched this"
+                                          accentColor={cfg.ringColor}
+                                        />
                                       )}
 
                                       {/* Deadline + Actions */}
@@ -2116,13 +2196,235 @@ const ScholarshipAlertBanner = ({
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Skill Gap Radar Card — visualizes current skills vs. target role requirements
+// ─────────────────────────────────────────────────────────────────────────────
 
-const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading, onInitInterview, onAiCareerSearch, isAiCareerLoading, aiCareerSearchMessage, onNavigate, dashboardIntel, isDashboardIntelLoading, onResetToGlobal, onNavigateToScholarship }: { profile: UserProfile, onSelectPath: (id: string) => void, onSelectByTitle: (title: string) => void, careers: CareerPath[], isLoading: boolean, onInitInterview: (role: string, company?: string) => void, onAiCareerSearch: (query: string) => Promise<void>, isAiCareerLoading: boolean, aiCareerSearchMessage: string, onNavigate: (view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'resume' | 'interview') => void, dashboardIntel: DashboardIntelligence | null, isDashboardIntelLoading: boolean, onResetToGlobal: () => Promise<void>, onNavigateToScholarship: (id: string) => void }) => {
+const SkillGapRadarCard: React.FC<{
+  skillGap: CareerSkillGap[];
+  loading: boolean;
+  careerTitle: string;
+}> = ({ skillGap, loading, careerTitle }) => {
+  const radarData = skillGap.slice(0, 7).map(s => ({
+    skill: s.skill.length > 12 ? s.skill.slice(0, 12) + '…' : s.skill,
+    Required: s.demand,
+    Current: s.owned ? Math.min(s.demand, 90) : Math.max(10, s.demand * 0.25),
+  }));
+
+  const owned = skillGap.filter(s => s.owned).length;
+  const total = skillGap.length;
+  const pct = total > 0 ? Math.round((owned / total) * 100) : 0;
+
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Skill Gap Analysis</p>
+          <p className="text-sm font-black text-slate-800 leading-tight mt-0.5 truncate">{careerTitle || 'Your Target Role'}</p>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${pct >= 70 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : pct >= 40 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+            {pct}% Match
+          </span>
+          <span className="text-[8px] text-slate-400 font-medium">{owned}/{total} skills owned</span>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="h-44 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-8 h-8 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+            <p className="text-[9px] text-slate-400 font-medium">Analysing skills…</p>
+          </div>
+        </div>
+      ) : radarData.length === 0 ? (
+        <div className="h-44 flex items-center justify-center">
+          <p className="text-[10px] text-slate-400 font-medium text-center">Select a career path to see your skill gap</p>
+        </div>
+      ) : (
+        <>
+          <RC2 width="100%" height={180}>
+            <RadarChart data={radarData} outerRadius={65}>
+              <PolarGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+              <PolarAngleAxis dataKey="skill" tick={{ fontSize: 7, fontWeight: 700, fill: '#64748b', fontFamily: 'inherit' }} />
+              <Radar name="Required" dataKey="Required" stroke="#6366f1" fill="#6366f1" fillOpacity={0.12} strokeWidth={1.5} />
+              <Radar name="Current" dataKey="Current" stroke="#10b981" fill="#10b981" fillOpacity={0.25} strokeWidth={2} dot={{ r: 3, fill: '#10b981' }} />
+            </RadarChart>
+          </RC2>
+          <div className="flex items-center justify-center gap-4 mt-1">
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-1.5 rounded-full bg-indigo-500/30 border border-indigo-500" />
+              <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Required</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-1.5 rounded-full bg-emerald-500/40 border border-emerald-500" />
+              <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Your Level</span>
+            </div>
+          </div>
+          {/* Gap pills */}
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {skillGap.filter(s => !s.owned).slice(0, 4).map(s => (
+              <span key={s.skill} className="text-[8px] font-black px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100">
+                ↑ {s.skill}
+              </span>
+            ))}
+            {skillGap.filter(s => s.owned).slice(0, 3).map(s => (
+              <span key={s.skill} className="text-[8px] font-black px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                ✓ {s.skill}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// My Market Card — localized insights for user's target country
+// ─────────────────────────────────────────────────────────────────────────────
+
+function detectUserRegion(): string {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const lang = navigator.language || '';
+    if (tz.startsWith('America/')) {
+      if (lang.startsWith('pt')) return 'Brazil';
+      if (tz.includes('Toronto') || tz.includes('Vancouver') || tz.includes('Halifax')) return 'Canada';
+      return 'USA';
+    }
+    if (tz.startsWith('Europe/London')) return 'United Kingdom';
+    if (tz.startsWith('Europe/Berlin') || tz.startsWith('Europe/Frankfurt')) return 'Germany';
+    if (tz.startsWith('Europe/Paris')) return 'France';
+    if (tz.startsWith('Asia/Dubai') || tz.startsWith('Asia/Abu_Dhabi')) return 'UAE';
+    if (tz.startsWith('Asia/Singapore')) return 'Singapore';
+    if (tz.startsWith('Asia/Kolkata') || tz.startsWith('Asia/Calcutta')) return 'India';
+    if (tz.startsWith('Australia/')) return 'Australia';
+    if (tz.startsWith('Africa/Lagos') || tz.startsWith('Africa/Abidjan')) return 'Nigeria';
+    if (tz.startsWith('Africa/Johannesburg')) return 'South Africa';
+    if (tz.startsWith('Africa/Nairobi')) return 'Kenya';
+    if (tz.startsWith('America/Sao_Paulo') || tz.startsWith('America/Fortaleza')) return 'Brazil';
+    if (tz.startsWith('Asia/Manila')) return 'Philippines';
+    if (tz.startsWith('Asia/Karachi')) return 'Pakistan';
+    if (tz.startsWith('Asia/Dhaka')) return 'Bangladesh';
+    if (tz.startsWith('Asia/Tehran')) return 'Iran';
+    if (tz.startsWith('Asia/Jakarta')) return 'Indonesia';
+  } catch {}
+  return '';
+}
+
+const MyMarketCard: React.FC<{
+  profile: UserProfile;
+  dashboardIntel: DashboardIntelligence | null;
+  loading: boolean;
+  detectedRegion: string;
+  onSetCountry: (country: string) => void;
+  onNavigate: (view: any) => void;
+}> = ({ profile, dashboardIntel, loading, detectedRegion, onSetCountry, onNavigate }) => {
+  const targetCountry = profile.targetLocation || profile.country || detectedRegion;
+
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+      <div className="px-5 pt-5 pb-3 flex items-start justify-between gap-2">
+        <div>
+          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+            <MapPin size={9} /> My Market
+          </p>
+          <p className="text-sm font-black text-slate-800 mt-0.5 leading-tight">
+            {targetCountry || 'Set Your Target Country'}
+          </p>
+        </div>
+        {!profile.targetLocation && detectedRegion && (
+          <button
+            onClick={() => onSetCountry(detectedRegion)}
+            className="shrink-0 text-[8px] font-black text-indigo-600 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-xl hover:bg-indigo-100 transition-colors uppercase tracking-widest"
+          >
+            Use {detectedRegion}
+          </button>
+        )}
+      </div>
+
+      {!targetCountry ? (
+        <div className="px-5 pb-5">
+          <p className="text-[10px] text-slate-500 font-medium mb-3">Set a target country to see localised salary data, top roles, and market trends.</p>
+          <button onClick={() => onNavigate('heatmap')} className="flex items-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-800 transition-colors">
+            Explore Markets <ChevronRight size={11} />
+          </button>
+        </div>
+      ) : loading ? (
+        <div className="px-5 pb-5 space-y-2">
+          {[1,2,3].map(i => <div key={i} className="h-6 bg-slate-50 rounded-xl animate-pulse" />)}
+        </div>
+      ) : dashboardIntel ? (
+        <div className="px-5 pb-5 space-y-3">
+          {/* Demand indicator */}
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-500 font-medium">Market Demand</span>
+            <span className={`font-black px-2.5 py-0.5 rounded-full text-[9px] uppercase tracking-widest ${
+              dashboardIntel.demandLevel === 'high' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+              : dashboardIntel.demandLevel === 'medium' ? 'bg-amber-100 text-amber-700 border border-amber-200'
+              : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>
+              {dashboardIntel.demandLevel === 'high' ? '🔥 Hot' : dashboardIntel.demandLevel === 'medium' ? '📈 Growing' : '📊 Stable'}
+            </span>
+          </div>
+          {/* Salary */}
+          {dashboardIntel.salaryRange && (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-500 font-medium">Est. Salary</span>
+              <span className="font-black text-slate-800">{dashboardIntel.salaryRange}</span>
+            </div>
+          )}
+          {/* Top skills bar pills */}
+          {Array.isArray(dashboardIntel.topSkillsRequired) && dashboardIntel.topSkillsRequired.length > 0 && (
+            <div>
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Top Skills in Demand</p>
+              <div className="flex flex-wrap gap-1">
+                {dashboardIntel.topSkillsRequired.slice(0, 5).map(s => (
+                  <span key={s} className="text-[8px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">{s}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          <button onClick={() => onNavigate('heatmap')} className="w-full mt-1 py-2 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-700 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1 border border-slate-100 hover:border-indigo-200">
+            Full Market Intelligence <ChevronRight size={10} />
+          </button>
+        </div>
+      ) : (
+        <div className="px-5 pb-5">
+          <button onClick={() => onNavigate('heatmap')} className="w-full py-2 bg-indigo-50 text-indigo-700 rounded-2xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-1">
+            View {targetCountry} Market <ChevronRight size={10} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading, onInitInterview, onAiCareerSearch, isAiCareerLoading, aiCareerSearchMessage, onNavigate, dashboardIntel, isDashboardIntelLoading, onResetToGlobal, onNavigateToScholarship, onUpdateProfile }: { profile: UserProfile, onSelectPath: (id: string) => void, onSelectByTitle: (title: string) => void, careers: CareerPath[], isLoading: boolean, onInitInterview: (role: string, company?: string) => void, onAiCareerSearch: (query: string) => Promise<void>, isAiCareerLoading: boolean, aiCareerSearchMessage: string, onNavigate: (view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'resume' | 'interview') => void, dashboardIntel: DashboardIntelligence | null, isDashboardIntelLoading: boolean, onResetToGlobal: () => Promise<void>, onNavigateToScholarship: (id: string) => void, onUpdateProfile?: (updates: Partial<UserProfile>) => void }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedPath, setExpandedPath] = useState<string | null>(null);
   const [skillGapCache, setSkillGapCache] = useState<Record<string, CareerSkillGap[]>>({});
   const [skillGapLoading, setSkillGapLoading] = useState<Record<string, boolean>>({});
   const [skillGapError, setSkillGapError] = useState<Record<string, boolean>>({});
+
+  // ── Geo-detection ──────────────────────────────────────────────────────────
+  const [detectedRegion] = useState<string>(() => detectUserRegion());
+
+  // ── Dashboard skill gap for primary career ─────────────────────────────────
+  const [dashboardSkillGap, setDashboardSkillGap] = useState<CareerSkillGap[]>([]);
+  const [isDashboardSkillGapLoading, setIsDashboardSkillGapLoading] = useState(false);
+  const primaryCareer = careers.find(c => c.id === (profile.targetCareerId || careers[0]?.id));
+
+  useEffect(() => {
+    if (!primaryCareer) return;
+    setIsDashboardSkillGapLoading(true);
+    getCareerSkillGap(profile, primaryCareer.title)
+      .then(setDashboardSkillGap)
+      .catch(() => {})
+      .finally(() => setIsDashboardSkillGapLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [primaryCareer?.id, profile.targetCareerId]);
 
   // ── Scholarship alert state (new-match notifications) ─────────────────────
   const [scholarshipAlerts, setScholarshipAlerts] = useState<FundingOpportunity[]>([]);
@@ -2807,6 +3109,31 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
           </div>
         </div>
 
+        {/* ── Scholarship funding teaser ── */}
+        {centerTab === 'scholarships' && (() => {
+          const totalPot = FUNDING_OPPORTUNITIES
+            .filter(o => o.type !== 'Loan')
+            .slice(0, 8)
+            .reduce((s, o) => s + o.amount, 0);
+          return totalPot > 0 ? (
+            <div
+              className="flex items-center gap-4 rounded-[2rem] px-5 py-4 cursor-pointer group overflow-hidden relative"
+              style={{ background: 'linear-gradient(135deg, #059669 0%, #0d9488 100%)' }}
+              onClick={() => {}}
+            >
+              <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(circle at 80% 50%, rgba(255,255,255,0.08), transparent 60%)' }} />
+              <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
+                <DollarSign size={18} className="text-white" />
+              </div>
+              <div className="flex-1 min-w-0 relative z-10">
+                <p className="text-[9px] font-black text-white/70 uppercase tracking-widest">You've unlocked potential scholarships worth</p>
+                <p className="text-2xl font-black text-white leading-tight">${totalPot.toLocaleString()}<span className="text-sm text-white/60 ml-1 font-bold">this month</span></p>
+              </div>
+              <ChevronRight size={16} className="text-white/60 shrink-0 group-hover:translate-x-1 transition-transform relative z-10" />
+            </div>
+          ) : null;
+        })()}
+
         {/* ── Center tab switcher ── */}
         <div className="flex items-center gap-1 p-1 rounded-2xl border border-slate-200 bg-slate-50 shadow-sm">
           {([
@@ -3073,6 +3400,23 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
       {/* ── RIGHT SIDEBAR ── */}
       <div className="xl:col-span-3 space-y-5">
 
+        {/* My Market — localized insights */}
+        <MyMarketCard
+          profile={profile}
+          dashboardIntel={dashboardIntel}
+          loading={isDashboardIntelLoading}
+          detectedRegion={detectedRegion}
+          onSetCountry={(country) => onUpdateProfile?.({ targetLocation: country })}
+          onNavigate={onNavigate}
+        />
+
+        {/* Skill Gap Radar */}
+        <SkillGapRadarCard
+          skillGap={dashboardSkillGap}
+          loading={isDashboardSkillGapLoading}
+          careerTitle={primaryCareer?.title || profile.targetCareerId || ''}
+        />
+
         {/* Deadline Countdown Tracker — top of right for immediate visibility */}
         <DeadlineCountdownWidget
           onViewAll={() => onNavigate('expenses')}
@@ -3225,8 +3569,37 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
   );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Text-to-Speech hook
+// ─────────────────────────────────────────────────────────────────────────────
+function useTTS() {
+  const [speaking, setSpeaking] = useState<string | null>(null);
+
+  const speak = (text: string, id: string) => {
+    if (!('speechSynthesis' in window)) return;
+    if (speaking === id) {
+      window.speechSynthesis.cancel();
+      setSpeaking(null);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.rate = 0.95;
+    utt.pitch = 1;
+    utt.onend = () => setSpeaking(null);
+    utt.onerror = () => setSpeaking(null);
+    window.speechSynthesis.speak(utt);
+    setSpeaking(id);
+  };
+
+  const stop = () => { window.speechSynthesis.cancel(); setSpeaking(null); };
+
+  return { speak, stop, speaking };
+}
+
 const RoadmapView = ({ profile, pathId, careers, onNavigate, onInitInterview }: { profile: UserProfile, pathId?: string, careers: CareerPath[], onNavigate: (view: 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap', context?: { search?: string; roadmap?: InstitutionRoadmapContext | null }) => void, onInitInterview: (role: string, company?: string) => void }) => {
   const path = careers.find(p => p.id === pathId) || careers[0];
+  const { speak, speaking } = useTTS();
 
   const [skillGap, setSkillGap] = useState<CareerSkillGap[]>([]);
   const [isSkillGapLoading, setIsSkillGapLoading] = useState(false);
@@ -3459,11 +3832,24 @@ const RoadmapView = ({ profile, pathId, careers, onNavigate, onInitInterview }: 
                           {milestone.title}
                         </h3>
                       </div>
-                      {isDone && (
-                        <span className="shrink-0 text-[7px] font-black uppercase tracking-widest px-2 py-0.5 bg-indigo-600 text-white rounded-full">
-                          Complete
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {/* Listen / TTS button */}
+                        {'speechSynthesis' in window && (
+                          <button
+                            onClick={() => speak(`${milestone.title}. ${milestone.description}`, key)}
+                            title={speaking === key ? 'Stop' : 'Listen to this milestone'}
+                            className={`p-1.5 rounded-lg transition-colors text-[9px] font-black flex items-center gap-1 border ${speaking === key ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'}`}
+                          >
+                            <Headphones size={11} />
+                            {speaking === key ? 'Stop' : 'Listen'}
+                          </button>
+                        )}
+                        {isDone && (
+                          <span className="text-[7px] font-black uppercase tracking-widest px-2 py-0.5 bg-indigo-600 text-white rounded-full">
+                            Complete
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <p className="text-[11px] text-slate-500 leading-relaxed mb-3">{milestone.description}</p>
                     {milestone.requirements?.length > 0 && (
@@ -5938,10 +6324,13 @@ const FundingOpportunitiesView = ({ profile, highlightId, onHighlightConsumed }:
                     </div>
                   )}
 
+                  {/* AI Reasoning — Explainable AI */}
                   {opp.matchReasoning && (
-                    <p className="text-[10px] text-slate-500 italic leading-snug line-clamp-2 px-1">
-                      "{opp.matchReasoning}"
-                    </p>
+                    <WhyThisMatch
+                      explanation={opp.matchReasoning}
+                      score={opp.matchScore}
+                      label="Why Spark.E matched this scholarship"
+                    />
                   )}
                 </div>
 
@@ -6741,6 +7130,314 @@ export default function App() {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// First-login Onboarding Wizard
+// ─────────────────────────────────────────────────────────────────────────────
+const ONBOARDING_EDUCATION_OPTIONS = [
+  'High School', 'Some College', "Associate's Degree", "Bachelor's Degree",
+  "Master's Degree", 'PhD / Doctoral', 'Vocational / Trade', 'Self-Taught',
+];
+
+const ONBOARDING_INTEREST_OPTIONS = [
+  'Technology', 'Artificial Intelligence', 'Data Science', 'Cybersecurity',
+  'Finance', 'Healthcare / Medicine', 'Design / UX', 'Marketing', 'Law',
+  'Education', 'Engineering', 'Entrepreneurship', 'Arts & Media', 'Science',
+];
+
+const ONBOARDING_CAREER_SUGGESTIONS = [
+  'Software Engineer', 'Data Scientist', 'AI Engineer', 'Cybersecurity Analyst',
+  'Product Manager', 'UX Designer', 'Financial Analyst', 'Nurse / Midwife',
+  'Doctor / Physician', 'Marketing Manager', 'Teacher / Educator', 'Lawyer',
+];
+
+interface OnboardingAnswers {
+  education: string;
+  interests: string[];
+  targetCountry: string;
+  targetCareer: string;
+}
+
+const OnboardingWizard: React.FC<{
+  userName: string;
+  onComplete: (answers: OnboardingAnswers) => void;
+}> = ({ userName, onComplete }) => {
+  const [step, setStep] = useState(0);
+  const [answers, setAnswers] = useState<OnboardingAnswers>({
+    education: '', interests: [], targetCountry: '', targetCareer: '',
+  });
+
+  const steps = [
+    {
+      title: 'Your Education Background',
+      subtitle: 'Helps us calibrate your pathway recommendations.',
+      content: (
+        <div className="grid grid-cols-2 gap-2">
+          {ONBOARDING_EDUCATION_OPTIONS.map(opt => (
+            <button
+              key={opt}
+              onClick={() => setAnswers(a => ({ ...a, education: opt }))}
+              className={cn(
+                'text-[11px] font-bold px-3 py-3 rounded-xl border transition-all text-left',
+                answers.education === opt
+                  ? 'bg-indigo-600 text-white border-indigo-700 shadow-md shadow-indigo-200'
+                  : 'bg-white text-slate-700 border-slate-200 hover:border-indigo-300 hover:text-indigo-600',
+              )}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      ),
+      canAdvance: () => !!answers.education,
+    },
+    {
+      title: 'What are your interests?',
+      subtitle: "Pick up to 5 areas you're passionate about.",
+      content: (
+        <div className="flex flex-wrap gap-2">
+          {ONBOARDING_INTEREST_OPTIONS.map(opt => {
+            const selected = answers.interests.includes(opt);
+            return (
+              <button
+                key={opt}
+                onClick={() =>
+                  setAnswers(a => ({
+                    ...a,
+                    interests: selected
+                      ? a.interests.filter(i => i !== opt)
+                      : a.interests.length < 5 ? [...a.interests, opt] : a.interests,
+                  }))
+                }
+                className={cn(
+                  'text-[11px] font-bold px-3 py-2 rounded-full border transition-all',
+                  selected
+                    ? 'bg-indigo-600 text-white border-indigo-700'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600',
+                )}
+              >
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+      ),
+      canAdvance: () => answers.interests.length > 0,
+    },
+    {
+      title: 'Where do you want to work?',
+      subtitle: "We'll tailor visa, salary and market data to this country.",
+      content: (
+        <div className="space-y-4">
+          <input
+            value={answers.targetCountry}
+            onChange={e => setAnswers(a => ({ ...a, targetCountry: e.target.value }))}
+            placeholder="e.g. Canada, Germany, USA…"
+            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
+          <div className="flex flex-wrap gap-2">
+            {['USA', 'Canada', 'United Kingdom', 'Germany', 'Australia', 'UAE', 'Singapore', 'Netherlands'].map(c => (
+              <button key={c} onClick={() => setAnswers(a => ({ ...a, targetCountry: c }))}
+                className={cn('text-[10px] font-black px-2.5 py-1 rounded-full border transition-all uppercase tracking-widest',
+                  answers.targetCountry === c ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300 hover:text-indigo-600')}>
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+      ),
+      canAdvance: () => !!answers.targetCountry.trim(),
+    },
+    {
+      title: "What's your dream career?",
+      subtitle: 'AI will map every milestone you need to get there.',
+      content: (
+        <div className="space-y-4">
+          <input
+            value={answers.targetCareer}
+            onChange={e => setAnswers(a => ({ ...a, targetCareer: e.target.value }))}
+            placeholder="e.g. AI Engineer, Nurse, Lawyer…"
+            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
+          <div className="flex flex-wrap gap-2">
+            {ONBOARDING_CAREER_SUGGESTIONS.map(c => (
+              <button key={c} onClick={() => setAnswers(a => ({ ...a, targetCareer: c }))}
+                className={cn('text-[10px] font-black px-2.5 py-1 rounded-full border transition-all',
+                  answers.targetCareer === c ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300 hover:text-indigo-600')}>
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+      ),
+      canAdvance: () => !!answers.targetCareer.trim(),
+    },
+  ];
+
+  const currentStep = steps[step];
+  const isLast = step === steps.length - 1;
+  const progress = Math.round(((step) / steps.length) * 100);
+
+  return (
+    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden"
+      >
+        {/* Progress bar */}
+        <div className="h-1.5 bg-slate-100">
+          <motion.div
+            className="h-full bg-indigo-600 rounded-full"
+            animate={{ width: `${progress + (100 / steps.length)}%` }}
+            transition={{ duration: 0.4 }}
+          />
+        </div>
+
+        <div className="p-8">
+          {/* Step indicator */}
+          <div className="flex items-center gap-2 mb-6">
+            <div className="flex gap-1.5">
+              {steps.map((_, i) => (
+                <div key={i} className={cn('h-1.5 rounded-full transition-all', i === step ? 'w-6 bg-indigo-600' : i < step ? 'w-3 bg-indigo-200' : 'w-3 bg-slate-200')} />
+              ))}
+            </div>
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-auto">{step + 1} / {steps.length}</span>
+          </div>
+
+          {/* Header */}
+          <div className="mb-6">
+            {step === 0 && (
+              <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1">
+                Welcome, {userName.split(' ')[0]}! Let's personalise your journey.
+              </p>
+            )}
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-tight mb-1">{currentStep.title}</h2>
+            <p className="text-[11px] text-slate-400 font-medium">{currentStep.subtitle}</p>
+          </div>
+
+          {/* Step content */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={step}
+              initial={{ opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -12 }}
+              transition={{ duration: 0.2 }}
+              className="mb-8 max-h-64 overflow-y-auto pr-1"
+            >
+              {currentStep.content}
+            </motion.div>
+          </AnimatePresence>
+
+          {/* Navigation */}
+          <div className="flex items-center gap-3">
+            {step > 0 && (
+              <button
+                onClick={() => setStep(s => s - 1)}
+                className="px-5 py-3 rounded-2xl bg-slate-100 text-slate-600 text-[11px] font-black uppercase tracking-widest hover:bg-slate-200 transition-colors"
+              >
+                Back
+              </button>
+            )}
+            <button
+              onClick={() => isLast ? onComplete(answers) : setStep(s => s + 1)}
+              disabled={!currentStep.canAdvance()}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-[11px] font-black uppercase tracking-widest transition-all shadow-md shadow-indigo-200"
+            >
+              {isLast ? (
+                <><Sparkles size={13} /> Launch My Roadmap</>
+              ) : (
+                <>Continue <ChevronRight size={13} /></>
+              )}
+            </button>
+          </div>
+
+          {step === 0 && (
+            <button
+              onClick={() => onComplete(answers)}
+              className="w-full text-center text-[9px] text-slate-400 font-medium mt-3 hover:text-slate-600 transition-colors"
+            >
+              Skip for now
+            </button>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI Coach Hub — self-contained shell with built-in tab navigation
+// Replaces reliance on the global sub-nav for the AI Coach pillar
+// ─────────────────────────────────────────────────────────────────────────────
+type AICoachView = 'career-coach' | 'interview' | 'resume' | 'job-match' | 'industry-sim' | 'soft-skills' | 'salary-coach';
+
+const AI_COACH_TABS: { id: AICoachView; label: string; icon: React.ElementType; desc: string }[] = [
+  { id: 'career-coach', label: 'AI Coach',       icon: MessageSquare,  desc: 'Spark.E career coach' },
+  { id: 'interview',    label: 'Interview Prep',  icon: Mic,            desc: 'Mock interview simulator' },
+  { id: 'resume',       label: 'Resume',          icon: FileText,       desc: 'Build & score your resume' },
+  { id: 'job-match',    label: 'AI Match',        icon: Zap,            desc: 'Smart job-fit scoring' },
+  { id: 'industry-sim', label: 'Industry Sim',    icon: Building2,      desc: 'Role-play scenarios' },
+  { id: 'soft-skills',  label: 'Soft Skills',     icon: Users,          desc: 'Personality & communication' },
+  { id: 'salary-coach', label: 'Salary Coach',    icon: DollarSign,     desc: 'Negotiation training' },
+];
+
+function AICoachHub({ activeView, onNavigate, profile, userId, isMobile }: {
+  activeView: AICoachView;
+  onNavigate: (view: AICoachView) => void;
+  profile: UserProfile;
+  userId: string;
+  isMobile: boolean;
+}) {
+  const defaultRole = profile.targetCareerId?.replace(/-/g, ' ') || 'Software Engineer';
+
+  return (
+    <div className="flex flex-col gap-0">
+      {/* ── Tab bar (always visible, horizontally scrollable) ── */}
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-slate-200 -mx-4 lg:-mx-10 px-4 lg:px-10 mb-6">
+        <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide py-2">
+          {AI_COACH_TABS.map(tab => {
+            const TabIcon = tab.icon;
+            const isActive = activeView === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => onNavigate(tab.id)}
+                aria-current={isActive ? 'page' : undefined}
+                title={tab.desc}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap shrink-0',
+                  isActive
+                    ? 'bg-purple-600 text-white shadow-sm shadow-purple-200'
+                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                )}
+              >
+                <TabIcon size={12} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Content ── */}
+      <div className="flex-1">
+        {activeView === 'career-coach' && <CareerCoachChat profile={profile} />}
+        {activeView === 'interview' && (
+          isMobile
+            ? <MobileInterviewView userId={userId} defaultRole={defaultRole} />
+            : <InterviewPrepView userId={userId} defaultRole={defaultRole} />
+        )}
+        {activeView === 'resume'       && <ResumeManager profile={profile} userId={userId} />}
+        {activeView === 'job-match'    && <JobMatchView userId={userId} resumeContent={null} />}
+        {activeView === 'industry-sim' && <IndustrySimulator profile={profile} />}
+        {activeView === 'soft-skills'  && <SoftSkillsAssessment profile={profile} />}
+        {activeView === 'salary-coach' && <SalaryNegotiationCoach profile={profile} />}
+      </div>
+    </div>
+  );
+}
+
 function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   const { t } = useTranslation();
   const { language, setLanguage } = useAccessibility();
@@ -6748,31 +7445,39 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   // ── Admin check (used for pillar visibility + admin view) ──────────────────
   const isAdmin = !!(user?.email && import.meta.env.VITE_ADMIN_EMAIL && user.email === import.meta.env.VITE_ADMIN_EMAIL);
 
-  type AppView = 'dashboard' | 'roadmap' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'resume' | 'job-match' | 'interview' | 'directory' | 'network' | 'analytics' | 'pricing' | 'enterprise' | 'career-coach' | 'industry-sim' | 'soft-skills' | 'salary-coach' | 'side-hustle' | 'burnout' | 'admin';
-  const VALID_VIEWS: AppView[] = ['dashboard', 'roadmap', 'institutions', 'materials', 'expenses', 'advisor', 'parent', 'heatmap', 'jobs', 'resume', 'job-match', 'interview', 'directory', 'network', 'analytics', 'pricing', 'enterprise', 'career-coach', 'industry-sim', 'soft-skills', 'salary-coach', 'side-hustle', 'burnout', 'admin'];
+  // ── First-login onboarding wizard ──────────────────────────────────────────
+  const onboardingKey = `cv_onboarded_v2_${user?.uid || user?.id || user?.email}`;
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
+    if (isAdmin) return false; // Admins skip onboarding
+    try { return !localStorage.getItem(onboardingKey); } catch { return false; }
+  });
+
+  type AppView = 'dashboard' | 'roadmap' | 'digital-twin' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'resume' | 'job-match' | 'interview' | 'directory' | 'network' | 'coaching-hub' | 'impact-lab' | 'analytics' | 'pricing' | 'enterprise' | 'career-coach' | 'industry-sim' | 'soft-skills' | 'salary-coach' | 'side-hustle' | 'burnout' | 'admin';
+  const VALID_VIEWS: AppView[] = ['dashboard', 'roadmap', 'digital-twin', 'institutions', 'materials', 'expenses', 'advisor', 'parent', 'heatmap', 'jobs', 'resume', 'job-match', 'interview', 'directory', 'network', 'coaching-hub', 'impact-lab', 'analytics', 'pricing', 'enterprise', 'career-coach', 'industry-sim', 'soft-skills', 'salary-coach', 'side-hustle', 'burnout', 'admin'];
   // ── Pillar Definitions ──
   type PillarSub = { label: string; view: AppView; icon: React.ElementType; desc: string };
   type Pillar = { id: string; label: string; icon: React.ElementType; primaryView: AppView; views: AppView[]; accent: { bg: string; text: string }; subs: PillarSub[] };
   const PILLAR_DEFS: Pillar[] = [
     { id: 'dashboard', label: t('pillars.dashboard'), icon: LayoutDashboard, primaryView: 'dashboard', views: ['dashboard'], accent: { bg: 'bg-slate-950', text: 'text-white' }, subs: [] },
     {
-      id: 'explore', label: t('pillars.explore'), icon: Layers, primaryView: 'roadmap', views: ['roadmap', 'institutions', 'materials', 'directory'],
+      id: 'explore', label: t('pillars.explore'), icon: Layers, primaryView: 'roadmap', views: ['roadmap', 'digital-twin', 'institutions', 'materials', 'directory'],
       accent: { bg: 'bg-violet-600', text: 'text-white' },
       subs: [
-        { label: t('pillars.subs.careerMaps'),  view: 'roadmap',      icon: Map,      desc: 'Visual nodes & trajectory mapping' },
-        { label: t('pillars.subs.institutions'), view: 'institutions', icon: School,   desc: 'Global universities & bootcamps' },
-        { label: t('pillars.subs.academy'),      view: 'materials',    icon: BookOpen, desc: 'Study materials & guides' },
-        { label: t('pillars.subs.directory'),    view: 'directory',    icon: Layers,   desc: 'Browse careers by your target location' },
+        { label: t('pillars.subs.careerMaps'),  view: 'roadmap',        icon: Map,         desc: 'Visual nodes & trajectory mapping' },
+        { label: 'Digital Twin',                view: 'digital-twin',   icon: GitBranch,   desc: 'Simulate career what-if scenarios' },
+        { label: t('pillars.subs.institutions'), view: 'institutions',  icon: School,      desc: 'Global universities & bootcamps' },
+        { label: t('pillars.subs.academy'),      view: 'materials',     icon: BookOpen,    desc: 'Study materials & guides' },
+        { label: t('pillars.subs.directory'),    view: 'directory',     icon: Layers,      desc: 'Browse careers by your target location' },
       ],
     },
     {
-      id: 'ai-coach', label: t('pillars.aiCoach'), icon: BrainCircuit, primaryView: 'interview', views: ['interview', 'resume', 'job-match', 'career-coach', 'industry-sim', 'soft-skills', 'salary-coach'],
+      id: 'ai-coach', label: t('pillars.aiCoach'), icon: BrainCircuit, primaryView: 'career-coach', views: ['interview', 'resume', 'job-match', 'career-coach', 'industry-sim', 'soft-skills', 'salary-coach'],
       accent: { bg: 'bg-purple-600', text: 'text-white' },
       subs: [
+        { label: t('pillars.subs.careerCoach'),    view: 'career-coach', icon: MessageSquare,  desc: 'AI career coach chatbot' },
         { label: t('pillars.subs.interviewPrep'), view: 'interview',    icon: Mic,            desc: 'AI mock interview simulator' },
         { label: t('pillars.subs.resume'),         view: 'resume',       icon: FileText,       desc: 'Build & score your resume' },
         { label: t('pillars.subs.aiMatch'),        view: 'job-match',    icon: Zap,            desc: 'Smart job-fit scoring' },
-        { label: t('pillars.subs.careerCoach'),    view: 'career-coach', icon: MessageSquare,  desc: 'AI career coach chatbot' },
         { label: t('pillars.subs.industrySim'),    view: 'industry-sim', icon: Building2,      desc: 'Role-play industry scenarios' },
         { label: t('pillars.subs.softSkills'),     view: 'soft-skills',  icon: Users,          desc: 'Personality & communication' },
         { label: t('pillars.subs.salaryCoach'),    view: 'salary-coach', icon: DollarSign,     desc: 'Salary negotiation training' },
@@ -6789,10 +7494,12 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       ],
     },
     {
-      id: 'network', label: t('pillars.network'), icon: Users, primaryView: 'network', views: ['network'],
+      id: 'network', label: t('pillars.network'), icon: Users, primaryView: 'network', views: ['network', 'coaching-hub', 'impact-lab'],
       accent: { bg: 'bg-rose-600', text: 'text-white' },
       subs: [
-        { label: t('pillars.subs.communities'),   view: 'network', icon: MessageSquare, desc: 'Industry channels & peer groups' },
+        { label: t('pillars.subs.communities'),   view: 'network',       icon: MessageSquare, desc: 'Industry channels & peer groups' },
+        { label: 'Coaching Hub',                   view: 'coaching-hub',  icon: UserCheck,     desc: 'Human coaches & mentor matching' },
+        { label: 'Impact Lab',                     view: 'impact-lab',    icon: Globe,         desc: 'NGO projects & social impact work' },
       ],
     },
     {
@@ -6828,6 +7535,13 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       trackView((user.id || (user as any).uid) as string, view);
     }
   };
+  // Reset scroll to top synchronously after every view change,
+  // BEFORE Framer Motion starts its exit animation — prevents
+  // scroll-anchor compensation from leaving main.scrollTop > 0.
+  useEffect(() => {
+    const main = document.getElementById('main-content');
+    if (main) main.scrollTop = 0;
+  }, [activeView]);
   const activePillar = PILLAR_DEFS.find(p => p.views.includes(activeView)) || PILLAR_DEFS[0];
   const LANG_OPTIONS = [
     { code: 'en' as const, flag: '🇬🇧', label: 'EN' },
@@ -7142,8 +7856,157 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
 
   const profileStatusLabel = profile.targetCareerId ? `${profile.targetCareerId} trajectory` : 'Career explorer';
 
+  // ── Onboarding completion handler ────────────────────────────────────────
+  const handleOnboardingComplete = (answers: OnboardingAnswers) => {
+    try { localStorage.setItem(onboardingKey, '1'); } catch {}
+    if (answers.education || answers.interests.length || answers.targetCountry || answers.targetCareer) {
+      setProfile(prev => ({
+        ...prev,
+        education: answers.education || prev.education,
+        interests: answers.interests.length ? answers.interests : prev.interests,
+        targetLocation: answers.targetCountry || prev.targetLocation,
+        targetCareerId: answers.targetCareer
+          ? answers.targetCareer.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+          : prev.targetCareerId,
+      }));
+    }
+    setShowOnboarding(false);
+  };
+
+  // ── Admin-only shell — bypasses all normal user views ────────────────────
+  if (isAdmin) {
+    return (
+      <div className="flex flex-col h-screen bg-[#070d1a] font-sans text-white overflow-hidden">
+        {/* Admin header */}
+        <header className="flex items-center justify-between border-b border-slate-800 bg-[#0d1526]/90 backdrop-blur-xl px-5 py-3 z-50 shrink-0 sticky top-0">
+          <div className="flex items-center gap-3">
+            <Logo size={32} className="rounded-xl shadow-xl shadow-indigo-900/40" />
+            <div>
+              <span className="text-sm font-black tracking-tighter text-white">
+                CareerVision<span className="text-indigo-400 italic">AI</span>
+              </span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <ShieldCheck size={10} className="text-indigo-400" />
+                <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Admin Console</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-slate-400 hidden sm:block">{user.email}</span>
+            <div className="flex items-center gap-1.5 bg-indigo-900/50 border border-indigo-700/50 rounded-xl px-3 py-1.5">
+              <ShieldCheck size={12} className="text-indigo-400" />
+              <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Admin</span>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 text-xs font-black text-rose-400 hover:text-white hover:bg-rose-600 border border-rose-700/50 hover:border-rose-600 bg-rose-900/30 rounded-xl px-3 py-1.5 transition-all"
+            >
+              <LogOut size={12} /> Sign Out
+            </button>
+          </div>
+        </header>
+        {/* Admin content */}
+        <main className="flex-1 overflow-y-auto px-4 lg:px-8 py-6 pb-10">
+          <AdminDashboard adminEmail={user.email} />
+        </main>
+
+        {/* Spark.E Floating Bubble */}
+        <div className={`fixed bottom-8 ${sparkEPosition === 'bottom-right' ? 'right-6 items-end' : 'left-6 items-start'} z-50 flex flex-col gap-2`}>
+          <AnimatePresence>
+            {!sparkEOpen && (
+              <motion.div
+                initial={{ opacity: 0, x: 10, scale: 0.9 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: 10, scale: 0.9 }}
+                className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl shadow-xl pointer-events-none"
+              >
+                Spark.E ⚡
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <div className="p-2 bg-slate-800/80 backdrop-blur-md rounded-[22px] shadow-xl shadow-black/40 border border-slate-700/60">
+            <motion.button
+              onClick={() => setSparkEOpen(o => !o)}
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.94 }}
+              className="relative w-14 h-14 rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-500/40 flex items-center justify-center text-white overflow-hidden"
+            >
+              <AnimatePresence mode="wait">
+                {sparkEOpen ? (
+                  <motion.span key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.2 }}>
+                    <X size={22} />
+                  </motion.span>
+                ) : (
+                  <motion.span key="open" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.2 }}>
+                    <Sparkles size={22} />
+                  </motion.span>
+                )}
+              </AnimatePresence>
+              {!sparkEOpen && (
+                <span className="absolute inset-0 rounded-2xl border-2 border-indigo-400 animate-ping opacity-30 pointer-events-none" />
+              )}
+            </motion.button>
+          </div>
+        </div>
+
+        {/* Spark.E Slide-in Drawer */}
+        <AnimatePresence>
+          {sparkEOpen && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setSparkEOpen(false)}
+                className="fixed inset-0 bg-slate-950/50 backdrop-blur-sm z-40"
+              />
+              <motion.div
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+                className="fixed top-0 right-0 h-full w-full max-w-md z-50 bg-white shadow-2xl flex flex-col overflow-hidden"
+              >
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-slate-950">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center">
+                      <Sparkles size={16} className="text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-white tracking-tight leading-none">⚡ Spark.E</p>
+                      <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest leading-none mt-0.5">AI Career Mentor</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSparkEOpen(false)}
+                    className="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <AIAdvisor profile={profile} embedded />
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen bg-[#F8FAFC] font-sans text-slate-900 overflow-hidden relative">
+      {/* First-login Onboarding Wizard */}
+      <AnimatePresence>
+        {showOnboarding && (
+          <OnboardingWizard
+            userName={profile.name}
+            onComplete={handleOnboardingComplete}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Skip-to-content link for keyboard/screen-reader users */}
       <a
         href="#main-content"
@@ -7158,7 +8021,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] bg-blue-50/50 rounded-full blur-[100px] pointer-events-none" />
 
       {/* Header Navigation */}
-      <header className="flex items-center justify-between border-b border-slate-200/60 bg-white/70 backdrop-blur-xl px-4 py-3 z-[200] shrink-0 sticky top-0 gap-2">
+      <header className="flex items-center justify-between border-b border-slate-200/60 bg-white px-4 py-3 z-[200] shrink-0 sticky top-0 gap-2">
         {/* Brand */}
         <div className="flex items-center gap-2 cursor-pointer group shrink-0" onClick={() => onExit()}>
           <Logo size={34} className="group-hover:scale-110 transition-transform rounded-xl shadow-xl shadow-indigo-200" />
@@ -7314,9 +8177,13 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
 
       {/* ── SUB-NAV STRIP ── */}
       {activePillar.subs.length > 0 && (
-        <nav className="hidden md:flex items-center gap-1 border-b border-slate-200/50 bg-white/80 backdrop-blur-sm px-5 py-2 z-20 shrink-0" aria-label={`${activePillar.label} sub-navigation`}>
-          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 mr-2" aria-hidden="true">{activePillar.label}</span>
-          <div className="w-px h-3.5 bg-slate-200 mr-1.5" aria-hidden="true" />
+        <nav className="flex items-center gap-1 border-b border-slate-200/50 bg-white/80 backdrop-blur-sm px-5 py-2 z-20 shrink-0 overflow-x-auto scrollbar-hide" aria-label={`${activePillar.label} sub-navigation`}>
+          <button
+            onClick={() => handleNavigate(activePillar.primaryView)}
+            aria-label={activePillar.label}
+            className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 mr-2 shrink-0 transition-colors"
+          >{activePillar.label}</button>
+          <div className="w-px h-3.5 bg-slate-200 mr-1.5 shrink-0" aria-hidden="true" />
           {activePillar.subs.map(sub => {
             const SubIcon = sub.icon;
             const isSubActive = activeView === sub.view;
@@ -7327,7 +8194,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                 aria-current={isSubActive ? 'page' : undefined}
                 aria-label={sub.label}
                 className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all',
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shrink-0',
                   isSubActive
                     ? cn(activePillar.accent.bg, activePillar.accent.text, 'shadow-sm')
                     : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
@@ -7589,7 +8456,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       </AnimatePresence>
       
       {/* Main Content Viewport */}
-      <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto scrollbar-hide relative z-10 px-4 lg:px-10 py-6 pb-24 lg:pb-32" aria-label="Main content">
+      <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto scrollbar-hide relative px-4 lg:px-10 py-6 pb-24 lg:pb-32" style={{ overflowAnchor: 'none' }} aria-label="Main content">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeView}
@@ -7599,7 +8466,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
             transition={{ duration: 0.3, ease: "circOut" }}
             className={activeView === 'institutions' ? 'min-h-full' : 'h-full'}
           >
-            {activeView === 'dashboard' && <Dashboard profile={profile} onSelectPath={handleSelectPath} onSelectByTitle={handleSelectByTitle} careers={careers} isLoading={isCareersLoading} onInitInterview={initiateInterview} onAiCareerSearch={handleAiCareerSearch} isAiCareerLoading={isAiCareerLoading} aiCareerSearchMessage={aiCareerSearchMessage} onNavigate={handleNavigate} dashboardIntel={dashboardIntel} isDashboardIntelLoading={isDashboardIntelLoading} onResetToGlobal={fetchTopGlobalCareers} onNavigateToScholarship={(id) => { setScholarshipHighlightId(id); handleNavigate('expenses'); }} />}
+            {activeView === 'dashboard' && <Dashboard profile={profile} onSelectPath={handleSelectPath} onSelectByTitle={handleSelectByTitle} careers={careers} isLoading={isCareersLoading} onInitInterview={initiateInterview} onAiCareerSearch={handleAiCareerSearch} isAiCareerLoading={isAiCareerLoading} aiCareerSearchMessage={aiCareerSearchMessage} onNavigate={handleNavigate} dashboardIntel={dashboardIntel} isDashboardIntelLoading={isDashboardIntelLoading} onResetToGlobal={fetchTopGlobalCareers} onNavigateToScholarship={(id) => { setScholarshipHighlightId(id); handleNavigate('expenses'); }} onUpdateProfile={(updates) => setProfile(prev => ({ ...prev, ...updates }))} />}
 
             {/* Admin view — full width, no sidebar */}
             {activeView === 'admin' && isAdmin && (
@@ -7610,28 +8477,30 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
               <div className={activeView === 'institutions' ? 'grid grid-cols-12 gap-8' : 'grid grid-cols-12 gap-8 h-full'}>
                 <section className={activeView === 'institutions' ? 'col-span-12 xl:col-span-9 space-y-8' : 'col-span-12 xl:col-span-9 space-y-8 h-full'}>
                    {activeView === 'roadmap' && <RoadmapView profile={profile} pathId={selectedPathId} careers={careers} onNavigate={handleNavigate} onInitInterview={initiateInterview} />}
+                   {activeView === 'digital-twin' && <CareerDigitalTwin profile={profile} careers={careers} />}
                    {activeView === 'jobs' && <JobBoardView profile={profile} />}
                    {activeView === 'institutions' && <InstitutionsView profile={profile} selectedPathId={selectedPathId} careerTitle={careers.find(c => c.id === selectedPathId)?.title || selectedPathId} initialSearch={institutionSearchQuery} onInitInterview={initiateInterview} institutions={dynamicInstitutions} isLoading={isInstitutionsLoading} visaGuidance={visaGuidance} isVisaLoading={isVisaLoading} roadmapContext={institutionRoadmapContext} />}
                    {activeView === 'heatmap' && <HeatmapView profile={profile} />}
                    {activeView === 'materials' && <MaterialsView materials={dynamicMaterials} isLoading={isMaterialsLoading} careerTitle={careers.find(c => c.id === selectedPathId)?.title || profile.targetCareerId?.replace(/-/g,' ') || 'Technology'} />}
                    {activeView === 'parent' && <ParentalDashboard profile={profile} onBack={() => setActiveView('dashboard')} careers={careers} />}
                    {activeView === 'expenses' && <FinancialView profile={profile} setProfile={setProfile} highlightScholarshipId={scholarshipHighlightId} onClearHighlight={() => setScholarshipHighlightId(null)} />}
-                   {activeView === 'resume' && <ResumeManager profile={profile} userId={user.id || user.uid} />}
-                   {activeView === 'job-match' && <JobMatchView userId={user.id || user.uid} resumeContent={null} />}
-                   {activeView === 'interview' && (
-                     isMobileDevice()
-                       ? <MobileInterviewView userId={(user?.id || (user as any)?.uid) as string} defaultRole={profile.targetCareerId?.replace(/-/g,' ') || 'Software Engineer'} />
-                       : <InterviewPrepView userId={user.id || user.uid} defaultRole={profile.targetCareerId?.replace(/-/g,' ') || 'Software Engineer'} />
+                   {/* ── AI Coach Hub (self-contained with built-in tab navigation) ── */}
+                   {(['career-coach', 'interview', 'resume', 'job-match', 'industry-sim', 'soft-skills', 'salary-coach'] as AICoachView[]).includes(activeView as AICoachView) && (
+                     <AICoachHub
+                       activeView={activeView as AICoachView}
+                       onNavigate={(v) => handleNavigate(v)}
+                       profile={profile}
+                       userId={user.id || user.uid}
+                       isMobile={isMobileDevice()}
+                     />
                    )}
                    {activeView === 'directory' && <CareerDirectoryView profile={profile} />}
                    {activeView === 'network' && <NetworkView profile={profile} />}
+                   {activeView === 'coaching-hub' && <CoachingHub profile={profile} />}
+                   {activeView === 'impact-lab' && <ImpactLab profile={profile} />}
                    {activeView === 'analytics' && <AnalyticsDashboard profile={profile} userId={(user?.id || (user as any)?.uid) as string} />}
                    {activeView === 'pricing' && <PricingPage userId={(user?.id || (user as any)?.uid) as string} onNavigate={(v) => setActiveView(v as AppView)} />}
                    {activeView === 'enterprise' && <EnterpriseView userId={(user?.id || (user as any)?.uid) as string} onNavigatePricing={() => setActiveView('pricing')} />}
-                   {activeView === 'career-coach'  && <CareerCoachChat profile={profile} />}
-                   {activeView === 'industry-sim'  && <IndustrySimulator profile={profile} />}
-                   {activeView === 'soft-skills'   && <SoftSkillsAssessment profile={profile} />}
-                   {activeView === 'salary-coach'  && <SalaryNegotiationCoach profile={profile} />}
                    {activeView === 'side-hustle'   && <SideHustleAdvisor profile={profile} />}
                    {activeView === 'burnout'        && <BurnoutPrevention profile={profile} />}
                 </section>

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Check, Zap, Users, Building2, Star, ArrowRight,
-  Crown, Sparkles, Shield, Globe, X, Loader2, CheckCircle2,
+  Crown, Sparkles, Shield, Globe, X, Loader2, CheckCircle2, FileText,
 } from "lucide-react";
 import { usePlans, useSubscription } from "../hooks/useSubscription";
 import {
@@ -353,6 +353,9 @@ export default function PricingPage({ userId, onNavigate }: PricingPageProps) {
         </AnimatePresence>
       </div>
 
+      {/* ── Resume Template Previews ──────────────────────────────────────── */}
+      <ResumeTemplatePreviews />
+
       {/* ── Partner Network ──────────────────────────────────────────────────── */}
       <div className="max-w-6xl mx-auto px-4 mb-16">
         <div className="text-center mb-8">
@@ -460,6 +463,94 @@ function CellValue({ val }: { val: boolean | string }) {
   if (val === true)  return <Check className="w-5 h-5 text-emerald-500 mx-auto" />;
   if (val === false) return <X className="w-4 h-4 text-slate-300 mx-auto" />;
   return <span className="text-sm text-slate-700 font-medium">{val}</span>;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Resume Template Previews
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RESUME_TEMPLATES = [
+  { id: 'executive', name: 'Executive', badge: 'Pro', tag: 'Clean & Corporate', accent: '#1e293b', lines: [40, 85, 70, 55, 80, 60, 45], headerH: 28 },
+  { id: 'modern', name: 'Modern', badge: 'Pro', tag: 'Two-Column Layout', accent: '#4f46e5', lines: [50, 80, 65, 75, 55, 70], headerH: 24 },
+  { id: 'minimal', name: 'Minimal', badge: 'Pro', tag: 'Less is More', accent: '#0f172a', lines: [45, 90, 60, 50, 80, 55], headerH: 20 },
+  { id: 'creative', name: 'Creative', badge: 'Pro', tag: 'Bold & Memorable', accent: '#7c3aed', lines: [55, 75, 85, 60, 70, 50], headerH: 32 },
+  { id: 'tech', name: 'Tech Stack', badge: 'Pro', tag: 'Dev / Engineering', accent: '#0284c7', lines: [60, 80, 70, 65, 75, 55], headerH: 26 },
+  { id: 'classic', name: 'Classic', badge: 'Free', tag: 'ATS Optimized', accent: '#374151', lines: [50, 85, 65, 60, 70], headerH: 22 },
+];
+
+const ResumeMiniCard: React.FC<{ tmpl: typeof RESUME_TEMPLATES[0]; active: boolean; onClick: () => void }> = ({ tmpl, active, onClick }) => (
+  <button
+    onClick={onClick}
+    className={`group relative rounded-2xl border-2 transition-all overflow-hidden ${active ? 'border-indigo-500 shadow-lg shadow-indigo-100 scale-[1.02]' : 'border-slate-100 hover:border-indigo-200'}`}
+    style={{ aspectRatio: '3/4', minWidth: 0 }}
+  >
+    {/* Mini resume mockup */}
+    <div className="absolute inset-0 bg-white p-2 flex flex-col gap-1">
+      {/* Header bar */}
+      <div className="rounded-sm w-full flex-shrink-0" style={{ height: `${tmpl.headerH}px`, backgroundColor: tmpl.accent }} />
+      {/* Content lines */}
+      <div className="flex-1 flex flex-col justify-start gap-1 pt-1">
+        {tmpl.lines.map((w, i) => (
+          <div key={i} className="rounded-full bg-slate-200" style={{ height: i % 3 === 0 ? 3 : 2, width: `${w}%` }} />
+        ))}
+      </div>
+      {/* Two-column hint for modern template */}
+      {tmpl.id === 'modern' && (
+        <div className="absolute inset-0 flex" style={{ paddingTop: `${tmpl.headerH + 12}px`, paddingLeft: '8px', paddingRight: '8px' }}>
+          <div className="w-1/3 border-r border-slate-100 pr-1 space-y-1 pt-1">
+            {[60, 80, 50].map((w, i) => <div key={i} className="rounded-full bg-slate-200" style={{ height: 2, width: `${w}%` }} />)}
+          </div>
+        </div>
+      )}
+    </div>
+    {/* Badge */}
+    <div className="absolute top-1.5 right-1.5">
+      <span className={`text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${tmpl.badge === 'Free' ? 'bg-slate-100 text-slate-600' : 'text-white'}`}
+        style={tmpl.badge !== 'Free' ? { backgroundColor: tmpl.accent } : {}}>
+        {tmpl.badge}
+      </span>
+    </div>
+    {active && (
+      <div className="absolute inset-0 ring-2 ring-inset ring-indigo-500 rounded-2xl pointer-events-none" />
+    )}
+  </button>
+);
+
+function ResumeTemplatePreviews() {
+  const [active, setActive] = useState('executive');
+  const activeTmpl = RESUME_TEMPLATES.find(t => t.id === active)!;
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 mb-16">
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2.5rem] p-8 md:p-12 overflow-hidden relative">
+        <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 70% 30%, white, transparent 50%)' }} />
+
+        <div className="text-center mb-8 relative z-10">
+          <span className="inline-flex items-center gap-2 bg-white/10 border border-white/20 text-white/70 text-[10px] font-black uppercase tracking-[0.3em] px-4 py-1.5 rounded-full mb-4">
+            <FileText size={10} /> Premium Resume Templates
+          </span>
+          <h2 className="text-3xl font-black text-white tracking-tight mb-2">12+ Professional Templates</h2>
+          <p className="text-white/50 text-sm max-w-md mx-auto">Each template is ATS-optimized and crafted by recruiters from Fortune 500 companies.</p>
+        </div>
+
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-6 relative z-10">
+          {RESUME_TEMPLATES.map(t => (
+            <ResumeMiniCard key={t.id} tmpl={t} active={active === t.id} onClick={() => setActive(t.id)} />
+          ))}
+        </div>
+
+        <div className="flex items-center justify-center gap-6 relative z-10">
+          <div className="text-center">
+            <p className="text-white font-black text-base leading-none">{activeTmpl.name}</p>
+            <p className="text-white/50 text-[10px] font-medium mt-0.5">{activeTmpl.tag}</p>
+          </div>
+          <div className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest ${activeTmpl.badge === 'Free' ? 'bg-white/20 text-white' : 'bg-indigo-500 text-white'}`}>
+            {activeTmpl.badge === 'Free' ? 'Available on Free plan' : 'Unlock with Pro'}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function FeatureComparisonTable({ plans, currentPlan }: { plans: Plan[]; currentPlan: PlanSlug }) {

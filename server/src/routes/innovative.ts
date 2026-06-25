@@ -4,10 +4,11 @@ import { generateDeepSeekResponse } from "../services/deepseekService.js";
 const router = Router();
 
 function extractJSON(raw: string | null | undefined): string {
-  if (!raw) return "";
+  if (!raw || raw.trim().length === 0) throw new Error("LLM returned empty response");
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenced) return fenced[1].trim();
-  return raw.trim();
+  const candidate = fenced ? fenced[1].trim() : raw.trim();
+  if (candidate.length === 0) throw new Error("LLM returned empty response");
+  return candidate;
 }
 
 // ── 1. AI Career Coach — conversational message ──────────────────────────────
@@ -251,7 +252,7 @@ Return JSON array:
   }
 ]`;
 
-    const result = await generateDeepSeekResponse(prompt, { temperature: 0.75 });
+    const result = await generateDeepSeekResponse(prompt, { temperature: 0.75, maxTokens: 2048 });
     res.json({ success: true, data: JSON.parse(extractJSON(result.text)) });
   } catch (e) {
     console.error("side-hustle/suggest error:", e);
