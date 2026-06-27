@@ -109,4 +109,22 @@ export interface WorkPreferences {
   preferredLocations: string[];
   preferredIndustries: string[];
   targetRole: string | null;
+  setupCompletedAt?: string;
+  updatedAt?: string;
+}
+
+export interface SemanticMatchBreakdown {
+  semantic: number;
+  title: number;
+  skills: number;
+  salary: number;
+  preference: number;
+}
+
+export interface SemanticMatchedJob {
+  job: JobListing;
+  score: number;
+  breakdown: SemanticMatchBreakdown;
+  reasons: string[];
+  missingSkills: string[];
 }

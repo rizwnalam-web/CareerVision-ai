@@ -5,7 +5,7 @@ import {
   Plus, Trash2, Edit3, Save, X, ExternalLink, Github, Star,
   ChevronDown, ChevronRight, Loader2, RotateCcw, Download,
   User, Briefcase, GraduationCap, Code, Award, FolderGit2,
-  TrendingUp, Target, Lightbulb, Shield,
+  TrendingUp, Target, Lightbulb, Shield, Wand2, FileEdit, Copy, Check,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { UserProfile } from "../types/career";
@@ -18,13 +18,14 @@ import {
   getResumeVersions, restoreResumeVersion, runATSCheck,
   getResumeSuggestions, getPortfolioProjects,
   createPortfolioProject, updatePortfolioProject, deletePortfolioProject,
+  tailorResumeToJD, generateCoverLetter, deleteResumeVersion,
 } from "../services/resumeService";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-type Tab = "editor" | "ats" | "versions" | "portfolio";
+type Tab = "editor" | "tailor" | "cover-letter" | "ats" | "versions" | "portfolio";
 
 interface Props {
   profile: UserProfile;
@@ -258,6 +259,19 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isAtsLoading, setIsAtsLoading] = useState(false);
+  const [jdForAts, setJdForAts] = useState("");
+
+  // ── AI Tailor state ──
+  const [jdForTailor, setJdForTailor] = useState("");
+  const [isTailorLoading, setIsTailorLoading] = useState(false);
+  const [tailoredContent, setTailoredContent] = useState<ResumeContent | null>(null);
+  const [tailorApplied, setTailorApplied] = useState(false);
+
+  // ── Cover Letter state ──
+  const [jdForCover, setJdForCover] = useState("");
+  const [isCoverLoading, setIsCoverLoading] = useState(false);
+  const [coverLetter, setCoverLetter] = useState("");
+  const [coverCopied, setCoverCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -266,6 +280,8 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
   const [hasResume, setHasResume] = useState(false);
   const [expandedExp, setExpandedExp] = useState<string | null>(null);
   const [expandedEdu, setExpandedEdu] = useState<string | null>(null);
+  const [pendingDeleteVersionId, setPendingDeleteVersionId] = useState<string | null>(null);
+  const [isDeletingVersion, setIsDeletingVersion] = useState(false);
 
   // Portfolio state
   const [showPortfolioForm, setShowPortfolioForm] = useState(false);
@@ -363,13 +379,60 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
     setIsAtsLoading(true);
     setError(null);
     try {
-      const report = await runATSCheck(content, targetRole);
+      const report = await runATSCheck(content, targetRole, jdForAts || undefined);
       setAtsReport(report);
     } catch (e: any) {
       setError(e.message || "ATS check failed");
     } finally {
       setIsAtsLoading(false);
     }
+  };
+
+  // ── AI Tailor ──
+  const handleTailorResume = async () => {
+    if (!jdForTailor.trim()) return setError("Paste a job description first");
+    setIsTailorLoading(true);
+    setError(null);
+    setTailoredContent(null);
+    setTailorApplied(false);
+    try {
+      const result = await tailorResumeToJD(content, jdForTailor);
+      setTailoredContent(result);
+    } catch (e: any) {
+      setError(e.message || "Tailoring failed");
+    } finally {
+      setIsTailorLoading(false);
+    }
+  };
+
+  const handleApplyTailored = () => {
+    if (!tailoredContent) return;
+    setContent(tailoredContent);
+    setTailorApplied(true);
+    showSuccess("Tailored resume applied — review the Editor tab, then Save & Run ATS Check");
+  };
+
+  // ── Cover Letter ──
+  const handleGenerateCoverLetter = async () => {
+    if (!jdForCover.trim()) return setError("Paste a job description first");
+    setIsCoverLoading(true);
+    setError(null);
+    setCoverLetter("");
+    try {
+      const letter = await generateCoverLetter(content, jdForCover, targetRole || undefined);
+      setCoverLetter(letter);
+    } catch (e: any) {
+      setError(e.message || "Cover letter generation failed");
+    } finally {
+      setIsCoverLoading(false);
+    }
+  };
+
+  const handleCopyCoverLetter = async () => {
+    if (!coverLetter) return;
+    await navigator.clipboard.writeText(coverLetter);
+    setCoverCopied(true);
+    setTimeout(() => setCoverCopied(false), 2000);
   };
 
   // ── AI suggestions ──
@@ -400,6 +463,33 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
       setCurrentVersionId(versionsResult.currentVersionId);
     } catch (e: any) {
       setError(e.message || "Restore failed");
+    }
+  };
+
+  // ── Delete old version ──
+  const handleDeleteVersion = async (versionId: string) => {
+    if (versionId === currentVersionId) {
+      return setError("Cannot delete the current version");
+    }
+
+    setPendingDeleteVersionId(versionId);
+  };
+
+  const confirmDeleteVersion = async () => {
+    if (!pendingDeleteVersionId) return;
+
+    try {
+      setIsDeletingVersion(true);
+      await deleteResumeVersion(userId, pendingDeleteVersionId);
+      showSuccess("Version deleted");
+      const versionsResult = await getResumeVersions(userId);
+      setVersions(versionsResult.versions);
+      setCurrentVersionId(versionsResult.currentVersionId);
+    } catch (e: any) {
+      setError(e.message || "Delete failed");
+    } finally {
+      setIsDeletingVersion(false);
+      setPendingDeleteVersionId(null);
     }
   };
 
@@ -495,10 +585,12 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
   // ─────────────────────────────────────────────────────────────────────────
 
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
-    { id: "editor",    label: "Resume Editor", icon: Edit3 },
-    { id: "ats",       label: "ATS Checker",   icon: Shield },
-    { id: "versions",  label: "Versions",      icon: Clock },
-    { id: "portfolio", label: "Portfolio",     icon: FolderGit2 },
+    { id: "editor",       label: "Resume Editor", icon: Edit3 },
+    { id: "tailor",       label: "AI Tailor",     icon: Wand2 },
+    { id: "cover-letter", label: "Cover Letter",  icon: FileEdit },
+    { id: "ats",          label: "ATS Scanner",   icon: Shield },
+    { id: "versions",     label: "Versions",      icon: Clock },
+    { id: "portfolio",    label: "Portfolio",     icon: FolderGit2 },
   ];
 
   return (
@@ -508,7 +600,7 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Resume & Profile</h1>
           <p className="text-[10px] text-indigo-500 font-black uppercase tracking-[0.2em] mt-1">
-            Multi-format parsing · ATS compliance · Version control · Portfolio
+            Multi-format parsing · AI Tailor · Cover Letter · ATS Scanner · Version control · Portfolio
           </p>
         </div>
         {hasResume && atsReport && (
@@ -557,22 +649,24 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
       </div>
 
       {/* Tab navigation */}
-      <div className="flex gap-1 bg-slate-100/80 rounded-2xl p-1">
-        {tabs.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setActiveTab(t.id)}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
-              activeTab === t.id
-                ? "bg-white text-indigo-600 shadow-sm"
-                : "text-slate-500 hover:text-slate-700"
-            )}
-          >
-            <t.icon size={12} />
-            <span className="hidden sm:inline">{t.label}</span>
-          </button>
-        ))}
+      <div className="sticky top-14 z-20 -mx-2 px-2 py-1 bg-slate-50/95 backdrop-blur-sm">
+        <div className="flex gap-1 bg-slate-100/90 rounded-2xl p-1 overflow-x-auto scrollbar-hide">
+          {tabs.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={cn(
+                "shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all",
+                activeTab === t.id
+                  ? "bg-white text-indigo-600 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              <t.icon size={12} />
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── TAB: EDITOR ── */}
@@ -764,26 +858,257 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
           </motion.div>
         )}
 
-        {/* ── TAB: ATS CHECKER ── */}
+        {/* ── TAB: AI TAILOR ── */}
+        {activeTab === "tailor" && (
+          <motion.div key="tailor" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+            <div className="bg-gradient-to-r from-violet-50 to-indigo-50 rounded-2xl border border-indigo-100 p-5">
+              <div className="flex items-center gap-2 mb-1">
+                <Wand2 size={15} className="text-violet-500" />
+                <p className="text-xs font-black uppercase tracking-widest text-violet-700">AI-Powered Resume Tailoring</p>
+              </div>
+              <p className="text-sm text-slate-600">Paste a job description and Spark.E will intelligently rewrite your summary, experience bullet points, and skills to mirror the JD's language — without fabricating anything.</p>
+            </div>
+
+            <SectionCard title="Job Description" icon={FileEdit}>
+              <textarea
+                value={jdForTailor}
+                onChange={e => setJdForTailor(e.target.value)}
+                rows={10}
+                placeholder="Paste the full job description here…&#10;&#10;e.g. We are looking for a Senior Software Engineer with 5+ years of experience in React, Node.js, and cloud infrastructure. The ideal candidate will lead cross-functional teams…"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-50 resize-none"
+              />
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-xs text-slate-400">{jdForTailor.length} characters</p>
+                <button
+                  onClick={handleTailorResume}
+                  disabled={isTailorLoading || !jdForTailor.trim()}
+                  className="flex items-center gap-2 px-6 py-3 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-violet-200"
+                >
+                  {isTailorLoading ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+                  {isTailorLoading ? "Tailoring resume…" : "Tailor My Resume"}
+                </button>
+              </div>
+            </SectionCard>
+
+            {isTailorLoading && (
+              <div className="flex flex-col items-center py-16 gap-4 text-slate-500">
+                <Loader2 size={36} className="text-violet-500 animate-spin" />
+                <p className="font-bold text-sm">AI is tailoring your resume to the job description…</p>
+                <p className="text-xs text-slate-400">This takes ~30 seconds</p>
+              </div>
+            )}
+
+            {tailoredContent && !isTailorLoading && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle size={16} className="text-emerald-500" />
+                    <p className="text-sm font-black text-slate-800">Tailoring complete!</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setTailoredContent(null); setTailorApplied(false); }}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      <RotateCcw size={11} /> Discard
+                    </button>
+                    <button
+                      onClick={handleApplyTailored}
+                      disabled={tailorApplied}
+                      className="flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      {tailorApplied ? <><Check size={11} /> Applied</> : <><Save size={11} /> Apply to Resume</>}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Summary diff preview */}
+                {tailoredContent.personalInfo.summary !== content.personalInfo.summary && (
+                  <SectionCard title="Tailored Summary" icon={User}>
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Original</p>
+                        <p className="text-sm text-slate-500 bg-slate-50 rounded-xl p-3 line-through">{content.personalInfo.summary || "(empty)"}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-violet-600 mb-1">Tailored</p>
+                        <p className="text-sm text-slate-800 bg-violet-50 rounded-xl p-3 border border-violet-100">{tailoredContent.personalInfo.summary}</p>
+                      </div>
+                    </div>
+                  </SectionCard>
+                )}
+
+                {/* Experience diffs */}
+                {tailoredContent.experience.length > 0 && (
+                  <SectionCard title="Tailored Experience Highlights" icon={Briefcase}>
+                    <div className="space-y-4">
+                      {tailoredContent.experience.map((exp, i) => {
+                        const orig = content.experience[i];
+                        if (!orig || orig.description === exp.description) return null;
+                        return (
+                          <div key={exp.id} className="space-y-2">
+                            <p className="text-xs font-black text-slate-700">{exp.position} @ {exp.company}</p>
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Original</p>
+                              <p className="text-xs text-slate-500 bg-slate-50 rounded-xl p-3 line-through">{orig.description || "(empty)"}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-violet-600 mb-1">Tailored</p>
+                              <p className="text-xs text-slate-800 bg-violet-50 rounded-xl p-3 border border-violet-100">{exp.description}</p>
+                            </div>
+                          </div>
+                        );
+                      }).filter(Boolean)}
+                      {tailoredContent.experience.every((exp, i) => content.experience[i]?.description === exp.description) && (
+                        <p className="text-sm text-slate-500 text-center py-2">Experience descriptions already well-aligned to the JD</p>
+                      )}
+                    </div>
+                  </SectionCard>
+                )}
+
+                {/* Skills diff */}
+                <SectionCard title="Skills Alignment" icon={Code}>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Technical Skills (tailored)</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {tailoredContent.skills.technical.map(s => (
+                          <span key={s} className={cn(
+                            "px-2 py-0.5 text-[11px] font-bold rounded-lg",
+                            content.skills.technical.includes(s) ? "bg-slate-100 text-slate-600" : "bg-violet-100 text-violet-700 ring-1 ring-violet-300"
+                          )}>{s}</span>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-violet-600 mt-2">Purple = newly added from JD</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Certifications (tailored)</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {tailoredContent.skills.certifications.map(s => (
+                          <span key={s} className={cn(
+                            "px-2 py-0.5 text-[11px] font-bold rounded-lg",
+                            content.skills.certifications.includes(s) ? "bg-slate-100 text-slate-600" : "bg-violet-100 text-violet-700 ring-1 ring-violet-300"
+                          )}>{s}</span>
+                        ))}
+                        {tailoredContent.skills.certifications.length === 0 && <span className="text-xs text-slate-400">None</span>}
+                      </div>
+                    </div>
+                  </div>
+                </SectionCard>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* ── TAB: COVER LETTER ── */}
+        {activeTab === "cover-letter" && (
+          <motion.div key="cover-letter" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+            <div className="bg-gradient-to-r from-teal-50 to-emerald-50 rounded-2xl border border-teal-100 p-5">
+              <div className="flex items-center gap-2 mb-1">
+                <FileEdit size={15} className="text-teal-500" />
+                <p className="text-xs font-black uppercase tracking-widest text-teal-700">AI Cover Letter Builder</p>
+              </div>
+              <p className="text-sm text-slate-600">Paste a job description and Spark.E will craft a compelling, personalised cover letter using your resume content, matched to the role's specific requirements.</p>
+            </div>
+
+            <SectionCard title="Job Description" icon={FileEdit}>
+              <textarea
+                value={jdForCover}
+                onChange={e => setJdForCover(e.target.value)}
+                rows={8}
+                placeholder="Paste the full job description here…"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 resize-none"
+              />
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-xs text-slate-400">{jdForCover.length} characters</p>
+                <button
+                  onClick={handleGenerateCoverLetter}
+                  disabled={isCoverLoading || !jdForCover.trim()}
+                  className="flex items-center gap-2 px-6 py-3 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-teal-200"
+                >
+                  {isCoverLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  {isCoverLoading ? "Writing cover letter…" : "Generate Cover Letter"}
+                </button>
+              </div>
+            </SectionCard>
+
+            {isCoverLoading && (
+              <div className="flex flex-col items-center py-16 gap-4 text-slate-500">
+                <Loader2 size={36} className="text-teal-500 animate-spin" />
+                <p className="font-bold text-sm">Crafting your cover letter…</p>
+                <p className="text-xs text-slate-400">This takes ~20 seconds</p>
+              </div>
+            )}
+
+            {coverLetter && !isCoverLoading && (
+              <SectionCard title="Your Cover Letter" icon={FileText}>
+                <div className="flex justify-end gap-2 mb-3">
+                  <button
+                    onClick={handleCopyCoverLetter}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-teal-50 hover:text-teal-600 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    {coverCopied ? <><Check size={11} /> Copied!</> : <><Copy size={11} /> Copy</>}
+                  </button>
+                  <button
+                    onClick={() => { setJdForCover(""); setCoverLetter(""); }}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    <RotateCcw size={11} /> Reset
+                  </button>
+                </div>
+                <div className="bg-slate-50 rounded-xl border border-slate-200 p-5">
+                  <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">{coverLetter}</pre>
+                </div>
+                <p className="text-[10px] text-slate-400 text-center mt-2">Review and personalise before sending. Remove placeholder text like [Company Name] if present.</p>
+              </SectionCard>
+            )}
+
+            {!coverLetter && !isCoverLoading && (
+              <div className="text-center py-16 text-slate-400">
+                <FileEdit size={40} className="mx-auto mb-4 opacity-30" />
+                <p className="font-bold">No cover letter yet</p>
+                <p className="text-xs mt-1">Paste a job description and click Generate</p>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* ── TAB: ATS SCANNER ── */}
         {activeTab === "ats" && (
           <motion.div key="ats" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-slate-600">Analyse your resume against ATS systems and get actionable improvements.</p>
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <p className="text-sm text-slate-600">Score your resume against ATS systems. Add a job description for a precise, JD-matched analysis.</p>
               <button
                 onClick={handleATSCheck}
                 disabled={isAtsLoading}
-                className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+                className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0"
               >
                 {isAtsLoading ? <Loader2 size={13} className="animate-spin" /> : <Shield size={13} />}
-                {isAtsLoading ? "Analysing…" : "Run ATS Check"}
+                {isAtsLoading ? "Analysing…" : "Run ATS Scan"}
               </button>
+            </div>
+
+            {/* Optional JD input for precise ATS scanning */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <FileEdit size={13} className="text-indigo-400" />
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">Job Description (optional — for precise keyword matching)</p>
+              </div>
+              <textarea
+                value={jdForAts}
+                onChange={e => setJdForAts(e.target.value)}
+                rows={4}
+                placeholder="Paste the job description here for a JD-specific ATS score. Leave blank for a general analysis."
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 resize-none"
+              />
+              {jdForAts && <p className="text-[10px] text-indigo-500 font-bold">JD-matched scanning enabled — keywords will be extracted from this description</p>}
             </div>
 
             {!atsReport && !isAtsLoading && (
               <div className="text-center py-20 text-slate-400">
                 <Shield size={40} className="mx-auto mb-4 opacity-30" />
                 <p className="font-bold">No ATS report yet</p>
-                <p className="text-xs mt-1">Upload a resume or run a check above</p>
+                <p className="text-xs mt-1">Upload a resume or click Run ATS Scan above</p>
               </div>
             )}
 
@@ -923,12 +1248,20 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
                       </div>
                     )}
                     {v.id !== currentVersionId && (
-                      <button
-                        onClick={() => handleRestoreVersion(v.id)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
-                      >
-                        <RotateCcw size={11} /> Restore
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleDeleteVersion(v.id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                        >
+                          <Trash2 size={11} /> Delete
+                        </button>
+                        <button
+                          onClick={() => handleRestoreVersion(v.id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                        >
+                          <RotateCcw size={11} /> Restore
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -1066,6 +1399,56 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
                 </motion.div>
               )}
             </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete version confirmation */}
+      <AnimatePresence>
+        {pendingDeleteVersionId && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+          >
+            <div className="absolute inset-0 bg-slate-950/45" onClick={() => !isDeletingVersion && setPendingDeleteVersionId(null)} />
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0, y: 8 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.96, opacity: 0, y: 8 }}
+              className="relative w-full max-w-md rounded-3xl bg-white border border-slate-200 shadow-2xl p-6 space-y-4"
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center shrink-0">
+                  <Trash2 size={16} className="text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">Delete Resume Version?</h3>
+                  <p className="text-sm text-slate-600 mt-1">
+                    This will permanently delete this older snapshot. This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-1">
+                <button
+                  onClick={() => setPendingDeleteVersionId(null)}
+                  disabled={isDeletingVersion}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteVersion}
+                  disabled={isDeletingVersion}
+                  className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-60 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                >
+                  {isDeletingVersion ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                  {isDeletingVersion ? "Deleting…" : "Delete Version"}
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

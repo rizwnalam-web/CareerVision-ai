@@ -108,18 +108,89 @@ export async function restoreResumeVersion(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ATS check
+// Resume – delete old version
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function runATSCheck(content: ResumeContent, targetRole?: string): Promise<ATSReport> {
+export async function deleteResumeVersion(userId: string, versionId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/resume/${userId}/version/${versionId}`, { method: "DELETE" });
+  const data = await res.json();
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to delete version");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ATS check (optionally supply a full job description for precise scoring)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function runATSCheck(
+  content: ResumeContent,
+  targetRole?: string,
+  jobDescription?: string
+): Promise<ATSReport> {
   const res = await fetch(`${API_BASE}/api/resume/ats-check`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content, targetRole }),
+    body: JSON.stringify({ content, targetRole, jobDescription }),
   });
   const data = await res.json();
   if (!res.ok || !data.success) throw new Error(data.error || "ATS check failed");
   return data.report;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI Tailor – rewrite resume content to match a job description
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function tailorResumeToJD(
+  content: ResumeContent,
+  jobDescription: string
+): Promise<ResumeContent> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90_000);
+  try {
+    const res = await fetch(`${API_BASE}/api/resume/tailor`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, jobDescription }),
+      signal: controller.signal,
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || "Tailoring failed");
+    return data.tailored;
+  } catch (err: any) {
+    if (err.name === "AbortError") throw new Error("Tailoring timed out. Please try again.");
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cover Letter – generate from resume + job description
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function generateCoverLetter(
+  content: ResumeContent,
+  jobDescription: string,
+  targetRole?: string
+): Promise<string> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90_000);
+  try {
+    const res = await fetch(`${API_BASE}/api/resume/cover-letter`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, jobDescription, targetRole }),
+      signal: controller.signal,
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || "Cover letter generation failed");
+    return data.coverLetter;
+  } catch (err: any) {
+    if (err.name === "AbortError") throw new Error("Cover letter generation timed out. Please try again.");
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

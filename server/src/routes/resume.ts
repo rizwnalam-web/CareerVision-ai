@@ -8,6 +8,8 @@ import {
   structureResumeFromText,
   runATSCheck,
   getResumeSuggestions,
+  tailorResumeToJD,
+  generateCoverLetterFromResume,
   type ResumeContent,
 } from "../services/resumeService.js";
 
@@ -333,17 +335,94 @@ router.post("/:userId/restore/:versionId", async (req: Request, res: Response) =
 });
 
 // ---------------------------------------------------------------------------
+// DELETE /api/resume/:userId/version/:versionId  – delete a non-current version
+// ---------------------------------------------------------------------------
+router.delete("/:userId/version/:versionId", async (req: Request, res: Response) => {
+  try {
+    const userIdentifier = normaliseUserId(req.params.userId);
+    if (!userIdentifier) return res.status(400).json({ error: "userId is required" });
+
+    const { versionId } = req.params;
+
+    const resume = await db.oneOrNone(
+      "SELECT id, current_version_id FROM resumes WHERE user_identifier = $1 LIMIT 1",
+      [userIdentifier]
+    );
+    if (!resume) return res.status(404).json({ error: "No resume found" });
+
+    if (resume.current_version_id === versionId) {
+      return res.status(400).json({ error: "Cannot delete the current resume version" });
+    }
+
+    const version = await db.oneOrNone(
+      "SELECT id FROM resume_versions WHERE id = $1 AND resume_id = $2",
+      [versionId, resume.id]
+    );
+    if (!version) return res.status(404).json({ error: "Version not found" });
+
+    await db.none(
+      "DELETE FROM resume_versions WHERE id = $1 AND resume_id = $2",
+      [versionId, resume.id]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[resume/delete-version]", err);
+    res.status(500).json({ error: "Failed to delete resume version" });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/resume/ats-check
 // ---------------------------------------------------------------------------
 router.post("/ats-check", async (req: Request, res: Response) => {
   try {
-    const { content, targetRole } = req.body;
+    const { content, targetRole, jobDescription } = req.body;
     if (!content) return res.status(400).json({ error: "content is required" });
-    const report = await runATSCheck(content, targetRole);
+    const report = await runATSCheck(content, targetRole, jobDescription);
     res.json({ success: true, report });
   } catch (err) {
     console.error("[resume/ats-check]", err);
     res.status(500).json({ error: "ATS check failed" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/resume/tailor  – AI-tailor resume content to a job description
+// ---------------------------------------------------------------------------
+router.post("/tailor", async (req: Request, res: Response) => {
+  try {
+    const { content, jobDescription } = req.body as {
+      content: ResumeContent;
+      jobDescription: string;
+    };
+    if (!content) return res.status(400).json({ error: "content is required" });
+    if (!jobDescription?.trim()) return res.status(400).json({ error: "jobDescription is required" });
+    const tailored = await tailorResumeToJD(content, jobDescription);
+    res.json({ success: true, tailored });
+  } catch (err: any) {
+    console.error("[resume/tailor]", err);
+    res.status(500).json({ error: err.message || "Tailoring failed" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/resume/cover-letter  – generate cover letter from resume + JD
+// ---------------------------------------------------------------------------
+router.post("/cover-letter", async (req: Request, res: Response) => {
+  try {
+    const { content, jobDescription, targetRole } = req.body as {
+      content: ResumeContent;
+      jobDescription: string;
+      targetRole?: string;
+    };
+    if (!content) return res.status(400).json({ error: "content is required" });
+    if (!jobDescription?.trim()) return res.status(400).json({ error: "jobDescription is required" });
+    const coverLetter = await generateCoverLetterFromResume(content, jobDescription, targetRole);
+    res.json({ success: true, coverLetter });
+  } catch (err: any) {
+    console.error("[resume/cover-letter]", err);
+    res.status(500).json({ error: err.message || "Cover letter generation failed" });
   }
 });
 

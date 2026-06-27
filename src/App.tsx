@@ -225,9 +225,11 @@ import { NewsFlash } from './components/NewsFlash';
 import InternshipWidget from './components/InternshipWidget';
 import { JobBoardView } from './components/JobBoardView';
 import ResumeManager from './components/ResumeManager';
+import ApplicationDashboard from './components/ApplicationDashboard';
 import JobMatchView from './components/JobMatchView';
 import InterviewPrepView from './components/InterviewPrepView';
 import MobileInterviewView from './components/MobileInterviewView';
+import InitialSetupModal from './components/InitialSetupModal';
 import OfflineBanner from './components/OfflineBanner';
 import { isMobileDevice } from './lib/pwa';
 import { InstitutionComparator } from './components/InstitutionComparator';
@@ -235,6 +237,8 @@ import { UserProfileModal } from './components/UserProfileModal';
 import { fetchLLMHealth, reprobeLLM, type LLMHealthStatus } from './services/llmHealthService';
 import AccessibilityToolbar from './components/AccessibilityToolbar';
 import AccessibilityChecker from './components/AccessibilityChecker';
+import { getWorkPreferences } from './services/jobMatchService';
+import { completeInitialSetupAndClaimCredits, getCreditsSummary } from './services/creditsService';
 
 const SectionTitle = ({ title, subtitle }: { title: string, subtitle?: string }) => (
   <div className="mb-8">
@@ -7682,6 +7686,8 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
 
   // ── Admin check (used for pillar visibility + admin view) ──────────────────
   const isAdmin = !!(user?.email && import.meta.env.VITE_ADMIN_EMAIL && user.email === import.meta.env.VITE_ADMIN_EMAIL);
+  const userIdentifier = String(user?.id || user?.uid || user?.email || '').trim();
+  const setupStorageKey = `cv_job_setup_done_${userIdentifier}`;
 
   // ── First-login onboarding wizard ──────────────────────────────────────────
   const onboardingKey = `cv_onboarded_v2_${user?.uid || user?.id || user?.email}`;
@@ -7690,8 +7696,8 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
     try { return !localStorage.getItem(onboardingKey); } catch { return false; }
   });
 
-  type AppView = 'dashboard' | 'roadmap' | 'digital-twin' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'resume' | 'job-match' | 'interview' | 'directory' | 'network' | 'coaching-hub' | 'impact-lab' | 'analytics' | 'pricing' | 'enterprise' | 'career-coach' | 'industry-sim' | 'soft-skills' | 'salary-coach' | 'side-hustle' | 'burnout' | 'admin';
-  const VALID_VIEWS: AppView[] = ['dashboard', 'roadmap', 'digital-twin', 'institutions', 'materials', 'expenses', 'advisor', 'parent', 'heatmap', 'jobs', 'resume', 'job-match', 'interview', 'directory', 'network', 'coaching-hub', 'impact-lab', 'analytics', 'pricing', 'enterprise', 'career-coach', 'industry-sim', 'soft-skills', 'salary-coach', 'side-hustle', 'burnout', 'admin'];
+  type AppView = 'dashboard' | 'roadmap' | 'digital-twin' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'applications' | 'resume' | 'job-match' | 'interview' | 'directory' | 'network' | 'coaching-hub' | 'impact-lab' | 'analytics' | 'pricing' | 'enterprise' | 'career-coach' | 'industry-sim' | 'soft-skills' | 'salary-coach' | 'side-hustle' | 'burnout' | 'admin';
+  const VALID_VIEWS: AppView[] = ['dashboard', 'roadmap', 'digital-twin', 'institutions', 'materials', 'expenses', 'advisor', 'parent', 'heatmap', 'jobs', 'applications', 'resume', 'job-match', 'interview', 'directory', 'network', 'coaching-hub', 'impact-lab', 'analytics', 'pricing', 'enterprise', 'career-coach', 'industry-sim', 'soft-skills', 'salary-coach', 'side-hustle', 'burnout', 'admin'];
   // ── Pillar Definitions ──
   type PillarSub = { label: string; view: AppView; icon: React.ElementType; desc: string };
   type Pillar = { id: string; label: string; icon: React.ElementType; primaryView: AppView; views: AppView[]; accent: { bg: string; text: string }; subs: PillarSub[] };
@@ -7722,12 +7728,13 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       ],
     },
     {
-      id: 'mobility', label: t('pillars.mobility'), icon: Globe, primaryView: 'expenses', views: ['expenses', 'heatmap', 'jobs', 'side-hustle'],
+      id: 'mobility', label: t('pillars.mobility'), icon: Globe, primaryView: 'expenses', views: ['expenses', 'heatmap', 'jobs', 'applications', 'side-hustle'],
       accent: { bg: 'bg-teal-600', text: 'text-white' },
       subs: [
         { label: t('pillars.subs.financeBudget'), view: 'expenses',    icon: CircleDollarSign, desc: 'Cost-of-living, ROI & budget' },
         { label: t('pillars.subs.marketHubs'),    view: 'heatmap',     icon: TrendingUp,       desc: 'Global career market intel' },
         { label: t('pillars.subs.jobsBoard'),     view: 'jobs',        icon: Briefcase,        desc: 'Live listings & opportunities' },
+        { label: 'Applications',                  view: 'applications', icon: CheckCircle,      desc: 'Track every job application and status' },
         { label: t('pillars.subs.sideHustle'),    view: 'side-hustle', icon: Zap,              desc: 'AI side hustle suggestions' },
       ],
     },
@@ -7799,6 +7806,9 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   const [sparkEPosition, setSparkEPosition] = useState<'bottom-right' | 'bottom-left'>('bottom-right');
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showA11yChecker, setShowA11yChecker] = useState(false);
+  const [creditBalance, setCreditBalance] = useState(0);
+  const [showInitialSetup, setShowInitialSetup] = useState(false);
+  const [isSetupSaving, setIsSetupSaving] = useState(false);
   const [isInterviewOpen, setIsInterviewOpen] = useState(false);
   const [interviewRole, setInterviewRole] = useState("");
   const [interviewCompany, setInterviewCompany] = useState("");
@@ -7836,6 +7846,66 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       },
     };
   });
+
+  useEffect(() => {
+    if (!userIdentifier) return;
+
+    const loadCreditsAndSetup = async () => {
+      try {
+        const [creditSummary, prefs] = await Promise.all([
+          getCreditsSummary(userIdentifier),
+          getWorkPreferences(userIdentifier),
+        ]);
+
+        setCreditBalance(creditSummary.wallet.balance || 0);
+
+        const alreadyCompleted = !!prefs?.setupCompletedAt;
+        if (alreadyCompleted) {
+          try { localStorage.setItem(setupStorageKey, '1'); } catch {}
+          setShowInitialSetup(false);
+          return;
+        }
+
+        if (isAdmin) {
+          setShowInitialSetup(false);
+          return;
+        }
+
+        const localDone = (() => {
+          try { return !!localStorage.getItem(setupStorageKey); } catch { return false; }
+        })();
+        setShowInitialSetup(!localDone);
+      } catch {
+        // If backend check fails, keep default hidden state instead of blocking app use.
+      }
+    };
+
+    loadCreditsAndSetup();
+  }, [isAdmin, setupStorageKey, userIdentifier]);
+
+  const handleInitialSetupSave = async (preferences: {
+    workTypePreference?: 'remote' | 'hybrid' | 'onsite' | 'any';
+    minSalary?: number | null;
+    maxSalary?: number | null;
+    salaryCurrency?: string;
+    preferredLocations?: string[];
+    preferredIndustries?: string[];
+    targetRole?: string | null;
+  }) => {
+    if (!userIdentifier) return;
+    setIsSetupSaving(true);
+    try {
+      const result = await completeInitialSetupAndClaimCredits(userIdentifier, preferences);
+      setCreditBalance(result.wallet.balance || 0);
+      if (preferences.targetRole) {
+        setProfile(prev => ({ ...prev, targetCareerId: preferences.targetRole || prev.targetCareerId }));
+      }
+      try { localStorage.setItem(setupStorageKey, '1'); } catch {}
+      setShowInitialSetup(false);
+    } finally {
+      setIsSetupSaving(false);
+    }
+  };
 
   // Sync profile to Firestore when it changes
   useEffect(() => {
@@ -8379,6 +8449,11 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
             </AnimatePresence>
           </div>
 
+          <div className="hidden md:flex items-center gap-1.5 h-9 px-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 shadow-sm">
+            <Wallet size={14} className="text-amber-600" />
+            <span className="text-[10px] font-black uppercase tracking-widest">{creditBalance} credits</span>
+          </div>
+
           {/* Profile button — icon+name on xl+, icon-only on md-lg */}
           <button className="flex items-center gap-2 bg-white pl-1.5 pr-2 xl:pr-3 py-1.5 rounded-2xl border border-slate-300 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all group" onClick={() => setShowProfileModal(true)}>
             <div className="h-8 w-8 rounded-xl bg-indigo-100 border border-indigo-200 flex items-center justify-center group-hover:bg-indigo-600 transition-colors overflow-hidden shrink-0">
@@ -8717,6 +8792,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                    {activeView === 'roadmap' && <RoadmapView profile={profile} pathId={selectedPathId} careers={careers} onNavigate={handleNavigate} onInitInterview={initiateInterview} />}
                    {activeView === 'digital-twin' && <CareerDigitalTwin profile={profile} careers={careers} />}
                    {activeView === 'jobs' && <JobBoardView profile={profile} />}
+                   {activeView === 'applications' && <ApplicationDashboard userId={(user?.id || (user as any)?.uid) as string} />}
                    {activeView === 'institutions' && <InstitutionsView profile={profile} selectedPathId={selectedPathId} careerTitle={careers.find(c => c.id === selectedPathId)?.title || selectedPathId} initialSearch={institutionSearchQuery} onInitInterview={initiateInterview} institutions={dynamicInstitutions} isLoading={isInstitutionsLoading} visaGuidance={visaGuidance} isVisaLoading={isVisaLoading} roadmapContext={institutionRoadmapContext} />}
                    {activeView === 'heatmap' && <HeatmapView profile={profile} />}
                    {activeView === 'materials' && <MaterialsView materials={dynamicMaterials} isLoading={isMaterialsLoading} careerTitle={careers.find(c => c.id === selectedPathId)?.title || profile.targetCareerId?.replace(/-/g,' ') || 'Technology'} />}
@@ -8815,6 +8891,16 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
         user={user}
         profile={profile}
         onProfileUpdate={(updated) => setProfile(updated)}
+      />
+
+      <InitialSetupModal
+        isOpen={showInitialSetup}
+        saving={isSetupSaving}
+        onSave={handleInitialSetupSave}
+        onClose={() => {
+          try { localStorage.setItem(setupStorageKey, '1'); } catch {}
+          setShowInitialSetup(false);
+        }}
       />
 
       {/* Spark.E Floating Bubble */}

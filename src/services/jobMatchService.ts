@@ -1,6 +1,6 @@
 import type {
   JobListing, CachedMatch, JobMatchResult,
-  WorkPreferences, SalaryPrediction, CultureAnalysis,
+  WorkPreferences, SalaryPrediction, CultureAnalysis, SemanticMatchedJob,
 } from "../types/jobMatch";
 import type { ResumeContent } from "../types/resume";
 
@@ -131,9 +131,71 @@ export async function saveWorkPreferences(
   userId: string,
   prefs: Partial<WorkPreferences>
 ): Promise<void> {
-  await fetch(`${API_BASE}/api/job-match/${userId}/preferences`, {
+  const res = await fetch(`${API_BASE}/api/job-match/${userId}/preferences`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(prefs),
   });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.success === false) {
+    throw new Error(data?.error || "Failed to save work preferences");
+  }
+}
+
+export async function runSemanticJobMatching(opts: {
+  userId: string;
+  resumeContent: ResumeContent;
+  workTypeFilter?: string;
+  industry?: string;
+  limit?: number;
+  minSalary?: number;
+  maxSalary?: number;
+}): Promise<SemanticMatchedJob[]> {
+  const data = await apiPost<{ results: SemanticMatchedJob[] }>("/semantic-match", opts);
+  return data.results;
+}
+
+export async function aggregateJobsFromProviders(opts?: {
+  providers?: Array<"linkedin" | "indeed" | "greenhouse" | "lever" | "remoteok">;
+  query?: string;
+  location?: string;
+  limitPerProvider?: number;
+}): Promise<{
+  totalFetched: number;
+  inserted: number;
+  updated: number;
+  skipped: number;
+  providerStats: Record<string, { fetched: number; inserted: number; updated: number; skipped: number }>;
+}> {
+  const res = await fetch(`${API_BASE}/api/job-match/jobs/aggregate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(opts || {}),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || "Failed to aggregate jobs");
+  }
+  return data.summary;
+}
+
+export async function runAiTailorAndSubmitApplication(opts: {
+  userId: string;
+  jobId: string;
+}): Promise<{
+  application: { id: string; status: string; appliedAt: string; resumeVersionId: string };
+  tailoredResume: ResumeContent;
+  coverLetter: string;
+}> {
+  const res = await fetch(`${API_BASE}/api/job-match/applications/ai-submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(opts),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || "Failed to tailor and submit application");
+  }
+  return data;
 }

@@ -59,6 +59,36 @@ interface UserEditForm {
   currentSavings: string;
 }
 
+interface AggregationProviderStat {
+  fetched: number;
+  inserted: number;
+  updated: number;
+  skipped: number;
+}
+
+interface AggregationSummary {
+  totalFetched: number;
+  inserted: number;
+  updated: number;
+  skipped: number;
+  providerStats: Record<string, AggregationProviderStat>;
+}
+
+interface AggregationHealthMetrics {
+  enabled: boolean;
+  running: boolean;
+  baseIntervalMs: number;
+  lastRunAt: string | null;
+  lastSuccessAt: string | null;
+  lastErrorAt: string | null;
+  lastErrorMessage: string | null;
+  lastDurationMs: number | null;
+  consecutiveFailures: number;
+  retries: number;
+  nextRunAt: string | null;
+  lastSummary: AggregationSummary | null;
+}
+
 const API_BASE = (
   import.meta.env.VITE_API_BASE ||
   import.meta.env.VITE_API_URL ||
@@ -133,6 +163,10 @@ export default function AdminDashboard({ adminEmail }: {
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [feedbackFilter, setFeedbackFilter] = useState<"all" | "pending" | "approved" | "rejected">("pending");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [aggregationHealth, setAggregationHealth] = useState<AggregationHealthMetrics | null>(null);
+  const [aggregationHealthLoading, setAggregationHealthLoading] = useState(false);
+  const [aggregationHealthError, setAggregationHealthError] = useState<string | null>(null);
+  const [aggregationRunNowLoading, setAggregationRunNowLoading] = useState(false);
 
   const fetchFeedbacks = useCallback(async () => {
     setFeedbackLoading(true);
@@ -187,6 +221,48 @@ export default function AdminDashboard({ adminEmail }: {
   }, []);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
+
+  const fetchAggregationHealth = useCallback(async () => {
+    setAggregationHealthLoading(true);
+    setAggregationHealthError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/job-match/jobs/aggregate/health`, { credentials: "include" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setAggregationHealth(data.metrics || null);
+    } catch (err: any) {
+      setAggregationHealthError(err?.message || "Could not load aggregation health");
+    } finally {
+      setAggregationHealthLoading(false);
+    }
+  }, []);
+
+  const triggerAggregationRunNow = useCallback(async () => {
+    setAggregationRunNowLoading(true);
+    setAggregationHealthError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/job-match/jobs/aggregate/run-now`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await fetchAggregationHealth();
+    } catch (err: any) {
+      setAggregationHealthError(err?.message || "Failed to run aggregation now");
+    } finally {
+      setAggregationRunNowLoading(false);
+    }
+  }, [fetchAggregationHealth]);
+
+  useEffect(() => {
+    void fetchAggregationHealth();
+    const id = setInterval(() => {
+      void fetchAggregationHealth();
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [fetchAggregationHealth]);
 
   // ── Derived stats ────────────────────────────────────────────────────────
   const totalUsers = users.length;
@@ -446,6 +522,95 @@ export default function AdminDashboard({ adminEmail }: {
         <StatCard icon={UserCheck} label="New This Week"  value={newThisWeek} sub="last 7 days"              color="bg-emerald-600" />
         <StatCard icon={Globe}     label="Countries"      value={countries}   sub="distinct locations"       color="bg-violet-600" />
         <StatCard icon={Crown}     label="Paid Users"     value={paidUsers}   sub={`${totalUsers ? Math.round(paidUsers/totalUsers*100) : 0}% conversion`} color="bg-amber-600" />
+      </div>
+
+      {/* Job aggregation health card */}
+      <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
+              <Briefcase size={12} /> Job Aggregation Health
+            </p>
+            <p className="text-xs text-slate-400 mt-1">Live scheduler metrics + manual run trigger</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={fetchAggregationHealth}
+              disabled={aggregationHealthLoading}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-700 hover:bg-slate-600 text-slate-200 disabled:opacity-60"
+            >
+              {aggregationHealthLoading ? "Refreshing…" : "Refresh"}
+            </button>
+            <button
+              onClick={triggerAggregationRunNow}
+              disabled={aggregationRunNowLoading || !!aggregationHealth?.running}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-60"
+            >
+              {aggregationRunNowLoading ? "Running…" : "Run Now"}
+            </button>
+          </div>
+        </div>
+
+        {aggregationHealthError && (
+          <div className="mb-3 flex items-center gap-2 bg-rose-900 border border-rose-700 text-rose-200 text-xs px-3 py-2 rounded-xl">
+            <AlertCircle size={12} /> {aggregationHealthError}
+          </div>
+        )}
+
+        {!aggregationHealth ? (
+          <div className="text-xs text-slate-400">No aggregation health data yet.</div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+            <div className="bg-[#0d1526] border border-slate-700 rounded-xl p-3">
+              <p className="text-slate-400 text-[10px] uppercase tracking-widest">Scheduler</p>
+              <p className={cn("font-black mt-1", aggregationHealth.enabled ? "text-emerald-300" : "text-amber-300")}>
+                {aggregationHealth.enabled ? "Enabled" : "Disabled"}
+              </p>
+            </div>
+            <div className="bg-[#0d1526] border border-slate-700 rounded-xl p-3">
+              <p className="text-slate-400 text-[10px] uppercase tracking-widest">Status</p>
+              <p className={cn("font-black mt-1", aggregationHealth.running ? "text-indigo-300" : "text-slate-200")}>
+                {aggregationHealth.running ? "Running" : "Idle"}
+              </p>
+            </div>
+            <div className="bg-[#0d1526] border border-slate-700 rounded-xl p-3">
+              <p className="text-slate-400 text-[10px] uppercase tracking-widest">Last Success</p>
+              <p className="font-black mt-1 text-slate-200">{aggregationHealth.lastSuccessAt ? fmtDate(aggregationHealth.lastSuccessAt) : "—"}</p>
+            </div>
+            <div className="bg-[#0d1526] border border-slate-700 rounded-xl p-3">
+              <p className="text-slate-400 text-[10px] uppercase tracking-widest">Failures</p>
+              <p className={cn("font-black mt-1", aggregationHealth.consecutiveFailures > 0 ? "text-rose-300" : "text-emerald-300")}>
+                {aggregationHealth.consecutiveFailures}
+              </p>
+            </div>
+
+            <div className="bg-[#0d1526] border border-slate-700 rounded-xl p-3 md:col-span-2">
+              <p className="text-slate-400 text-[10px] uppercase tracking-widest">Next Run</p>
+              <p className="font-black mt-1 text-slate-200">{aggregationHealth.nextRunAt ? new Date(aggregationHealth.nextRunAt).toLocaleString() : "—"}</p>
+            </div>
+            <div className="bg-[#0d1526] border border-slate-700 rounded-xl p-3">
+              <p className="text-slate-400 text-[10px] uppercase tracking-widest">Last Duration</p>
+              <p className="font-black mt-1 text-slate-200">{aggregationHealth.lastDurationMs != null ? `${aggregationHealth.lastDurationMs} ms` : "—"}</p>
+            </div>
+            <div className="bg-[#0d1526] border border-slate-700 rounded-xl p-3">
+              <p className="text-slate-400 text-[10px] uppercase tracking-widest">Retries</p>
+              <p className="font-black mt-1 text-slate-200">{aggregationHealth.retries}</p>
+            </div>
+
+            <div className="bg-[#0d1526] border border-slate-700 rounded-xl p-3 md:col-span-4">
+              <p className="text-slate-400 text-[10px] uppercase tracking-widest mb-2">Last Sync Summary</p>
+              <div className="flex items-center gap-4 flex-wrap">
+                <span className="text-slate-200 font-bold">Fetched: {aggregationHealth.lastSummary?.totalFetched ?? 0}</span>
+                <span className="text-emerald-300 font-bold">Inserted: {aggregationHealth.lastSummary?.inserted ?? 0}</span>
+                <span className="text-indigo-300 font-bold">Updated: {aggregationHealth.lastSummary?.updated ?? 0}</span>
+                <span className="text-amber-300 font-bold">Skipped: {aggregationHealth.lastSummary?.skipped ?? 0}</span>
+              </div>
+              {aggregationHealth.lastErrorMessage && (
+                <p className="mt-2 text-xs text-rose-300">Last Error: {aggregationHealth.lastErrorMessage}</p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}

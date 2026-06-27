@@ -19,6 +19,9 @@ import * as migration016 from "./016_push_subscriptions.js";
 import * as migration017 from "./017_monetization_tables.js";
 import * as migration018 from "./018_feedback_status.js";
 import * as migration019 from "./019_network_qa_posts.js";
+import * as migration020 from "./020_add_job_applications.js";
+import * as migration021 from "./021_add_user_credits.js";
+import * as migration022 from "./022_job_aggregation_indexes.js";
 
 const migrations = [
   { name: "001_initial_schema",        module: migration001 },
@@ -41,6 +44,9 @@ const migrations = [
   { name: "017_monetization_tables",              module: migration017 },
   { name: "018_feedback_status",                  module: migration018 },
   { name: "019_network_qa_posts",                  module: migration019 },
+  { name: "020_add_job_applications",               module: migration020 },
+  { name: "021_add_user_credits",                    module: migration021 },
+  { name: "022_job_aggregation_indexes",              module: migration022 },
 ];
 
 export async function runMigrations() {

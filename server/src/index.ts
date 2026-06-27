@@ -30,6 +30,9 @@ import subscriptionRouter from "./routes/subscriptions.js";
 import affiliatesRouter from "./routes/affiliates.js";
 import stripeRouter, { stripeWebhookHandler } from "./routes/stripe.js";
 import innovativeRouter from "./routes/innovative.js";
+import applicationsRouter from "./routes/applications.js";
+import creditsRouter from "./routes/credits.js";
+import { startJobAggregationScheduler, stopJobAggregationScheduler } from "./services/jobAggregationScheduler.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -124,6 +127,8 @@ app.use("/api/subscription", subscriptionRouter);
 app.use("/api/affiliates", affiliatesRouter);
 app.use("/api/stripe", stripeRouter);
 app.use("/api/innovative", innovativeRouter);
+app.use("/api/applications", applicationsRouter);
+app.use("/api/credits", creditsRouter);
 
 // 404 handler
 app.use(notFoundHandler);
@@ -158,6 +163,14 @@ async function startServer() {
 
     // Probe LLM providers — lock in the first available one
     probeProviders().catch(err => console.warn("[LLM] Startup probe failed:", err));
+
+    if (dbAvailable) {
+      startJobAggregationScheduler({
+        query: process.env.JOB_AGGREGATION_DEFAULT_QUERY || "software engineer",
+        location: process.env.JOB_AGGREGATION_DEFAULT_LOCATION || "",
+        limitPerProvider: Number.parseInt(process.env.JOB_AGGREGATION_LIMIT_PER_PROVIDER || "50", 10),
+      });
+    }
 
     // Warn early if email delivery is not configured
     if (!process.env.RESEND_API_KEY) {
@@ -197,6 +210,7 @@ async function startServer() {
 // Graceful shutdown
 process.on("SIGINT", async () => {
   console.log("\n✓ Shutting down gracefully...");
+  stopJobAggregationScheduler();
   await closeConnection();
   process.exit(0);
 });

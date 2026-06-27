@@ -5,10 +5,19 @@ import {
   predictSalary,
   assessCultureFit,
   buildLearningPath,
+  rankJobsBySemanticFit,
   type ResumeContent,
   type JobListingRow,
   type JobMatchAnalysis,
+  type SemanticPreferences,
 } from "../services/jobMatchService.js";
+import {
+  tailorResumeToJD,
+  generateCoverLetterFromResume,
+  type ResumeContent as TailorResumeContent,
+} from "../services/resumeService.js";
+import { aggregateJobsFromProviders, type AggregationProvider } from "../services/jobAggregationService.js";
+import { getJobAggregationSchedulerMetrics, runJobAggregationNow } from "../services/jobAggregationScheduler.js";
 
 const router = Router();
 
@@ -21,6 +30,50 @@ function normaliseUser(raw: unknown): string | null {
   const t = raw.trim();
   if (!t || t === "undefined" || t === "null") return null;
   return t;
+}
+
+function mapJobListing(row: JobListingRow) {
+  return {
+    id: row.id,
+    title: row.title,
+    company: row.company,
+    location: row.location,
+    workType: row.work_type,
+    description: row.description,
+    requirements: row.requirements,
+    skillsRequired: row.skills_required,
+    salaryMin: row.salary_min,
+    salaryMax: row.salary_max,
+    salaryCurrency: row.salary_currency,
+    companyCulture: row.company_culture,
+    industry: row.industry,
+    experienceLevel: row.experience_level,
+    sourceUrl: row.source_url,
+    source: row.source || null,
+    postedAt: row.posted_at,
+  };
+}
+
+function parseResumeContent(raw: unknown): TailorResumeContent | null {
+  const normalize = (value: unknown): TailorResumeContent | null => {
+    if (!value || typeof value !== "object") return null;
+    const content = ({ ...(value as Record<string, unknown>) } as unknown) as TailorResumeContent;
+    if (!Array.isArray(content.projects)) {
+      content.projects = [];
+    }
+    return content;
+  };
+
+  if (!raw) return null;
+  if (typeof raw === "object") return normalize(raw);
+  if (typeof raw === "string") {
+    try {
+      return normalize(JSON.parse(raw));
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,7 +121,7 @@ router.post("/jobs", async (req: Request, res: Response) => {
     const {
       title, company, location, workType = "onsite", description, requirements,
       skillsRequired = [], salaryMin, salaryMax, salaryCurrency = "USD",
-      companyCulture, industry, experienceLevel, sourceUrl, source = "manual",
+      companyCulture, industry, experienceLevel, sourceUrl, source = "manual", externalJobId = null,
     } = req.body;
 
     if (!title || !company) {
@@ -79,19 +132,326 @@ router.post("/jobs", async (req: Request, res: Response) => {
       `INSERT INTO job_listings
          (title, company, location, work_type, description, requirements,
           skills_required, salary_min, salary_max, salary_currency,
-          company_culture, industry, experience_level, source_url, source)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+         company_culture, industry, experience_level, source_url, source, external_job_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
        RETURNING *`,
       [title, company, location, workType, description, requirements,
        skillsRequired, salaryMin || null, salaryMax || null, salaryCurrency,
        companyCulture || null, industry || null, experienceLevel || null,
-       sourceUrl || null, source]
+       sourceUrl || null, source, externalJobId]
     );
 
     res.status(201).json({ success: true, job });
   } catch (err) {
     console.error("[job-match/jobs POST]", err);
     res.status(500).json({ error: "Failed to create job listing" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/job-match/jobs/aggregate
+// Sync jobs from configured providers (LinkedIn/Indeed/etc).
+// Requires provider feed URLs configured via env vars.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/jobs/aggregate", async (req: Request, res: Response) => {
+  try {
+    const {
+      providers,
+      query,
+      location,
+      limitPerProvider,
+    } = req.body as {
+      providers?: AggregationProvider[];
+      query?: string;
+      location?: string;
+      limitPerProvider?: number;
+    };
+
+    const summary = await aggregateJobsFromProviders({
+      providers,
+      query,
+      location,
+      limitPerProvider,
+    });
+
+    res.json({ success: true, summary });
+  } catch (err) {
+    console.error("[job-match/jobs/aggregate POST]", err);
+    res.status(500).json({ error: "Failed to aggregate jobs" });
+  }
+});
+
+// GET /api/job-match/jobs/aggregate/health
+router.get("/jobs/aggregate/health", async (_req: Request, res: Response) => {
+  try {
+    res.json({ success: true, metrics: getJobAggregationSchedulerMetrics() });
+  } catch (err) {
+    console.error("[job-match/jobs/aggregate/health GET]", err);
+    res.status(500).json({ error: "Failed to fetch aggregation health" });
+  }
+});
+
+// POST /api/job-match/jobs/aggregate/run-now
+router.post("/jobs/aggregate/run-now", async (req: Request, res: Response) => {
+  try {
+    const {
+      providers,
+      query,
+      location,
+      limitPerProvider,
+    } = req.body as {
+      providers?: AggregationProvider[];
+      query?: string;
+      location?: string;
+      limitPerProvider?: number;
+    };
+
+    const summary = await runJobAggregationNow({
+      providers,
+      query,
+      location,
+      limitPerProvider,
+    });
+
+    res.json({ success: true, summary });
+  } catch (err) {
+    console.error("[job-match/jobs/aggregate/run-now POST]", err);
+    res.status(500).json({ error: "Failed to run aggregation" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/job-match/semantic-match
+// Fast, deterministic semantic ranking for large job sets.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/semantic-match", async (req: Request, res: Response) => {
+  try {
+    const {
+      userId,
+      resumeContent,
+      workTypeFilter,
+      industry,
+      limit = 30,
+      minSalary,
+      maxSalary,
+    } = req.body as {
+      userId: string;
+      resumeContent: ResumeContent;
+      workTypeFilter?: string;
+      industry?: string;
+      limit?: number;
+      minSalary?: number;
+      maxSalary?: number;
+    };
+
+    const userIdentifier = normaliseUser(userId);
+    if (!userIdentifier) return res.status(400).json({ error: "userId is required" });
+    if (!resumeContent) return res.status(400).json({ error: "resumeContent is required" });
+
+    const conditions: string[] = ["is_active = TRUE"];
+    const params: unknown[] = [];
+
+    if (workTypeFilter && workTypeFilter !== "any") {
+      params.push(workTypeFilter);
+      conditions.push(`work_type = $${params.length}`);
+    }
+    if (industry) {
+      params.push(`%${industry}%`);
+      conditions.push(`industry ILIKE $${params.length}`);
+    }
+
+    const jobs: JobListingRow[] = await db.manyOrNone(
+      `SELECT * FROM job_listings
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY posted_at DESC
+       LIMIT 300`,
+      params
+    );
+
+    const prefsRow = await db.oneOrNone(
+      `SELECT
+         work_type_preference AS "workTypePreference",
+         min_salary AS "minSalary",
+         max_salary AS "maxSalary",
+         preferred_locations AS "preferredLocations",
+         preferred_industries AS "preferredIndustries",
+         target_role AS "targetRole"
+       FROM user_work_preferences
+       WHERE user_identifier = $1`,
+      [userIdentifier]
+    );
+
+    const prefs: SemanticPreferences = {
+      ...(prefsRow || {}),
+      minSalary: minSalary ?? prefsRow?.minSalary ?? null,
+      maxSalary: maxSalary ?? prefsRow?.maxSalary ?? null,
+    };
+
+    const ranked = rankJobsBySemanticFit(resumeContent, jobs, prefs)
+      .slice(0, Math.min(Math.max(limit, 1), 100))
+      .map(({ job, score }) => ({
+        job: mapJobListing(job),
+        score: score.overall,
+        breakdown: {
+          semantic: score.semantic,
+          title: score.title,
+          skills: score.skills,
+          salary: score.salary,
+          preference: score.preference,
+        },
+        reasons: score.reasons,
+        missingSkills: score.missingSkills,
+      }));
+
+    res.json({ success: true, results: ranked });
+  } catch (err) {
+    console.error("[job-match/semantic-match POST]", err);
+    res.status(500).json({ error: "Failed to perform semantic matching" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/job-match/applications/ai-submit
+// AI-tailor resume + generate cover letter + create application record.
+// Body: { userId, jobId }
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/applications/ai-submit", async (req: Request, res: Response) => {
+  try {
+    const { userId, jobId } = req.body as { userId: string; jobId: string };
+
+    const userIdentifier = normaliseUser(userId);
+    if (!userIdentifier) return res.status(400).json({ error: "userId is required" });
+    if (!jobId?.trim()) return res.status(400).json({ error: "jobId is required" });
+
+    const job: JobListingRow | null = await db.oneOrNone(
+      "SELECT * FROM job_listings WHERE id = $1 AND is_active = TRUE",
+      [jobId]
+    );
+    if (!job) return res.status(404).json({ error: "Job not found" });
+
+    const existing = await db.oneOrNone(
+      `SELECT id
+       FROM job_applications
+       WHERE user_identifier = $1
+         AND (
+           ($2::text IS NOT NULL AND job_url = $2)
+           OR (job_title = $3 AND company = $4 AND COALESCE(location, '') = COALESCE($5, ''))
+         )
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [userIdentifier, job.source_url || null, job.title, job.company, job.location || null]
+    );
+
+    if (existing) {
+      return res.status(409).json({
+        error: "Application already exists for this job",
+        existingApplicationId: existing.id,
+      });
+    }
+
+    const resumeRecord = await db.oneOrNone(
+      `SELECT r.id AS resume_id,
+              rv.id AS current_version_id,
+              rv.content_json
+       FROM resumes r
+       LEFT JOIN resume_versions rv ON rv.id = r.current_version_id
+       WHERE r.user_identifier = $1
+       LIMIT 1`,
+      [userIdentifier]
+    );
+
+    if (!resumeRecord?.content_json) {
+      return res.status(400).json({ error: "No resume found. Please upload or create a resume first." });
+    }
+
+    const resumeContent = parseResumeContent(resumeRecord.content_json);
+    if (!resumeContent) {
+      return res.status(422).json({ error: "Current resume content is invalid. Please re-save your resume." });
+    }
+
+    const jobDescription = [
+      `Role: ${job.title}`,
+      `Company: ${job.company}`,
+      job.description || "",
+      job.requirements || "",
+    ].filter(Boolean).join("\n\n");
+
+    const tailoredResume = await tailorResumeToJD(resumeContent, jobDescription);
+    const coverLetter = await generateCoverLetterFromResume(tailoredResume, jobDescription, job.title);
+
+    const versionCount = await db.one(
+      "SELECT COALESCE(MAX(version_number), 0) AS max FROM resume_versions WHERE resume_id = $1",
+      [resumeRecord.resume_id]
+    );
+    const nextVersion = Number(versionCount.max) + 1;
+
+    const tailoredVersion = await db.one(
+      `INSERT INTO resume_versions
+         (resume_id, version_number, content_json, change_summary)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, version_number`,
+      [
+        resumeRecord.resume_id,
+        nextVersion,
+        JSON.stringify(tailoredResume),
+        `AI tailored for ${job.title} at ${job.company}`,
+      ]
+    );
+
+    const application = await db.one(
+      `INSERT INTO job_applications
+         (user_identifier, job_title, company, location, work_type,
+          salary_min, salary_max, salary_currency,
+          job_url, job_description, status, applied_at,
+          resume_version_id, cover_letter_sent, notes, source, tags)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'applied',NOW(),$11,TRUE,$12,'ai-match',$13)
+       RETURNING id, status, applied_at, resume_version_id`,
+      [
+        userIdentifier,
+        job.title,
+        job.company,
+        job.location || null,
+        job.work_type || null,
+        job.salary_min || null,
+        job.salary_max || null,
+        job.salary_currency || "USD",
+        job.source_url || null,
+        job.description || null,
+        tailoredVersion.id,
+        "Submitted via AI Tailor & Apply workflow.",
+        ["ai-tailored", "auto-submitted"],
+      ]
+    );
+
+    await db.none(
+      `INSERT INTO application_events (application_id, event_type, description)
+       VALUES ($1, 'created', $2)`,
+      [application.id, `Application submitted for ${job.title} at ${job.company}`]
+    );
+
+    await db.none(
+      `INSERT INTO application_events (application_id, event_type, description)
+       VALUES ($1, 'note', $2)`,
+      [application.id, `AI tailored resume version v${tailoredVersion.version_number} and generated cover letter.`]
+    );
+
+    res.status(201).json({
+      success: true,
+      application: {
+        id: application.id,
+        status: application.status,
+        appliedAt: application.applied_at,
+        resumeVersionId: application.resume_version_id,
+      },
+      tailoredResume,
+      coverLetter,
+    });
+  } catch (err) {
+    console.error("[job-match/applications/ai-submit POST]", err);
+    res.status(500).json({ error: "Failed to tailor and submit application" });
   }
 });
 
@@ -153,7 +513,7 @@ router.post("/analyse", async (req: Request, res: Response) => {
   try {
     const {
       userId, resumeContent, jobIds, workTypeFilter,
-      minSalary, maxSalary,
+      minSalary, maxSalary, candidatePoolLimit = 150, llmTopN = 20,
     } = req.body as {
       userId: string;
       resumeContent: ResumeContent;
@@ -161,6 +521,8 @@ router.post("/analyse", async (req: Request, res: Response) => {
       workTypeFilter?: string;
       minSalary?: number;
       maxSalary?: number;
+      candidatePoolLimit?: number;
+      llmTopN?: number;
     };
 
     const userIdentifier = normaliseUser(userId);
@@ -180,8 +542,14 @@ router.post("/analyse", async (req: Request, res: Response) => {
       conditions.push(`work_type = $${params.length}`);
     }
 
+    const safeCandidateLimit = Math.min(Math.max(candidatePoolLimit, 20), 500);
+    params.push(safeCandidateLimit);
+
     const jobs: JobListingRow[] = await db.manyOrNone(
-      `SELECT * FROM job_listings WHERE ${conditions.join(" AND ")} ORDER BY posted_at DESC LIMIT 20`,
+      `SELECT * FROM job_listings
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY posted_at DESC
+       LIMIT $${params.length}`,
       params
     );
 
@@ -189,10 +557,33 @@ router.post("/analyse", async (req: Request, res: Response) => {
       return res.json({ success: true, results: [] });
     }
 
-    // Analyse each job sequentially to avoid hammering the LLM
-    const results: (JobMatchAnalysis & { jobId: string })[] = [];
+    const prefsRow = await db.oneOrNone(
+      `SELECT
+         work_type_preference AS "workTypePreference",
+         min_salary AS "minSalary",
+         max_salary AS "maxSalary",
+         preferred_locations AS "preferredLocations",
+         preferred_industries AS "preferredIndustries",
+         target_role AS "targetRole"
+       FROM user_work_preferences
+       WHERE user_identifier = $1`,
+      [userIdentifier]
+    );
 
-    for (const job of jobs) {
+    const semanticPrefs: SemanticPreferences = {
+      ...(prefsRow || {}),
+      minSalary: minSalary ?? prefsRow?.minSalary ?? null,
+      maxSalary: maxSalary ?? prefsRow?.maxSalary ?? null,
+    };
+
+    const rankedJobs = rankJobsBySemanticFit(resumeContent, jobs, semanticPrefs);
+    const analysisCandidates = rankedJobs.slice(0, Math.min(Math.max(llmTopN, 5), 40));
+
+    // Analyse top semantic candidates sequentially to avoid hammering the LLM
+    const results: Array<JobMatchAnalysis & { jobId: string; semanticScore: number }> = [];
+
+    for (const candidate of analysisCandidates) {
+      const job = candidate.job;
       try {
         const analysis = await analyseJobMatch(resumeContent, job, minSalary, maxSalary);
 
@@ -226,7 +617,7 @@ router.post("/analyse", async (req: Request, res: Response) => {
           ]
         );
 
-        results.push({ jobId: job.id, ...analysis });
+        results.push({ jobId: job.id, ...analysis, semanticScore: candidate.score.overall });
       } catch (jobErr) {
         console.error(`[job-match/analyse] job ${job.id} failed:`, (jobErr as Error).message);
       }
@@ -352,6 +743,7 @@ router.get("/:userId/preferences", async (req: Request, res: Response) => {
          preferred_locations   AS "preferredLocations",
          preferred_industries  AS "preferredIndustries",
          target_role           AS "targetRole",
+         setup_completed_at    AS "setupCompletedAt",
          updated_at            AS "updatedAt"
        FROM user_work_preferences WHERE user_identifier = $1`,
       [userIdentifier]

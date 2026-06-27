@@ -12,13 +12,14 @@ import { cn } from "../lib/utils";
 import type { ResumeContent } from "../types/resume";
 import type {
   CachedMatch, JobListing, SkillGap, LearningResource,
-  SalaryPrediction, CultureAnalysis, WorkPreferences,
+  SalaryPrediction, CultureAnalysis, WorkPreferences, SemanticMatchedJob,
 } from "../types/jobMatch";
 import {
   getJobListings, runJobMatching, getCachedMatches,
   getSkillGapAnalysis, getSalaryPrediction, getCultureFit,
-  getWorkPreferences, saveWorkPreferences, addJobListing,
+  getWorkPreferences, saveWorkPreferences, runSemanticJobMatching, runAiTailorAndSubmitApplication,
 } from "../services/jobMatchService";
+import { getResume } from "../services/resumeService";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Props
@@ -328,7 +329,10 @@ const MatchCard: React.FC<{
   match: CachedMatch;
   onExpand: () => void;
   expanded: boolean;
-}> = ({ match, onExpand, expanded }) => (
+  onAiSubmit: (match: CachedMatch) => void;
+  isSubmitting: boolean;
+  isSubmitted: boolean;
+}> = ({ match, onExpand, expanded, onAiSubmit, isSubmitting, isSubmitted }) => (
   <div className={cn(
     "bg-white rounded-2xl border transition-all",
     expanded ? "border-indigo-300 shadow-lg shadow-indigo-100" : "border-slate-200 hover:border-slate-300"
@@ -452,14 +456,24 @@ const MatchCard: React.FC<{
               </div>
             )}
 
-            {match.sourceUrl && (
-              <a
-                href={match.sourceUrl} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => onAiSubmit(match)}
+                disabled={isSubmitting || isSubmitted}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
               >
-                Apply Now <ExternalLink size={11} />
-              </a>
-            )}
+                {isSubmitting ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                {isSubmitted ? "Submitted" : isSubmitting ? "Submitting…" : "AI Tailor & Submit"}
+              </button>
+              {match.sourceUrl && (
+                <a
+                  href={match.sourceUrl} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
+                >
+                  Apply Now <ExternalLink size={11} />
+                </a>
+              )}
+            </div>
           </div>
         </motion.div>
       )}
@@ -838,6 +852,37 @@ const JobMatchView: React.FC<Props> = ({ userId, resumeContent }) => {
   const [minSalary, setMinSalary] = useState<number | undefined>();
   const [maxSalary, setMaxSalary] = useState<number | undefined>();
   const [prefs, setPrefs] = useState<WorkPreferences | null>(null);
+  const [semanticMatches, setSemanticMatches] = useState<SemanticMatchedJob[]>([]);
+  const [isSemanticLoading, setIsSemanticLoading] = useState(false);
+  const [semanticError, setSemanticError] = useState<string | null>(null);
+  const [expandedSemantic, setExpandedSemantic] = useState<string | null>(null);
+  const [loadedResume, setLoadedResume] = useState<ResumeContent | null>(resumeContent);
+  const [isResumeLoading, setIsResumeLoading] = useState(false);
+  const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null);
+  const [batchSubmitting, setBatchSubmitting] = useState(false);
+  const [submittedJobIds, setSubmittedJobIds] = useState<Record<string, string>>({});
+  const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+
+  const effectiveResume = resumeContent || loadedResume;
+
+  // Keep local resume in sync if parent starts passing data.
+  useEffect(() => {
+    if (resumeContent) setLoadedResume(resumeContent);
+  }, [resumeContent]);
+
+  // Fallback: fetch persisted resume so AI Match works across tabs/sessions.
+  useEffect(() => {
+    if (!userId || resumeContent) return;
+    setIsResumeLoading(true);
+    getResume(userId)
+      .then(record => {
+        if (record?.content) setLoadedResume(record.content);
+      })
+      .catch(() => {
+        // Ignore fetch errors and keep UX warning.
+      })
+      .finally(() => setIsResumeLoading(false));
+  }, [userId, resumeContent]);
 
   // Load cached matches and preferences on mount
   useEffect(() => {
@@ -864,8 +909,32 @@ const JobMatchView: React.FC<Props> = ({ userId, resumeContent }) => {
       .catch(() => {});
   }, [workTypeFilter]);
 
+  const handleRunSemanticPreview = useCallback(async () => {
+    if (!effectiveResume) {
+      setSemanticError("Upload your resume to preview semantic matches.");
+      return;
+    }
+    setIsSemanticLoading(true);
+    setSemanticError(null);
+    try {
+      const results = await runSemanticJobMatching({
+        userId,
+        resumeContent: effectiveResume,
+        workTypeFilter: workTypeFilter === "any" ? undefined : workTypeFilter,
+        limit: 20,
+        minSalary,
+        maxSalary,
+      });
+      setSemanticMatches(results);
+    } catch (e: any) {
+      setSemanticError(e.message || "Semantic preview failed");
+    } finally {
+      setIsSemanticLoading(false);
+    }
+  }, [effectiveResume, maxSalary, minSalary, userId, workTypeFilter]);
+
   const handleRunAnalysis = useCallback(async () => {
-    if (!resumeContent) {
+    if (!effectiveResume) {
       setError("Please upload your resume first to run job matching.");
       return;
     }
@@ -874,7 +943,8 @@ const JobMatchView: React.FC<Props> = ({ userId, resumeContent }) => {
     try {
       await runJobMatching({
         userId,
-        resumeContent,
+        resumeContent: effectiveResume,
+        jobIds: semanticMatches.length > 0 ? semanticMatches.map(item => item.job.id).slice(0, 20) : undefined,
         workTypeFilter: workTypeFilter === "any" ? undefined : workTypeFilter,
         minSalary,
         maxSalary,
@@ -887,7 +957,53 @@ const JobMatchView: React.FC<Props> = ({ userId, resumeContent }) => {
     } finally {
       setIsAnalysing(false);
     }
-  }, [userId, resumeContent, workTypeFilter, minSalary, maxSalary]);
+  }, [userId, effectiveResume, semanticMatches, workTypeFilter, minSalary, maxSalary]);
+
+  const handleAiSubmit = useCallback(async (match: CachedMatch) => {
+    setSubmitMessage(null);
+    setSubmittingMatchId(match.id);
+    try {
+      const result = await runAiTailorAndSubmitApplication({ userId, jobId: match.jobId });
+      setSubmittedJobIds(prev => ({ ...prev, [match.jobId]: result.application.id }));
+      setSubmitMessage(`Submitted ${match.title} at ${match.company} with AI-tailored resume and cover letter.`);
+    } catch (e: any) {
+      setSubmitMessage(e.message || `Failed to submit ${match.title} at ${match.company}`);
+    } finally {
+      setSubmittingMatchId(null);
+    }
+  }, [userId]);
+
+  const handleBatchAiSubmit = useCallback(async () => {
+    const toSubmit = filteredMatches
+      .filter(m => !submittedJobIds[m.jobId])
+      .slice(0, 5);
+
+    if (!toSubmit.length) {
+      setSubmitMessage("No new matches to submit.");
+      return;
+    }
+
+    setSubmitMessage(null);
+    setBatchSubmitting(true);
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const match of toSubmit) {
+      setSubmittingMatchId(match.id);
+      try {
+        const result = await runAiTailorAndSubmitApplication({ userId, jobId: match.jobId });
+        setSubmittedJobIds(prev => ({ ...prev, [match.jobId]: result.application.id }));
+        successCount += 1;
+      } catch {
+        failCount += 1;
+      }
+    }
+
+    setSubmittingMatchId(null);
+    setBatchSubmitting(false);
+    setSubmitMessage(`AI workflow finished: ${successCount} submitted, ${failCount} failed (processed top ${toSubmit.length} matches).`);
+  }, [filteredMatches, submittedJobIds, userId]);
 
   const filteredMatches = matches.filter(m => {
     if (workTypeFilter !== "any" && m.workType !== workTypeFilter) return false;
@@ -974,22 +1090,121 @@ const JobMatchView: React.FC<Props> = ({ userId, resumeContent }) => {
 
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-slate-400">
-                  {jobs.length} available jobs · {filteredMatches.length} matched
+                  {jobs.length} available jobs · {filteredMatches.length} AI-matched
                 </span>
-                <button
-                  onClick={handleRunAnalysis}
-                  disabled={isAnalysing || !resumeContent}
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
-                >
-                  {isAnalysing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                  {isAnalysing ? "Analysing…" : "Run AI Match"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleBatchAiSubmit}
+                    disabled={batchSubmitting || submittingMatchId !== null || !effectiveResume || filteredMatches.length === 0}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
+                  >
+                    {batchSubmitting ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+                    {batchSubmitting ? "Submitting…" : "AI Tailor & Submit Top 5"}
+                  </button>
+                  <button
+                    onClick={handleRunSemanticPreview}
+                    disabled={isSemanticLoading || !effectiveResume}
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
+                  >
+                    {isSemanticLoading ? <Loader2 size={12} className="animate-spin" /> : <Brain size={12} />}
+                    {isSemanticLoading ? "Ranking…" : "Preview Semantic Match"}
+                  </button>
+                  <button
+                    onClick={handleRunAnalysis}
+                    disabled={isAnalysing || !effectiveResume}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
+                  >
+                    {isAnalysing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                    {isAnalysing ? "Analysing…" : "Run AI Match"}
+                  </button>
+                </div>
               </div>
 
-              {!resumeContent && (
+              {semanticError && (
+                <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 rounded-xl">
+                  <AlertCircle size={13} className="text-rose-500 shrink-0" />
+                  <span className="text-xs text-rose-700">{semanticError}</span>
+                </div>
+              )}
+
+              {semanticMatches.length > 0 && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      Semantic Preview ({semanticMatches.length})
+                    </p>
+                    <span className="text-[10px] text-slate-400">Used as pre-filter for AI match</span>
+                  </div>
+                  <div className="space-y-2 max-h-80 overflow-auto pr-1">
+                    {semanticMatches.map(item => (
+                      <div key={item.job.id} className="bg-white border border-slate-200 rounded-xl">
+                        <button
+                          onClick={() => setExpandedSemantic(prev => prev === item.job.id ? null : item.job.id)}
+                          className="w-full px-3 py-2.5 flex items-start justify-between gap-3 text-left"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-black text-slate-900 truncate">{item.job.title}</p>
+                            <p className="text-[11px] text-slate-500 truncate">{item.job.company} · {item.job.location || "Location not specified"}</p>
+                          </div>
+                          <div className="shrink-0 flex items-center gap-2">
+                            <span className={cn("px-2 py-0.5 rounded-lg text-[10px] font-black", scoreBg(item.score), scoreColor(item.score))}>
+                              {item.score}
+                            </span>
+                            <ChevronDown size={12} className={cn("text-slate-400 transition-transform", expandedSemantic === item.job.id && "rotate-180")} />
+                          </div>
+                        </button>
+
+                        <AnimatePresence>
+                          {expandedSemantic === item.job.id && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden border-t border-slate-100"
+                            >
+                              <div className="px-3 py-3 space-y-2">
+                                {item.reasons.length > 0 && (
+                                  <div className="space-y-1">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Reasons</p>
+                                    {item.reasons.map((reason, idx) => (
+                                      <div key={idx} className="text-xs text-slate-600 flex items-start gap-1.5">
+                                        <Star size={10} className="mt-0.5 text-indigo-500 shrink-0" />
+                                        <span>{reason}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {item.missingSkills.length > 0 && (
+                                  <div className="space-y-1">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Missing Skills</p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {item.missingSkills.map(skill => (
+                                        <span key={skill} className="px-2 py-0.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-semibold">
+                                          {skill}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!effectiveResume && (
                 <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
                   <AlertCircle size={13} className="text-amber-500 shrink-0" />
-                  <span className="text-xs text-amber-700">Upload your resume to enable AI job matching</span>
+                  <span className="text-xs text-amber-700">
+                    {isResumeLoading
+                      ? "Checking saved resume…"
+                      : "Upload your resume to enable AI job matching"}
+                  </span>
                 </div>
               )}
 
@@ -997,6 +1212,26 @@ const JobMatchView: React.FC<Props> = ({ userId, resumeContent }) => {
                 <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 rounded-xl">
                   <AlertCircle size={13} className="text-rose-500 shrink-0" />
                   <span className="text-xs text-rose-700">{error}</span>
+                </div>
+              )}
+
+              {submitMessage && (
+                <div className={cn(
+                  "flex items-center gap-2 p-3 border rounded-xl",
+                  submitMessage.toLowerCase().includes("failed")
+                    ? "bg-amber-50 border-amber-200"
+                    : "bg-emerald-50 border-emerald-200"
+                )}>
+                  <CheckCircle size={13} className={cn(
+                    "shrink-0",
+                    submitMessage.toLowerCase().includes("failed") ? "text-amber-500" : "text-emerald-500"
+                  )} />
+                  <span className={cn(
+                    "text-xs",
+                    submitMessage.toLowerCase().includes("failed") ? "text-amber-700" : "text-emerald-700"
+                  )}>
+                    {submitMessage}
+                  </span>
                 </div>
               )}
             </div>
@@ -1023,6 +1258,9 @@ const JobMatchView: React.FC<Props> = ({ userId, resumeContent }) => {
                     match={match}
                     expanded={expandedMatch === match.id}
                     onExpand={() => setExpandedMatch(expandedMatch === match.id ? null : match.id)}
+                    onAiSubmit={handleAiSubmit}
+                    isSubmitting={submittingMatchId === match.id || batchSubmitting}
+                    isSubmitted={!!submittedJobIds[match.jobId]}
                   />
                 ))}
               </div>
@@ -1033,14 +1271,14 @@ const JobMatchView: React.FC<Props> = ({ userId, resumeContent }) => {
         {/* ── SALARY TAB ── */}
         {activeTab === "salary" && (
           <motion.div key="salary" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-            <SalaryExplorer resumeContent={resumeContent} />
+            <SalaryExplorer resumeContent={effectiveResume} />
           </motion.div>
         )}
 
         {/* ── CULTURE TAB ── */}
         {activeTab === "culture" && (
           <motion.div key="culture" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-            <CultureExplorer resumeContent={resumeContent} />
+            <CultureExplorer resumeContent={effectiveResume} />
           </motion.div>
         )}
 

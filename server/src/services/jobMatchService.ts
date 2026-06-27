@@ -87,8 +87,30 @@ export interface JobListingRow {
   industry: string | null;
   experience_level: string | null;
   source_url: string | null;
+  source?: string | null;
+  external_job_id?: string | null;
   is_active: boolean;
   posted_at: string;
+}
+
+export interface SemanticPreferences {
+  workTypePreference?: "remote" | "hybrid" | "onsite" | "any";
+  minSalary?: number | null;
+  maxSalary?: number | null;
+  preferredLocations?: string[];
+  preferredIndustries?: string[];
+  targetRole?: string | null;
+}
+
+export interface SemanticMatchScore {
+  overall: number;
+  semantic: number;
+  title: number;
+  skills: number;
+  salary: number;
+  preference: number;
+  missingSkills: string[];
+  reasons: string[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -133,6 +155,189 @@ function resumeToText(c: ResumeContent): string {
   }
   if (c.awards?.length) parts.push(`Awards: ${c.awards.join(", ")}`);
   return parts.join("\n");
+}
+
+function tokenize(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9+#.\s-]/g, " ")
+    .split(/\s+/)
+    .map(t => t.trim())
+    .filter(t => t.length >= 2);
+}
+
+function tokenFreq(tokens: string[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const token of tokens) {
+    map.set(token, (map.get(token) || 0) + 1);
+  }
+  return map;
+}
+
+function cosineSimilarity(a: Map<string, number>, b: Map<string, number>): number {
+  if (!a.size || !b.size) return 0;
+
+  let dot = 0;
+  let aNorm = 0;
+  let bNorm = 0;
+
+  for (const [, value] of a) aNorm += value * value;
+  for (const [, value] of b) bNorm += value * value;
+
+  for (const [token, aVal] of a) {
+    const bVal = b.get(token) || 0;
+    dot += aVal * bVal;
+  }
+
+  if (!aNorm || !bNorm) return 0;
+  return dot / (Math.sqrt(aNorm) * Math.sqrt(bNorm));
+}
+
+function overlapScore(aSet: Set<string>, bSet: Set<string>): number {
+  if (!aSet.size || !bSet.size) return 0;
+  let intersection = 0;
+  for (const token of aSet) {
+    if (bSet.has(token)) intersection += 1;
+  }
+  return intersection / Math.max(aSet.size, bSet.size);
+}
+
+function normalizeLocation(value: string | null | undefined): string {
+  return (value || "")
+    .toLowerCase()
+    .replace(/[^a-z\s,]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseSkillsFromJob(job: JobListingRow): string[] {
+  if (Array.isArray(job.skills_required) && job.skills_required.length) {
+    return job.skills_required.map(s => s.toLowerCase().trim()).filter(Boolean);
+  }
+  const merged = `${job.title} ${job.requirements || ""} ${job.description || ""}`;
+  return Array.from(new Set(tokenize(merged).filter(t => t.length >= 3))).slice(0, 15);
+}
+
+function scoreSalaryFit(job: JobListingRow, prefs: SemanticPreferences): number {
+  if (!job.salary_min && !job.salary_max) return 55;
+  if (!prefs.minSalary && !prefs.maxSalary) return 60;
+
+  const jMin = job.salary_min ?? job.salary_max ?? 0;
+  const jMax = job.salary_max ?? job.salary_min ?? 0;
+  const pMin = prefs.minSalary ?? 0;
+  const pMax = prefs.maxSalary ?? Number.MAX_SAFE_INTEGER;
+
+  const overlapMin = Math.max(jMin, pMin);
+  const overlapMax = Math.min(jMax, pMax);
+  if (overlapMax < overlapMin) return 25;
+
+  const overlap = overlapMax - overlapMin;
+  const span = Math.max(jMax - jMin, 1);
+  return Math.max(35, Math.min(100, Math.round((overlap / span) * 100)));
+}
+
+function scorePreferenceFit(job: JobListingRow, prefs: SemanticPreferences): number {
+  let score = 55;
+
+  if (prefs.workTypePreference && prefs.workTypePreference !== "any") {
+    score += prefs.workTypePreference === job.work_type ? 20 : -15;
+  }
+
+  if (prefs.preferredLocations?.length) {
+    const normalizedJobLocation = normalizeLocation(job.location);
+    const hit = prefs.preferredLocations.some(loc => normalizedJobLocation.includes(normalizeLocation(loc)));
+    score += hit ? 15 : -8;
+  }
+
+  if (prefs.preferredIndustries?.length && job.industry) {
+    const jobIndustry = job.industry.toLowerCase();
+    const hit = prefs.preferredIndustries.some(ind => jobIndustry.includes(ind.toLowerCase()));
+    score += hit ? 10 : -5;
+  }
+
+  return Math.max(0, Math.min(100, score));
+}
+
+export function scoreSemanticMatch(
+  resume: ResumeContent,
+  job: JobListingRow,
+  prefs: SemanticPreferences = {}
+): SemanticMatchScore {
+  const resumeText = resumeToText(resume);
+  const jobText = [
+    job.title,
+    job.company,
+    job.location || "",
+    job.description || "",
+    job.requirements || "",
+    job.skills_required.join(" "),
+  ].join(" ");
+
+  const resumeTokens = tokenize(resumeText);
+  const jobTokens = tokenize(jobText);
+  const resumeFreq = tokenFreq(resumeTokens);
+  const jobFreq = tokenFreq(jobTokens);
+
+  const semantic = Math.round(cosineSimilarity(resumeFreq, jobFreq) * 100);
+
+  const candidateTitles = (resume.experience || []).map(exp => exp.position.toLowerCase());
+  const targetTitle = (prefs.targetRole || candidateTitles[0] || "").toLowerCase();
+  const titleTokens = new Set(tokenize(`${targetTitle} ${candidateTitles.join(" ")}`));
+  const jobTitleTokens = new Set(tokenize(job.title));
+  const title = Math.round(overlapScore(titleTokens, jobTitleTokens) * 100);
+
+  const candidateSkills = new Set([
+    ...(resume.skills?.technical || []),
+    ...(resume.skills?.soft || []),
+    ...(resume.skills?.certifications || []),
+  ].map(s => s.toLowerCase().trim()).filter(Boolean));
+
+  const jobSkills = parseSkillsFromJob(job);
+  const missingSkills = jobSkills.filter(skill => !candidateSkills.has(skill)).slice(0, 8);
+  const matchedSkills = jobSkills.filter(skill => candidateSkills.has(skill));
+  const skills = jobSkills.length
+    ? Math.round((matchedSkills.length / jobSkills.length) * 100)
+    : Math.round(overlapScore(new Set(resumeTokens), new Set(jobTokens)) * 100);
+
+  const salary = scoreSalaryFit(job, prefs);
+  const preference = scorePreferenceFit(job, prefs);
+
+  const overall = Math.round(
+    semantic * 0.36 +
+    skills * 0.30 +
+    title * 0.14 +
+    preference * 0.12 +
+    salary * 0.08
+  );
+
+  const reasons: string[] = [];
+  if (skills >= 70) reasons.push(`Strong skill overlap (${matchedSkills.length}/${jobSkills.length || 0})`);
+  if (title >= 60) reasons.push("Role/title alignment is high");
+  if (preference >= 70) reasons.push("Matches your work and location preferences");
+  if (salary >= 70) reasons.push("Salary range aligns with your target");
+  if (semantic >= 70) reasons.push("Resume content strongly matches job context");
+  if (!reasons.length) reasons.push("Moderate alignment with improvement opportunities");
+
+  return {
+    overall: Math.max(0, Math.min(100, overall)),
+    semantic,
+    title,
+    skills,
+    salary,
+    preference,
+    missingSkills,
+    reasons: reasons.slice(0, 4),
+  };
+}
+
+export function rankJobsBySemanticFit(
+  resume: ResumeContent,
+  jobs: JobListingRow[],
+  prefs: SemanticPreferences = {}
+): Array<{ job: JobListingRow; score: SemanticMatchScore }> {
+  return jobs
+    .map(job => ({ job, score: scoreSemanticMatch(resume, job, prefs) }))
+    .sort((a, b) => b.score.overall - a.score.overall);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
