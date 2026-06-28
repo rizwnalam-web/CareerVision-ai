@@ -13,6 +13,7 @@
  */
 
 import Stripe from "stripe";
+import { getCreditPackById } from "./creditsService.js";
 
 export const STRIPE_ENABLED = process.env.STRIPE_ENABLED === "true";
 
@@ -56,6 +57,51 @@ export async function createCheckoutSession(
     cancel_url: cancelUrl,
     client_reference_id: userId,
     metadata: { userId, planSlug, billingPeriod },
+  });
+
+  if (!session.url) throw new Error("Stripe did not return a checkout URL");
+  return session.url;
+}
+
+/** Create a one-time Stripe Checkout Session for application credit packs. */
+export async function createCreditPackCheckoutSession(
+  userId: string,
+  packId: string,
+  successUrl: string,
+  cancelUrl: string
+): Promise<string> {
+  if (!stripe) throw new Error("Stripe is not enabled");
+
+  const pack = getCreditPackById(packId);
+  if (!pack) throw new Error("Invalid application pack");
+
+  const lineItem = pack.stripePriceId
+    ? { price: pack.stripePriceId, quantity: 1 }
+    : {
+        price_data: {
+          currency: pack.currency,
+          unit_amount: pack.priceCents,
+          product_data: {
+            name: pack.name,
+            description: pack.description,
+          },
+        },
+        quantity: 1,
+      };
+
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ["card"],
+    mode: "payment",
+    line_items: [lineItem],
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    client_reference_id: userId,
+    metadata: {
+      userId,
+      purchaseType: "credit_pack",
+      packId: pack.id,
+      packCredits: String(pack.applicationCredits),
+    },
   });
 
   if (!session.url) throw new Error("Stripe did not return a checkout URL");

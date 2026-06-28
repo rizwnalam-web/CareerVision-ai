@@ -6,26 +6,34 @@ import {
   ChevronDown, ChevronRight, Loader2, RotateCcw, Download,
   User, Briefcase, GraduationCap, Code, Award, FolderGit2,
   TrendingUp, Target, Lightbulb, Shield, Wand2, FileEdit, Copy, Check,
+  Languages, MessageSquare, Send,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { UserProfile } from "../types/career";
 import type {
   ResumeContent, ResumeVersion, ATSReport, ATSSuggestion,
   PortfolioProject, PortfolioProjectInput,
+  DeepResumeProfileSnapshot, DeepResumeResponse,
 } from "../types/resume";
 import {
   uploadAndParseResume, getResume, saveResumeContent,
   getResumeVersions, restoreResumeVersion, runATSCheck,
   getResumeSuggestions, getPortfolioProjects,
   createPortfolioProject, updatePortfolioProject, deletePortfolioProject,
-  tailorResumeToJD, generateCoverLetter, deleteResumeVersion,
+  tailorResumeToJD, translateResume, generateCoverLetter, deleteResumeVersion,
+  askDeepResumeQuestion, createDeepResumeShareLink, getDeepResumeHistory,
 } from "../services/resumeService";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-type Tab = "editor" | "tailor" | "cover-letter" | "ats" | "versions" | "portfolio";
+type Tab = "editor" | "tailor" | "translate" | "cover-letter" | "deep-profile" | "ats" | "versions" | "portfolio";
+
+interface DeepResumeTurn {
+  question: string;
+  response: DeepResumeResponse;
+}
 
 interface Props {
   profile: UserProfile;
@@ -44,6 +52,7 @@ function emptyContent(): ResumeContent {
     skills: { technical: [], soft: [], languages: [], certifications: [] },
     projects: [],
     awards: [],
+    references: [],
   };
 }
 
@@ -118,11 +127,12 @@ const TagInput: React.FC<{
   onChange: (tags: string[]) => void;
 }> = ({ label, tags, onChange }) => {
   const [input, setInput] = useState("");
+  const safeTags = Array.isArray(tags) ? tags : [];
 
   const addTag = () => {
     const trimmed = input.trim();
-    if (trimmed && !tags.includes(trimmed)) {
-      onChange([...tags, trimmed]);
+    if (trimmed && !safeTags.includes(trimmed)) {
+      onChange([...safeTags, trimmed]);
     }
     setInput("");
   };
@@ -131,10 +141,10 @@ const TagInput: React.FC<{
     <div className="space-y-1">
       <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</label>
       <div className="flex flex-wrap gap-1.5 min-h-[36px] px-3 py-2 rounded-xl border border-slate-200 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-50">
-        {tags.map(tag => (
+        {safeTags.map(tag => (
           <span key={tag} className="flex items-center gap-1 bg-indigo-50 text-indigo-700 text-[11px] font-bold px-2 py-0.5 rounded-lg">
             {tag}
-            <button onClick={() => onChange(tags.filter(t => t !== tag))} className="hover:text-rose-500">
+            <button type="button" onClick={() => onChange(safeTags.filter(t => t !== tag))} className="hover:text-rose-500">
               <X size={10} />
             </button>
           </span>
@@ -267,6 +277,23 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
   const [tailoredContent, setTailoredContent] = useState<ResumeContent | null>(null);
   const [tailorApplied, setTailorApplied] = useState(false);
 
+  // ── Resume Translation state ──
+  const [translationLanguage, setTranslationLanguage] = useState("Spanish");
+  const [translationTone, setTranslationTone] = useState<"professional" | "formal" | "concise">("professional");
+  const [isTranslationLoading, setIsTranslationLoading] = useState(false);
+  const [translatedContent, setTranslatedContent] = useState<ResumeContent | null>(null);
+  const [translationApplied, setTranslationApplied] = useState(false);
+
+  // - Deep Resume interactive profile state -
+  const [deepQuestion, setDeepQuestion] = useState("");
+  const [deepReferences, setDeepReferences] = useState<string[]>([]);
+  const [deepHistory, setDeepHistory] = useState<DeepResumeTurn[]>([]);
+  const [deepSnapshot, setDeepSnapshot] = useState<DeepResumeProfileSnapshot | null>(null);
+  const [isDeepLoading, setIsDeepLoading] = useState(false);
+  const [isShareLoading, setIsShareLoading] = useState(false);
+  const [deepShareUrl, setDeepShareUrl] = useState("");
+  const [hasLoadedDeepHistory, setHasLoadedDeepHistory] = useState(false);
+
   // ── Cover Letter state ──
   const [jdForCover, setJdForCover] = useState("");
   const [isCoverLoading, setIsCoverLoading] = useState(false);
@@ -328,6 +355,31 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
       }
     })();
   }, [activeTab, userId]);
+
+  useEffect(() => {
+    setDeepReferences(Array.isArray(content.references) ? content.references : []);
+  }, [content.references]);
+
+  useEffect(() => {
+    if (activeTab !== "deep-profile" || !userId || hasLoadedDeepHistory) return;
+    (async () => {
+      try {
+        const history = await getDeepResumeHistory(userId, 20);
+        if (history.length > 0) {
+          setDeepHistory(
+            history
+              .slice()
+              .reverse()
+              .map((item) => ({ question: item.question, response: item.response }))
+          );
+        }
+      } catch {
+        // Non-blocking
+      } finally {
+        setHasLoadedDeepHistory(true);
+      }
+    })();
+  }, [activeTab, userId, hasLoadedDeepHistory]);
 
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);
@@ -412,6 +464,31 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
     showSuccess("Tailored resume applied — review the Editor tab, then Save & Run ATS Check");
   };
 
+  // ── Resume translation ──
+  const handleTranslateResume = async () => {
+    if (!translationLanguage.trim()) return setError("Select a target language");
+    setIsTranslationLoading(true);
+    setError(null);
+    setTranslatedContent(null);
+    setTranslationApplied(false);
+    try {
+      const result = await translateResume(userId, content, translationLanguage, translationTone, true);
+      setTranslatedContent(result.translated);
+      setContent(result.translated);
+      setHasResume(true);
+      setTranslationApplied(true);
+      showSuccess(
+        result.saved && result.versionNumber
+          ? `Translated to ${translationLanguage} and saved as v${result.versionNumber}`
+          : `Translated to ${translationLanguage}`
+      );
+    } catch (e: any) {
+      setError(e.message || "Translation failed");
+    } finally {
+      setIsTranslationLoading(false);
+    }
+  };
+
   // ── Cover Letter ──
   const handleGenerateCoverLetter = async () => {
     if (!jdForCover.trim()) return setError("Paste a job description first");
@@ -433,6 +510,47 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
     await navigator.clipboard.writeText(coverLetter);
     setCoverCopied(true);
     setTimeout(() => setCoverCopied(false), 2000);
+  };
+
+  // - Deep Resume interactive Q&A -
+  const handleAskDeepResume = async () => {
+    if (!deepQuestion.trim()) {
+      setError("Enter a question for the interactive profile");
+      return;
+    }
+
+    setIsDeepLoading(true);
+    setError(null);
+    try {
+      const historyPayload = deepHistory.slice(-4).map((turn) => ({
+        question: turn.question,
+        answer: turn.response.answer,
+      }));
+
+      const result = await askDeepResumeQuestion(userId, deepQuestion.trim(), deepReferences, historyPayload);
+      setDeepSnapshot(result.profileSnapshot);
+      setDeepHistory((prev) => [...prev, { question: deepQuestion.trim(), response: result.response }]);
+      setDeepQuestion("");
+    } catch (e: any) {
+      setError(e.message || "Deep resume query failed");
+    } finally {
+      setIsDeepLoading(false);
+    }
+  };
+
+  const handleGenerateShareLink = async () => {
+    setIsShareLoading(true);
+    setError(null);
+    try {
+      const result = await createDeepResumeShareLink(userId, true, window.location.origin);
+      setDeepShareUrl(result.shareUrl);
+      await navigator.clipboard.writeText(result.shareUrl);
+      showSuccess("Public Deep Resume link generated and copied to clipboard");
+    } catch (e: any) {
+      setError(e.message || "Failed to generate share link");
+    } finally {
+      setIsShareLoading(false);
+    }
   };
 
   // ── AI suggestions ──
@@ -587,7 +705,9 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: "editor",       label: "Resume Editor", icon: Edit3 },
     { id: "tailor",       label: "AI Tailor",     icon: Wand2 },
+    { id: "translate",    label: "Translate",     icon: Languages },
     { id: "cover-letter", label: "Cover Letter",  icon: FileEdit },
+    { id: "deep-profile", label: "Deep Resume",   icon: MessageSquare },
     { id: "ats",          label: "ATS Scanner",   icon: Shield },
     { id: "versions",     label: "Versions",      icon: Clock },
     { id: "portfolio",    label: "Portfolio",     icon: FolderGit2 },
@@ -600,7 +720,7 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Resume & Profile</h1>
           <p className="text-[10px] text-indigo-500 font-black uppercase tracking-[0.2em] mt-1">
-            Multi-format parsing · AI Tailor · Cover Letter · ATS Scanner · Version control · Portfolio
+            Multi-format parsing · AI Tailor · Translation · Cover Letter · Deep Resume · ATS Scanner · Version control · Portfolio
           </p>
         </div>
         {hasResume && atsReport && (
@@ -716,7 +836,21 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
                         <p className="text-xs text-slate-500 truncate">{exp.company || "Company"} {exp.startDate && `· ${exp.startDate}`}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <button onClick={e => { e.stopPropagation(); removeExp(exp.id); }} className="p-1 text-slate-400 hover:text-rose-500"><Trash2 size={13} /></button>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={e => { e.stopPropagation(); removeExp(exp.id); }}
+                          onKeyDown={e => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              removeExp(exp.id);
+                            }
+                          }}
+                          className="p-1 text-slate-400 hover:text-rose-500"
+                        >
+                          <Trash2 size={13} />
+                        </span>
                         {expandedExp === exp.id ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
                       </div>
                     </button>
@@ -766,7 +900,21 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
                         <p className="text-xs text-slate-500 truncate">{edu.institution || "Institution"}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <button onClick={e => { e.stopPropagation(); removeEdu(edu.id); }} className="p-1 text-slate-400 hover:text-rose-500"><Trash2 size={13} /></button>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={e => { e.stopPropagation(); removeEdu(edu.id); }}
+                          onKeyDown={e => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              removeEdu(edu.id);
+                            }
+                          }}
+                          className="p-1 text-slate-400 hover:text-rose-500"
+                        >
+                          <Trash2 size={13} />
+                        </span>
                         {expandedEdu === edu.id ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
                       </div>
                     </button>
@@ -812,6 +960,15 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
             {/* Awards */}
             <SectionCard title="Awards & Honours" icon={Award}>
               <TagInput label="Awards" tags={content.awards} onChange={v => setContent(c => ({ ...c, awards: v }))} />
+            </SectionCard>
+
+            <SectionCard title="References" icon={MessageSquare}>
+              <TagInput
+                label="Professional References"
+                tags={content.references}
+                onChange={v => setContent(c => ({ ...c, references: v }))}
+              />
+              <p className="text-xs text-slate-500">Add referee details (name, role, organization, contact) to power recruiter Q&A with evidence.</p>
             </SectionCard>
 
             {/* AI Suggestions Panel */}
@@ -1000,6 +1157,105 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
           </motion.div>
         )}
 
+        {/* ── TAB: TRANSLATE ── */}
+        {activeTab === "translate" && (
+          <motion.div key="translate" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+            <div className="bg-gradient-to-r from-sky-50 to-cyan-50 rounded-2xl border border-sky-100 p-5">
+              <div className="flex items-center gap-2 mb-1">
+                <Languages size={15} className="text-sky-500" />
+                <p className="text-xs font-black uppercase tracking-widest text-sky-700">AI Resume Translation</p>
+              </div>
+              <p className="text-sm text-slate-600">Professionally localize your resume for global recruiters while preserving facts, dates, and measurable achievements.</p>
+            </div>
+
+            <SectionCard title="Translation Settings" icon={Languages}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Target Language</label>
+                  <select
+                    value={translationLanguage}
+                    onChange={e => setTranslationLanguage(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm outline-none focus:border-sky-400 bg-white"
+                  >
+                    {["Spanish", "French", "German", "Portuguese", "Italian", "Dutch", "Arabic", "Chinese (Simplified)", "Japanese", "Korean", "Hindi"].map(lang => (
+                      <option key={lang} value={lang}>{lang}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Tone</label>
+                  <select
+                    value={translationTone}
+                    onChange={e => setTranslationTone(e.target.value as "professional" | "formal" | "concise")}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm outline-none focus:border-sky-400 bg-white"
+                  >
+                    <option value="professional">Professional</option>
+                    <option value="formal">Formal</option>
+                    <option value="concise">Concise</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-xs text-slate-500">Creates a new resume version automatically so you can restore anytime.</p>
+                <button
+                  onClick={handleTranslateResume}
+                  disabled={isTranslationLoading}
+                  className="flex items-center gap-2 px-6 py-3 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-sky-200"
+                >
+                  {isTranslationLoading ? <Loader2 size={14} className="animate-spin" /> : <Languages size={14} />}
+                  {isTranslationLoading ? "Translating…" : `Translate to ${translationLanguage}`}
+                </button>
+              </div>
+            </SectionCard>
+
+            {isTranslationLoading && (
+              <div className="flex flex-col items-center py-16 gap-4 text-slate-500">
+                <Loader2 size={36} className="text-sky-500 animate-spin" />
+                <p className="font-bold text-sm">Localizing your resume for {translationLanguage} recruiters…</p>
+                <p className="text-xs text-slate-400">This usually takes ~20-40 seconds</p>
+              </div>
+            )}
+
+            {translatedContent && !isTranslationLoading && (
+              <SectionCard title="Translation Preview" icon={CheckCircle}>
+                <div className="space-y-4">
+                  <div className="bg-sky-50 border border-sky-100 rounded-xl p-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-sky-700 mb-1">Localized Professional Summary</p>
+                    <p className="text-sm text-slate-700">{translatedContent.personalInfo.summary || "Summary is empty"}</p>
+                  </div>
+
+                  {translatedContent.experience.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Localized Experience Highlights</p>
+                      <div className="space-y-2">
+                        {translatedContent.experience.slice(0, 2).map(exp => (
+                          <div key={exp.id} className="border border-slate-200 rounded-xl p-3">
+                            <p className="text-xs font-black text-slate-800">{exp.position} · {exp.company}</p>
+                            <p className="text-xs text-slate-600 mt-1">{exp.description || "No description"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-emerald-600 font-bold">
+                      {translationApplied ? `Current resume is now localized in ${translationLanguage}.` : "Translation ready."}
+                    </span>
+                    <button
+                      onClick={() => setActiveTab("editor")}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      <Edit3 size={11} /> Review in Editor
+                    </button>
+                  </div>
+                </div>
+              </SectionCard>
+            )}
+          </motion.div>
+        )}
+
         {/* ── TAB: COVER LETTER ── */}
         {activeTab === "cover-letter" && (
           <motion.div key="cover-letter" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
@@ -1068,6 +1324,158 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
                 <FileEdit size={40} className="mx-auto mb-4 opacity-30" />
                 <p className="font-bold">No cover letter yet</p>
                 <p className="text-xs mt-1">Paste a job description and click Generate</p>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* ── TAB: ATS SCANNER ── */}
+        {activeTab === "deep-profile" && (
+          <motion.div key="deep-profile" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+            <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-2xl border border-cyan-100 p-5">
+              <div className="flex items-center gap-2 mb-1">
+                <MessageSquare size={15} className="text-cyan-600" />
+                <p className="text-xs font-black uppercase tracking-widest text-cyan-700">Deep Resume Interactive Profile</p>
+              </div>
+              <p className="text-sm text-slate-600">Replace static PDFs with a live profile. Hiring managers can ask questions and get evidence-backed answers from your resume, portfolio, GitHub repositories, case studies, and references.</p>
+            </div>
+
+            <SectionCard title="Ask the Candidate Profile" icon={MessageSquare}>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                  <p className="text-xs text-slate-600">Create a public read-only Deep Resume URL for hiring managers.</p>
+                  <button
+                    onClick={handleGenerateShareLink}
+                    disabled={isShareLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    {isShareLoading ? <Loader2 size={11} className="animate-spin" /> : <ExternalLink size={11} />}
+                    {isShareLoading ? "Generating..." : "Generate Share URL"}
+                  </button>
+                </div>
+
+                {deepShareUrl && (
+                  <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl p-2">
+                    <input
+                      readOnly
+                      value={deepShareUrl}
+                      className="flex-1 bg-transparent text-xs text-emerald-800 font-medium focus:outline-none"
+                    />
+                    <button
+                      onClick={() => navigator.clipboard.writeText(deepShareUrl)}
+                      className="px-2.5 py-1 bg-white border border-emerald-300 text-emerald-700 rounded-lg text-[10px] font-black uppercase tracking-widest"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                )}
+
+                <textarea
+                  value={deepQuestion}
+                  onChange={e => setDeepQuestion(e.target.value)}
+                  rows={3}
+                  placeholder="e.g. Show me examples of leadership on distributed teams"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-50 resize-none"
+                />
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <TagInput label="References used by AI" tags={deepReferences} onChange={setDeepReferences} />
+                  <button
+                    onClick={handleAskDeepResume}
+                    disabled={isDeepLoading || !deepQuestion.trim()}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    {isDeepLoading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                    {isDeepLoading ? "Thinking..." : "Ask Deep Resume"}
+                  </button>
+                </div>
+              </div>
+            </SectionCard>
+
+            {deepSnapshot && (
+              <SectionCard title="Profile Snapshot" icon={User}>
+                <div className="space-y-3">
+                  <p className="text-sm text-slate-700"><span className="font-black text-slate-900">{deepSnapshot.name}</span>{deepSnapshot.headline ? ` - ${deepSnapshot.headline}` : ""}</p>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Strengths</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {deepSnapshot.strengths.map(skill => (
+                        <span key={skill} className="px-2 py-0.5 bg-cyan-50 text-cyan-700 text-[11px] font-bold rounded-lg">{skill}</span>
+                      ))}
+                      {deepSnapshot.strengths.length === 0 && <span className="text-xs text-slate-400">No skills indexed yet</span>}
+                    </div>
+                  </div>
+                </div>
+              </SectionCard>
+            )}
+
+            {deepHistory.length > 0 ? (
+              <div className="space-y-4">
+                {deepHistory.slice().reverse().map((turn, idx) => (
+                  <div key={`${turn.question}-${idx}`} className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Question</p>
+                    <p className="text-sm font-bold text-slate-800">{turn.question}</p>
+
+                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-cyan-700 mb-2">Answer · Confidence {turn.response.confidence}%</p>
+                      <p className="text-sm text-slate-700 whitespace-pre-wrap">{turn.response.answer}</p>
+                    </div>
+
+                    {turn.response.evidence.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Evidence</p>
+                        <div className="space-y-2">
+                          {turn.response.evidence.map((ev, evIndex) => (
+                            <div key={`${ev.title}-${evIndex}`} className="rounded-xl border border-slate-200 p-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="text-xs font-black text-slate-800">{ev.title}</p>
+                                <span className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-600 rounded-lg uppercase tracking-widest font-black">{ev.sourceType}</span>
+                              </div>
+                              <p className="text-xs text-slate-600 mt-1">{ev.quote}</p>
+                              {(ev.sectionPath || ev.sourceId) && (
+                                <div className="flex gap-1.5 mt-2 flex-wrap">
+                                  {ev.sectionPath && (
+                                    <span className="px-2 py-0.5 bg-cyan-50 text-cyan-700 rounded-md text-[10px] font-black">{ev.sectionPath}</span>
+                                  )}
+                                  {ev.sourceId && (
+                                    <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md text-[10px] font-black">{ev.sourceId}</span>
+                                  )}
+                                </div>
+                              )}
+                              {ev.link && (
+                                <a href={ev.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 mt-2 text-[10px] font-bold text-cyan-700 hover:text-cyan-600">
+                                  <ExternalLink size={10} /> Source
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {turn.response.followUpQuestions.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Suggested Follow-ups</p>
+                        <div className="flex flex-wrap gap-2">
+                          {turn.response.followUpQuestions.map((fq, fIdx) => (
+                            <button
+                              key={`${fq}-${fIdx}`}
+                              onClick={() => setDeepQuestion(fq)}
+                              className="px-3 py-1.5 bg-cyan-50 hover:bg-cyan-100 text-cyan-700 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                            >
+                              {fq}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-16 text-slate-400">
+                <MessageSquare size={38} className="mx-auto mb-4 opacity-35" />
+                <p className="font-bold">No deep profile conversation yet</p>
+                <p className="text-xs mt-1">Ask your first hiring-manager style question above</p>
               </div>
             )}
           </motion.div>

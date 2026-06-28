@@ -2,10 +2,12 @@ import { Router, type Request, type Response } from "express";
 import {
   STRIPE_ENABLED,
   createCheckoutSession,
+  createCreditPackCheckoutSession,
   constructWebhookEvent,
   createPortalSession,
 } from "../services/stripeService.js";
 import { activateSubscription, type PlanSlug } from "../services/subscriptionService.js";
+import { awardCreditPackPurchase, listCreditPacks } from "../services/creditsService.js";
 
 const router = Router();
 
@@ -41,6 +43,34 @@ router.post("/checkout", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/stripe/credits/packs — list application credit packs
+router.get("/credits/packs", (_req: Request, res: Response) => {
+  const packs = listCreditPacks();
+  res.json({ success: true, packs });
+});
+
+// POST /api/stripe/checkout/credits — create Stripe Checkout for a credit pack
+router.post("/checkout/credits", async (req: Request, res: Response) => {
+  if (!STRIPE_ENABLED) {
+    return res.status(503).json({
+      success: false,
+      error: "Stripe payments are not yet enabled. Contact support to purchase packs.",
+    });
+  }
+
+  try {
+    const { userId, packId, successUrl, cancelUrl } = req.body;
+    if (!userId || !packId || !successUrl || !cancelUrl) {
+      return res.status(400).json({ success: false, error: "Missing required fields" });
+    }
+
+    const url = await createCreditPackCheckoutSession(userId, packId, successUrl, cancelUrl);
+    res.json({ success: true, url });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // POST /api/stripe/webhook — Stripe event handler (raw body — registered in index.ts)
 // Exported so index.ts can mount it directly before express.json()
 export async function stripeWebhookHandler(req: Request, res: Response) {
@@ -55,7 +85,22 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Record<string, any>;
-        const { userId, planSlug, billingPeriod } = session.metadata ?? {};
+        const { userId, planSlug, billingPeriod, purchaseType, packId } = session.metadata ?? {};
+
+        if (purchaseType === "credit_pack" && userId && packId) {
+          await awardCreditPackPurchase({
+            userIdentifier: String(userId),
+            packId: String(packId),
+            referenceKey: String(session.id || event.id),
+            metadata: {
+              checkoutSessionId: session.id,
+              paymentIntentId: session.payment_intent || null,
+              eventId: event.id,
+            },
+          });
+          break;
+        }
+
         if (userId && planSlug) {
           await activateSubscription(
             userId,

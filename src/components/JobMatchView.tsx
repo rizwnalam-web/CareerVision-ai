@@ -375,6 +375,12 @@ const MatchCard: React.FC<{
             )}
           </div>
 
+          {match.xaiExplanation && (
+            <p className="mt-2 text-[11px] text-slate-600 bg-indigo-50 border border-indigo-100 rounded-lg px-2.5 py-1.5">
+              {match.xaiExplanation}
+            </p>
+          )}
+
           {/* Sub-scores */}
           <div className="flex gap-3 mt-3">
             {[
@@ -1172,6 +1178,15 @@ const JobMatchView: React.FC<Props> = ({ userId, resumeContent }) => {
                                         <span>{reason}</span>
                                       </div>
                                     ))}
+                                  </div>
+                                )}
+
+                                {item.xaiExplanation && (
+                                  <div className="space-y-1">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Why Recommended</p>
+                                    <p className="text-xs text-slate-600 bg-indigo-50 border border-indigo-100 rounded-lg px-2 py-1.5">
+                                      {item.xaiExplanation}
+                                    </p>
                                   </div>
                                 )}
 

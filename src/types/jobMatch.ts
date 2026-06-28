@@ -86,6 +86,7 @@ export interface CachedMatch extends JobMatchAnalysis {
   id: string;
   jobId: string;
   computedAt: string;
+  xaiExplanation?: string;
   // Joined job fields
   title: string;
   company: string;
@@ -127,4 +128,5 @@ export interface SemanticMatchedJob {
   breakdown: SemanticMatchBreakdown;
   reasons: string[];
   missingSkills: string[];
+  xaiExplanation?: string;
 }

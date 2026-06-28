@@ -184,6 +184,7 @@ export async function runAiTailorAndSubmitApplication(opts: {
   jobId: string;
 }): Promise<{
   application: { id: string; status: string; appliedAt: string; resumeVersionId: string };
+  submission: { submitted: boolean; channel: "api" | "interface" | "none"; provider: string; status: string; message: string };
   tailoredResume: ResumeContent;
   coverLetter: string;
 }> {

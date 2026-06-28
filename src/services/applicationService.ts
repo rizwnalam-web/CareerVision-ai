@@ -58,6 +58,16 @@ export interface AICoachingResult {
   followUpInDays?: number;
 }
 
+export interface JobBoardSubmissionResult {
+  submitted: boolean;
+  channel: "api" | "interface" | "none";
+  provider: string;
+  externalSubmissionId?: string | null;
+  status: "submitted" | "queued" | "failed";
+  message: string;
+  launchUrl?: string | null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // API base
 // ─────────────────────────────────────────────────────────────────────────────
@@ -130,4 +140,46 @@ export async function getAICoaching(userId: string, id: string): Promise<AICoach
   const data = await res.json();
   if (!res.ok || !data.success) throw new Error(data.error || "AI coaching failed");
   return data.coaching;
+}
+
+export async function autoSubmitApplication(
+  userId: string,
+  payload: {
+    job: {
+      title: string;
+      company: string;
+      location?: string;
+      workType?: string;
+      salaryMin?: number;
+      salaryMax?: number;
+      salaryCurrency?: string;
+      url?: string;
+      description?: string;
+      source?: string;
+      externalJobId?: string;
+    };
+    applicant?: {
+      name?: string;
+      email?: string;
+      phone?: string;
+      location?: string;
+    };
+    coverLetter?: string;
+    tags?: string[];
+    source?: string;
+    notes?: string;
+  }
+): Promise<{ application: JobApplication; submission: JobBoardSubmissionResult }> {
+  const res = await fetch(`${API_BASE}/api/applications/${userId}/auto-submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to auto-submit application");
+  return {
+    application: data.application,
+    submission: data.submission,
+  };
 }

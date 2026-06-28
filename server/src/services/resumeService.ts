@@ -52,6 +52,7 @@ export interface ResumeContent {
   skills: ResumeSkills;
   projects: ResumeProjectItem[];
   awards: string[];
+  references: string[];
 }
 
 export interface ResumeProjectItem {
@@ -183,6 +184,7 @@ function normalizeResumeContent(input: Partial<ResumeContent> | null | undefined
     },
     projects: Array.isArray(input?.projects) ? input!.projects : [],
     awards: Array.isArray(input?.awards) ? input!.awards : [],
+    references: Array.isArray(input?.references) ? input!.references : [],
   };
 }
 
@@ -389,7 +391,7 @@ Rules:
 - Return ONLY a valid raw JSON object
 - Preserve all existing values exactly when possible
 - Do not invent new experience, education, projects, or awards
-- Ensure the final object contains keys: personalInfo, experience, education, skills, projects, awards
+- Ensure the final object contains keys: personalInfo, experience, education, skills, projects, awards, references
 - Fix truncation and remove trailing commas if present
 
 MALFORMED JSON:
@@ -458,7 +460,11 @@ Return ONLY a raw JSON object (no markdown, no code fences) with exactly this st
       "url": "github.com/user/repo"
     }
   ],
-  "awards": ["Dean's List 2020", "Hackathon Winner 2022"]
+  "awards": ["Dean's List 2020", "Hackathon Winner 2022"],
+  "references": [
+    "Alex Johnson - Engineering Manager at Acme Corp - alex@acme.com",
+    "Priya Shah - Product Lead at Beta Labs - priyashah@example.com"
+  ]
 }
 
 Extraction rules:
@@ -468,6 +474,7 @@ Extraction rules:
 - Generate unique sequential ids like "exp-1", "exp-2", "edu-1", "proj-1", etc.
 - If a field has no data in the resume, use "" for strings or [] for arrays.
 - Include ALL positions, degrees, skills, projects, and awards found in the text.
+- Put referee details under references if the resume includes a references section.
 - For personalInfo.summary: preserve the FULL professional summary paragraph(s) from the resume; do not shorten or compress.
 - If summary spans multiple lines, merge lines into one continuous paragraph while preserving meaning.
 
@@ -541,6 +548,48 @@ Return the tailored resume as a raw JSON object with identical structure. No mar
   } catch {
     throw new Error("Could not parse the tailored resume. Please try again.");
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LLM – Translate resume content for global applications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function translateResumeContent(
+  content: ResumeContent,
+  targetLanguage: string,
+  tone: "professional" | "formal" | "concise" = "professional"
+): Promise<ResumeContent> {
+  const language = (targetLanguage || "").trim();
+  if (!language) throw new Error("targetLanguage is required");
+
+  const prompt = `You are a professional multilingual resume localization specialist.
+
+Translate the resume JSON into ${language}.
+
+Critical rules:
+- Preserve all facts exactly: names, companies, institutions, dates, metrics, achievements, and order.
+- Keep URLs, email addresses, phone numbers, LinkedIn handles, certifications names, and technology names unchanged unless there is a common local rendering.
+- Do NOT invent, remove, or exaggerate content.
+- Keep the exact same JSON structure and IDs.
+- Ensure tone is ${tone} and suitable for recruiter screening in ${language}.
+- Translate text fields and list item text naturally for native professional readers.
+
+Return ONLY valid raw JSON with identical structure.
+
+SOURCE RESUME JSON:
+${JSON.stringify(content).slice(0, 14000)}`;
+
+  const result = await generateDeepSeekResponse(prompt);
+  if (!result.text) throw new Error("AI service did not return a response.");
+
+  const json = extractJSON(result.text);
+  const parsed = tryParseResumeContent(json);
+  if (parsed) return parsed;
+
+  const repaired = await repairResumeJSON(json || result.text);
+  if (repaired) return repaired;
+
+  throw new Error("Could not parse translated resume content. Please try again.");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -708,6 +757,11 @@ function resumeContentToText(content: ResumeContent): string {
     lines.push(`${proj.title}: ${proj.description}`);
   }
 
+  if (content.references.length > 0) {
+    lines.push("\nREFERENCES");
+    lines.push(...content.references);
+  }
+
   return lines.filter(Boolean).join("\n");
 }
 
@@ -719,6 +773,7 @@ function emptyResumeContent(): ResumeContent {
     skills: { technical: [], soft: [], languages: [], certifications: [] },
     projects: [],
     awards: [],
+    references: [],
   };
 }
 

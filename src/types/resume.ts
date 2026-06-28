@@ -56,6 +56,41 @@ export interface ResumeContent {
   skills: ResumeSkills;
   projects: ResumeProjectItem[];
   awards: string[];
+  references: string[];
+}
+
+export interface DeepResumeEvidence {
+  sourceType: "experience" | "project" | "github" | "caseStudy" | "reference" | "skill" | "education" | "award";
+  title: string;
+  quote: string;
+  link?: string;
+  sourceId?: string;
+  sectionPath?: string;
+}
+
+export interface DeepResumeResponse {
+  answer: string;
+  evidence: DeepResumeEvidence[];
+  followUpQuestions: string[];
+  confidence: number;
+}
+
+export interface DeepResumeProfileSnapshot {
+  name: string;
+  headline: string;
+  strengths: string[];
+  githubRepos: Array<{ title: string; url: string }>;
+  caseStudies: Array<{ title: string; url: string }>;
+  references: string[];
+}
+
+export interface DeepResumeHistoryEntry {
+  id: string;
+  accessScope: "owner" | "public";
+  shareSlug?: string | null;
+  question: string;
+  response: DeepResumeResponse;
+  createdAt: string;
 }
 
 export interface ATSSuggestion {

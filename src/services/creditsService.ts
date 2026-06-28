@@ -31,6 +31,16 @@ export interface CreditsSummary {
   transactions: CreditTransaction[];
 }
 
+export interface CreditPack {
+  id: string;
+  name: string;
+  applicationCredits: number;
+  priceCents: number;
+  currency: string;
+  description: string;
+  active: boolean;
+}
+
 export async function getCreditsSummary(userId: string): Promise<CreditsSummary> {
   const res = await fetch(`${API_BASE}/api/credits/${encodeURIComponent(userId)}`);
   const data = await res.json();
@@ -67,4 +77,13 @@ export async function completeInitialSetupAndClaimCredits(
     alreadyClaimed: data.alreadyClaimed,
     wallet: data.wallet,
   };
+}
+
+export async function listCreditPacks(): Promise<CreditPack[]> {
+  const res = await fetch(`${API_BASE}/api/stripe/credits/packs`);
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || "Failed to load credit packs");
+  }
+  return Array.isArray(data.packs) ? data.packs : [];
 }

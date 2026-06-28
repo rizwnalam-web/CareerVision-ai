@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deep Resume Profile</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --surface: #ffffff;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --accent: #0ea5e9;
+      --line: #dbeafe;
+    }
+    body { margin: 0; font-family: "Segoe UI", sans-serif; background: radial-gradient(circle at top right, #dff5ff 0%, var(--bg) 40%); color: var(--ink); }
+    .wrap { max-width: 920px; margin: 36px auto; padding: 0 16px; }
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; box-shadow: 0 8px 24px rgba(15,23,42,.05); }
+    .title { font-size: 28px; font-weight: 800; margin: 0; }
+    .sub { color: var(--muted); margin-top: 6px; }
+    .row { display: flex; gap: 10px; margin-top: 12px; }
+    textarea { width: 100%; min-height: 72px; border-radius: 10px; border: 1px solid #cbd5e1; padding: 10px; resize: vertical; font: inherit; }
+    button { background: var(--accent); color: #fff; border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 700; cursor: pointer; }
+    button:disabled { opacity: .65; cursor: not-allowed; }
+    .pill { display: inline-block; font-size: 12px; font-weight: 700; background: #e0f2fe; color: #0369a1; border-radius: 999px; padding: 4px 10px; margin: 4px 6px 0 0; }
+    .hist { margin-top: 16px; display: grid; gap: 12px; }
+    .q { font-size: 12px; color: var(--muted); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    .ans { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; margin-top: 8px; }
+    .ev { margin-top: 8px; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; }
+    .ev small { color: var(--muted); }
+    .meta { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .meta span { font-size: 11px; background: #ecfeff; color: #0e7490; border-radius: 999px; padding: 2px 8px; }
+    .muted { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1 class="title">Deep Resume</h1>
+      <p id="headline" class="sub">Loading profile...</p>
+      <div id="strengths"></div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <div class="q">Recruiter Question (Read-Only Access)</div>
+      <textarea id="question" placeholder="Example: show me leadership examples on distributed teams"></textarea>
+      <div class="row">
+        <button id="askBtn">Ask Profile</button>
+        <span id="status" class="muted"></span>
+      </div>
+    </div>
+
+    <div id="history" class="hist"></div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const shareSlug = params.get("share") || "";
+    const API_BASE = location.hostname === "localhost" ? "http://localhost:3001" : location.origin;
+
+    const history = [];
+
+    function renderSnapshot(snapshot) {
+      const headline = document.getElementById("headline");
+      const strengths = document.getElementById("strengths");
+      headline.textContent = `${snapshot.name}${snapshot.headline ? " - " + snapshot.headline : ""}`;
+      strengths.innerHTML = "";
+      (snapshot.strengths || []).forEach((s) => {
+        const el = document.createElement("span");
+        el.className = "pill";
+        el.textContent = s;
+        strengths.appendChild(el);
+      });
+      if (!snapshot.strengths || snapshot.strengths.length === 0) {
+        strengths.innerHTML = '<span class="muted">No indexed strengths yet.</span>';
+      }
+    }
+
+    function renderHistory() {
+      const root = document.getElementById("history");
+      root.innerHTML = "";
+      if (!history.length) {
+        root.innerHTML = '<div class="card muted">Ask a question to start recruiter Q&A.</div>';
+        return;
+      }
+      history.slice().reverse().forEach((turn) => {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        const q = document.createElement("div");
+        q.className = "q";
+        q.textContent = "Question";
+        const qt = document.createElement("div");
+        qt.textContent = turn.question;
+
+        const ans = document.createElement("div");
+        ans.className = "ans";
+        ans.innerHTML = `<strong>Answer (Confidence ${turn.response.confidence}%)</strong><div style="margin-top:6px">${turn.response.answer}</div>`;
+
+        card.appendChild(q);
+        card.appendChild(qt);
+        card.appendChild(ans);
+
+        (turn.response.evidence || []).forEach((ev) => {
+          const e = document.createElement("div");
+          e.className = "ev";
+          e.innerHTML = `<strong>${ev.title}</strong><br/><small>${ev.quote}</small>`;
+          const meta = document.createElement("div");
+          meta.className = "meta";
+          if (ev.sourceType) meta.innerHTML += `<span>${ev.sourceType}</span>`;
+          if (ev.sectionPath) meta.innerHTML += `<span>${ev.sectionPath}</span>`;
+          if (ev.sourceId) meta.innerHTML += `<span>${ev.sourceId}</span>`;
+          e.appendChild(meta);
+          if (ev.link) {
+            const a = document.createElement("a");
+            a.href = ev.link;
+            a.target = "_blank";
+            a.rel = "noreferrer";
+            a.textContent = "Open Source";
+            a.style.display = "inline-block";
+            a.style.marginTop = "6px";
+            e.appendChild(a);
+          }
+          card.appendChild(e);
+        });
+
+        root.appendChild(card);
+      });
+    }
+
+    async function loadProfile() {
+      const status = document.getElementById("status");
+      if (!shareSlug) {
+        status.textContent = "Missing share token in URL";
+        return;
+      }
+      status.textContent = "Loading...";
+      try {
+        const res = await fetch(`${API_BASE}/api/resume/public/${encodeURIComponent(shareSlug)}`);
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || "Unable to load profile");
+        renderSnapshot(data.profileSnapshot);
+        status.textContent = "Read-only profile loaded";
+      } catch (err) {
+        status.textContent = err.message || "Failed to load profile";
+      }
+      renderHistory();
+    }
+
+    async function ask() {
+      const q = document.getElementById("question").value.trim();
+      const btn = document.getElementById("askBtn");
+      const status = document.getElementById("status");
+      if (!q) return;
+      btn.disabled = true;
+      status.textContent = "Thinking...";
+      try {
+        const conversation = history.slice(-4).map((h) => ({ question: h.question, answer: h.response.answer }));
+        const res = await fetch(`${API_BASE}/api/resume/public/${encodeURIComponent(shareSlug)}/ask`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: q, conversation })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || "Failed to get answer");
+        renderSnapshot(data.profileSnapshot);
+        history.push({ question: q, response: data.response });
+        document.getElementById("question").value = "";
+        renderHistory();
+        status.textContent = "Answered";
+      } catch (err) {
+        status.textContent = err.message || "Failed to answer";
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById("askBtn").addEventListener("click", ask);
+    loadProfile();
+  </script>
+</body>
+</html>

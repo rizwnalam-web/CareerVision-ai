@@ -30,8 +30,52 @@ export interface CreditTransaction {
   createdAt: string;
 }
 
+export interface CreditPack {
+  id: string;
+  name: string;
+  applicationCredits: number;
+  priceCents: number;
+  currency: string;
+  description: string;
+  stripePriceId?: string;
+  active: boolean;
+}
+
 const INITIAL_SETUP_CREDITS = 30;
 const INITIAL_SETUP_REFERENCE = "initial_job_setup_v1";
+
+const CREDIT_PACKS: CreditPack[] = [
+  {
+    id: "starter",
+    name: "Starter Application Pack",
+    applicationCredits: 25,
+    priceCents: 900,
+    currency: "usd",
+    description: "25 AI-assisted application credits for focused job hunts.",
+    stripePriceId: process.env.STRIPE_PRICE_CREDITS_STARTER || undefined,
+    active: true,
+  },
+  {
+    id: "growth",
+    name: "Growth Application Pack",
+    applicationCredits: 75,
+    priceCents: 2400,
+    currency: "usd",
+    description: "75 application credits with better value per application.",
+    stripePriceId: process.env.STRIPE_PRICE_CREDITS_GROWTH || undefined,
+    active: true,
+  },
+  {
+    id: "pro",
+    name: "Pro Application Pack",
+    applicationCredits: 200,
+    priceCents: 5600,
+    currency: "usd",
+    description: "200 credits for high-volume application campaigns.",
+    stripePriceId: process.env.STRIPE_PRICE_CREDITS_PRO || undefined,
+    active: true,
+  },
+];
 
 function mapWallet(row: any): CreditWallet {
   return {
@@ -73,6 +117,16 @@ export async function getOrCreateCreditWallet(userIdentifier: string): Promise<C
   );
 
   return mapWallet(row);
+}
+
+export function listCreditPacks(): CreditPack[] {
+  return CREDIT_PACKS.filter(pack => pack.active).map(pack => ({ ...pack }));
+}
+
+export function getCreditPackById(packId: string): CreditPack | null {
+  const normalized = packId.trim().toLowerCase();
+  const found = CREDIT_PACKS.find(pack => pack.id === normalized && pack.active);
+  return found ? { ...found } : null;
 }
 
 export async function listCreditTransactions(
@@ -276,6 +330,89 @@ export async function completeInitialSetupAndAwardCredits(input: {
       creditsAwarded,
       alreadyClaimed: !inserted,
       wallet: mapWallet(walletRow),
+    };
+  });
+}
+
+export async function awardCreditPackPurchase(input: {
+  userIdentifier: string;
+  packId: string;
+  referenceKey: string;
+  metadata?: Record<string, unknown>;
+}): Promise<{
+  wallet: CreditWallet;
+  transaction: CreditTransaction | null;
+  creditsAwarded: number;
+  alreadyProcessed: boolean;
+}> {
+  const pack = getCreditPackById(input.packId);
+  if (!pack) {
+    throw new Error("invalid credit pack");
+  }
+
+  return db.tx(async t => {
+    await t.none(
+      `INSERT INTO user_credits (user_identifier)
+       VALUES ($1)
+       ON CONFLICT (user_identifier) DO NOTHING`,
+      [input.userIdentifier]
+    );
+
+    const lockedWallet = await t.one(
+      `SELECT user_identifier, balance, lifetime_earned, lifetime_spent, updated_at
+       FROM user_credits
+       WHERE user_identifier = $1
+       FOR UPDATE`,
+      [input.userIdentifier]
+    );
+
+    const nextBalance = Number(lockedWallet.balance || 0) + pack.applicationCredits;
+
+    const inserted = await t.oneOrNone(
+      `INSERT INTO credit_transactions
+         (user_identifier, direction, amount, balance_after, source, reference_key, metadata)
+       VALUES ($1,'credit',$2,$3,'stripe_credit_pack',$4,$5)
+       ON CONFLICT (user_identifier, source, reference_key) DO NOTHING
+       RETURNING id, user_identifier, direction, amount, balance_after, source, reference_key, metadata, created_at`,
+      [
+        input.userIdentifier,
+        pack.applicationCredits,
+        nextBalance,
+        input.referenceKey,
+        {
+          ...(input.metadata || {}),
+          packId: pack.id,
+          packName: pack.name,
+          applicationCredits: pack.applicationCredits,
+          priceCents: pack.priceCents,
+          currency: pack.currency,
+        },
+      ]
+    );
+
+    if (inserted) {
+      await t.none(
+        `UPDATE user_credits
+         SET balance = $2,
+             lifetime_earned = lifetime_earned + $3,
+             updated_at = NOW()
+         WHERE user_identifier = $1`,
+        [input.userIdentifier, nextBalance, pack.applicationCredits]
+      );
+    }
+
+    const walletRow = await t.one(
+      `SELECT user_identifier, balance, lifetime_earned, lifetime_spent, updated_at
+       FROM user_credits
+       WHERE user_identifier = $1`,
+      [input.userIdentifier]
+    );
+
+    return {
+      wallet: mapWallet(walletRow),
+      transaction: inserted ? mapTransaction(inserted) : null,
+      creditsAwarded: inserted ? pack.applicationCredits : 0,
+      alreadyProcessed: !inserted,
     };
   });
 }

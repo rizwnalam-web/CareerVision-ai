@@ -38,6 +38,25 @@ export async function startStripeCheckout(
   return data.url as string;
 }
 
+/** Create a Stripe Checkout session for one-time application credit pack purchases. */
+export async function startCreditPackCheckout(
+  userId: string,
+  packId: string
+): Promise<string> {
+  const successUrl = `${window.location.origin}?payment=success&purchase=credits&pack=${encodeURIComponent(packId)}`;
+  const cancelUrl = `${window.location.origin}?payment=cancelled&purchase=credits`;
+
+  const res = await fetch(`${API_BASE}/api/stripe/checkout/credits`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, packId, successUrl, cancelUrl }),
+  });
+
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || "Could not start credit pack checkout");
+  return data.url as string;
+}
+
 /** Open the Stripe Billing Portal so a user can manage / cancel their subscription. */
 export async function openBillingPortal(
   stripeCustomerId: string,

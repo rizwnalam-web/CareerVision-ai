@@ -5,6 +5,9 @@ import type {
   ResumeVersion,
   PortfolioProject,
   PortfolioProjectInput,
+  DeepResumeProfileSnapshot,
+  DeepResumeResponse,
+  DeepResumeHistoryEntry,
 } from "../types/resume";
 
 const API_BASE = (
@@ -193,6 +196,40 @@ export async function generateCoverLetter(
   }
 }
 
+export async function translateResume(
+  userId: string,
+  content: ResumeContent,
+  targetLanguage: string,
+  tone: "professional" | "formal" | "concise" = "professional",
+  saveAsVersion = true
+): Promise<{ translated: ResumeContent; saved: boolean; versionId?: string; versionNumber?: number }> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120_000);
+
+  try {
+    const res = await fetch(`${API_BASE}/api/resume/${userId}/translate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, targetLanguage, tone, saveAsVersion }),
+      signal: controller.signal,
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || "Resume translation failed");
+    return {
+      translated: data.translated,
+      saved: Boolean(data.saved),
+      versionId: data.versionId,
+      versionNumber: data.versionNumber,
+    };
+  } catch (err: any) {
+    if (err.name === "AbortError") throw new Error("Resume translation timed out. Please try again.");
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // AI suggestions
 // ─────────────────────────────────────────────────────────────────────────────
@@ -258,4 +295,102 @@ export async function deletePortfolioProject(userId: string, projectId: string):
   });
   const data = await res.json();
   if (!res.ok || !data.success) throw new Error(data.error || "Failed to delete project");
+}
+
+export async function askDeepResumeQuestion(
+  userId: string,
+  question: string,
+  references: string[] = [],
+  conversation: Array<{ question: string; answer: string }> = []
+): Promise<{ profileSnapshot: DeepResumeProfileSnapshot; response: DeepResumeResponse }> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90_000);
+
+  try {
+    const res = await fetch(`${API_BASE}/api/resume/${userId}/deep-profile/ask`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, references, conversation }),
+      signal: controller.signal,
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || "Failed to answer deep resume question");
+    return {
+      profileSnapshot: data.profileSnapshot,
+      response: data.response,
+    };
+  } catch (err: any) {
+    if (err.name === "AbortError") {
+      throw new Error("Deep resume response timed out. Please try again.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function createDeepResumeShareLink(
+  userId: string,
+  enabled = true,
+  publicBaseUrl?: string
+): Promise<{ shareSlug: string; shareUrl: string; isPublic: boolean }> {
+  const res = await fetch(`${API_BASE}/api/resume/${userId}/deep-profile/share`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled, publicBaseUrl }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to generate share link");
+  return {
+    shareSlug: data.shareSlug,
+    shareUrl: data.shareUrl,
+    isPublic: Boolean(data.isPublic),
+  };
+}
+
+export async function getDeepResumeHistory(
+  userId: string,
+  limit = 20
+): Promise<DeepResumeHistoryEntry[]> {
+  const res = await fetch(`${API_BASE}/api/resume/${userId}/deep-profile/history?limit=${encodeURIComponent(String(limit))}`);
+  const data = await res.json();
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to fetch deep resume history");
+  return Array.isArray(data.history) ? data.history : [];
+}
+
+export async function getPublicDeepResumeProfile(
+  shareSlug: string
+): Promise<{ profileSnapshot: DeepResumeProfileSnapshot }> {
+  const res = await fetch(`${API_BASE}/api/resume/public/${encodeURIComponent(shareSlug)}`);
+  const data = await res.json();
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to fetch public deep resume profile");
+  return { profileSnapshot: data.profileSnapshot };
+}
+
+export async function askPublicDeepResumeQuestion(
+  shareSlug: string,
+  question: string,
+  conversation: Array<{ question: string; answer: string }> = []
+): Promise<{ profileSnapshot: DeepResumeProfileSnapshot; response: DeepResumeResponse }> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90_000);
+  try {
+    const res = await fetch(`${API_BASE}/api/resume/public/${encodeURIComponent(shareSlug)}/ask`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, conversation }),
+      signal: controller.signal,
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || "Failed to ask public deep resume question");
+    return {
+      profileSnapshot: data.profileSnapshot,
+      response: data.response,
+    };
+  } catch (err: any) {
+    if (err.name === "AbortError") throw new Error("Public deep resume response timed out. Please try again.");
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 }

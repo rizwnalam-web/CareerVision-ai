@@ -16,6 +16,7 @@ import {
   generateCoverLetterFromResume,
   type ResumeContent as TailorResumeContent,
 } from "../services/resumeService.js";
+import { submitJobBoardApplication } from "../services/jobBoardSubmissionService.js";
 import { aggregateJobsFromProviders, type AggregationProvider } from "../services/jobAggregationService.js";
 import { getJobAggregationSchedulerMetrics, runJobAggregationNow } from "../services/jobAggregationScheduler.js";
 
@@ -74,6 +75,61 @@ function parseResumeContent(raw: unknown): TailorResumeContent | null {
     }
   }
   return null;
+}
+
+function buildSemanticXaiExplanation(args: {
+  title: string;
+  company: string;
+  score: number;
+  breakdown: { semantic: number; title: number; skills: number; salary: number; preference: number };
+  reasons: string[];
+  missingSkills: string[];
+}) {
+  const { title, company, score, breakdown, reasons, missingSkills } = args;
+  const drivers: string[] = [];
+
+  if (breakdown.skills >= 70) drivers.push("your current skills overlap strongly with this role");
+  if (breakdown.title >= 60) drivers.push("your target role aligns with the job title");
+  if (breakdown.preference >= 70) drivers.push("it matches your work setup and location preferences");
+  if (breakdown.salary >= 70) drivers.push("the salary range is close to your target");
+  if (breakdown.semantic >= 70) drivers.push("your resume context is highly relevant to the responsibilities");
+
+  const primaryReason = drivers[0] || reasons[0]?.toLowerCase() || "your profile aligns with key parts of this job";
+  const gaps = missingSkills.slice(0, 2);
+
+  if (score >= 80) {
+    return gaps.length
+      ? `${title} at ${company} is a strong recommendation because ${primaryReason}. Main upskilling areas: ${gaps.join(", ")}.`
+      : `${title} at ${company} is a strong recommendation because ${primaryReason}.`;
+  }
+
+  return gaps.length
+    ? `${title} at ${company} is recommended because ${primaryReason}, with moderate gaps in ${gaps.join(", ")}.`
+    : `${title} at ${company} is recommended because ${primaryReason}.`;
+}
+
+function buildCachedXaiExplanation(row: any) {
+  const drivers: string[] = [];
+  if (Number(row.skillMatchScore) >= 70) drivers.push("your skills fit the core requirements");
+  if (Number(row.cultureFitScore) >= 70) drivers.push("your background aligns with the team culture");
+  if (Number(row.salaryFitScore) >= 70) drivers.push("the compensation is aligned with your expectations");
+
+  const reasonFromModel = Array.isArray(row.matchReasons) && row.matchReasons.length
+    ? String(row.matchReasons[0]).toLowerCase()
+    : "there is overall alignment between your resume and this role";
+
+  const primaryReason = drivers[0] || reasonFromModel;
+  const score = Number(row.matchScore) || 0;
+
+  if (score >= 80) {
+    return `${row.title} at ${row.company} is a high-confidence match because ${primaryReason}.`;
+  }
+
+  if (score >= 60) {
+    return `${row.title} at ${row.company} is a good match because ${primaryReason}, with a few areas to improve.`;
+  }
+
+  return `${row.title} at ${row.company} is a partial match because ${primaryReason}.`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -291,19 +347,31 @@ router.post("/semantic-match", async (req: Request, res: Response) => {
 
     const ranked = rankJobsBySemanticFit(resumeContent, jobs, prefs)
       .slice(0, Math.min(Math.max(limit, 1), 100))
-      .map(({ job, score }) => ({
-        job: mapJobListing(job),
-        score: score.overall,
-        breakdown: {
+      .map(({ job, score }) => {
+        const breakdown = {
           semantic: score.semantic,
           title: score.title,
           skills: score.skills,
           salary: score.salary,
           preference: score.preference,
-        },
+        };
+
+        return {
+        job: mapJobListing(job),
+        score: score.overall,
+        breakdown,
         reasons: score.reasons,
         missingSkills: score.missingSkills,
-      }));
+        xaiExplanation: buildSemanticXaiExplanation({
+          title: job.title,
+          company: job.company,
+          score: score.overall,
+          breakdown,
+          reasons: score.reasons,
+          missingSkills: score.missingSkills,
+        }),
+      };
+      });
 
     res.json({ success: true, results: ranked });
   } catch (err) {
@@ -382,6 +450,32 @@ router.post("/applications/ai-submit", async (req: Request, res: Response) => {
     const tailoredResume = await tailorResumeToJD(resumeContent, jobDescription);
     const coverLetter = await generateCoverLetterFromResume(tailoredResume, jobDescription, job.title);
 
+    const submission = await submitJobBoardApplication({
+      userId: userIdentifier,
+      job: {
+        title: job.title,
+        company: job.company,
+        source: job.source || null,
+        sourceUrl: job.source_url || null,
+        externalJobId: job.external_job_id || null,
+        location: job.location || null,
+      },
+      applicant: {
+        name: tailoredResume.personalInfo?.name,
+        email: tailoredResume.personalInfo?.email,
+        phone: tailoredResume.personalInfo?.phone,
+        location: tailoredResume.personalInfo?.location,
+      },
+      documents: {
+        resumeJson: tailoredResume,
+        coverLetter,
+      },
+      metadata: {
+        workflow: "ai-tailor-and-submit",
+        jobId: job.id,
+      },
+    });
+
     const versionCount = await db.one(
       "SELECT COALESCE(MAX(version_number), 0) AS max FROM resume_versions WHERE resume_id = $1",
       [resumeRecord.resume_id]
@@ -406,8 +500,9 @@ router.post("/applications/ai-submit", async (req: Request, res: Response) => {
          (user_identifier, job_title, company, location, work_type,
           salary_min, salary_max, salary_currency,
           job_url, job_description, status, applied_at,
-          resume_version_id, cover_letter_sent, notes, source, tags)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'applied',NOW(),$11,TRUE,$12,'ai-match',$13)
+         resume_version_id, cover_letter_sent, notes, source, tags,
+         submission_channel, submission_provider, external_submission_id, submission_metadata)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,TRUE,$14,'ai-match',$15,$16,$17,$18,$19)
        RETURNING id, status, applied_at, resume_version_id`,
       [
         userIdentifier,
@@ -420,16 +515,26 @@ router.post("/applications/ai-submit", async (req: Request, res: Response) => {
         job.salary_currency || "USD",
         job.source_url || null,
         job.description || null,
+        submission.submitted ? "applied" : "saved",
+        submission.submitted ? new Date() : null,
         tailoredVersion.id,
-        "Submitted via AI Tailor & Apply workflow.",
-        ["ai-tailored", "auto-submitted"],
+        `AI Tailor & Apply workflow: ${submission.message}`,
+        ["ai-tailored", submission.submitted ? "auto-submitted" : "submission-pending"],
+        submission.channel,
+        submission.provider,
+        submission.externalSubmissionId || null,
+        JSON.stringify({
+          submission,
+        }),
       ]
     );
 
     await db.none(
       `INSERT INTO application_events (application_id, event_type, description)
        VALUES ($1, 'created', $2)`,
-      [application.id, `Application submitted for ${job.title} at ${job.company}`]
+      [application.id, submission.submitted
+        ? `Application submitted for ${job.title} at ${job.company} via ${submission.channel} (${submission.provider}).`
+        : `Application saved for ${job.title} at ${job.company}. ${submission.message}`]
     );
 
     await db.none(
@@ -446,6 +551,7 @@ router.post("/applications/ai-submit", async (req: Request, res: Response) => {
         appliedAt: application.applied_at,
         resumeVersionId: application.resume_version_id,
       },
+      submission,
       tailoredResume,
       coverLetter,
     });
@@ -496,7 +602,12 @@ router.get("/:userId/matches", async (req: Request, res: Response) => {
       [userIdentifier]
     );
 
-    res.json({ success: true, matches: rows || [] });
+    const matches = (rows || []).map(row => ({
+      ...row,
+      xaiExplanation: buildCachedXaiExplanation(row),
+    }));
+
+    res.json({ success: true, matches });
   } catch (err) {
     console.error("[job-match/matches GET]", err);
     res.status(500).json({ error: "Failed to fetch matches" });

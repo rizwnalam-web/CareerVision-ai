@@ -30,7 +30,8 @@ const sample = {
     certifications: ["PMP"]
   },
   projects: [],
-  awards: []
+  awards: [],
+  references: [],
 };
 
 const report = await runATSCheck(sample, "Enterprise Application Architect");

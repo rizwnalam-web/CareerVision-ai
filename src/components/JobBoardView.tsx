@@ -12,6 +12,7 @@ import Avatar from './Avatar';
 import { JobListing, UserProfile, MarketInsights } from '../types/career';
 import { JOB_LISTINGS, CAREER_PATHS } from '../constants/mockData';
 import { aiSearchJobs, getAiJobSuggestions, getAiProactiveJobRecommendations, getMarketInsights } from '../services/geminiService';
+import { autoSubmitApplication } from '../services/applicationService';
 
 type JobStatus = 'Saved' | 'Applied' | 'Interviewing' | 'Rejected';
 
@@ -167,28 +168,76 @@ function buildCoverLetter(job: JobListing, profile: UserProfile): string {
 const QuickApplyModal = ({
   job,
   profile,
+  userId,
   onClose,
   onApplied,
 }: {
   job: JobListing;
   profile: UserProfile;
+  userId: string | null;
   onClose: () => void;
-  onApplied: () => void;
+  onApplied: (submitted: boolean) => void;
 }) => {
   const [step, setStep] = useState<'review' | 'success'>('review');
   const [coverLetter, setCoverLetter] = useState(() => buildCoverLetter(job, profile));
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const readiness = getProfileReadiness(profile);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setIsSubmitting(true);
-    // Open the real job URL in a new tab — actual application happens there
-    window.open(job.url, '_blank', 'noopener,noreferrer');
-    setTimeout(() => {
-      setIsSubmitting(false);
+
+    try {
+      if (!userId) {
+        if (job.url) {
+          window.open(job.url, '_blank', 'noopener,noreferrer');
+        }
+        setSuccessMessage('Opened the job application page because no signed-in user ID was found for automated submission.');
+        setStep('success');
+        onApplied(false);
+        return;
+      }
+
+      const response = await autoSubmitApplication(userId, {
+        job: {
+          title: job.title,
+          company: job.company,
+          location: job.location,
+          workType: /remote/i.test(job.type) ? 'remote' : /hybrid/i.test(job.type) ? 'hybrid' : 'onsite',
+          salaryMin: job.salary.min,
+          salaryMax: job.salary.max,
+          salaryCurrency: job.salary.currency,
+          url: job.url,
+          description: job.description,
+        },
+        applicant: {
+          name: profile.name,
+          email: profile.email,
+          location: profile.targetLocation || profile.country,
+        },
+        coverLetter,
+        source: 'job-board',
+        tags: ['quick-apply', 'job-board'],
+      });
+
+      const submission = response.submission;
+      if (!submission.submitted && (submission.launchUrl || job.url)) {
+        window.open(submission.launchUrl || job.url, '_blank', 'noopener,noreferrer');
+      }
+
+      setSuccessMessage(submission.message || 'Application workflow completed.');
       setStep('success');
-      onApplied();
-    }, 600);
+      onApplied(submission.submitted);
+    } catch {
+      if (job.url) {
+        window.open(job.url, '_blank', 'noopener,noreferrer');
+      }
+      setSuccessMessage('Auto-submit failed, so the job page was opened for manual completion.');
+      setStep('success');
+      onApplied(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -323,7 +372,7 @@ const QuickApplyModal = ({
                 ) : (
                   <Zap size={14} />
                 )}
-                {isSubmitting ? 'Opening Application…' : 'Submit & Open Application'}
+                {isSubmitting ? 'Submitting Application…' : 'Auto Submit Application'}
                 <ChevronRight size={12} />
               </button>
             </div>
@@ -347,7 +396,7 @@ const QuickApplyModal = ({
               </p>
             </div>
             <p className="text-sm text-slate-600 font-medium max-w-xs leading-relaxed">
-              The application page has opened in a new tab. Your status has been updated to <strong>Applied</strong>.
+              {successMessage || 'Your application workflow was completed. Status has been updated accordingly.'}
             </p>
             <button
               onClick={onClose}
@@ -657,9 +706,12 @@ export const JobBoardView = ({ profile }: { profile: UserProfile }) => {
           <QuickApplyModal
             job={quickApplyJob}
             profile={profile}
+            userId={profile.uid || null}
             onClose={() => setQuickApplyJob(null)}
-            onApplied={() => {
-              updateJobStatus(quickApplyJob.id, 'Applied');
+            onApplied={(submitted) => {
+              if (submitted) {
+                updateJobStatus(quickApplyJob.id, 'Applied');
+              }
               setSavedJobIds(prev => prev.includes(quickApplyJob.id) ? prev : [...prev, quickApplyJob.id]);
             }}
           />
