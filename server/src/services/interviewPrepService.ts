@@ -1,4 +1,5 @@
 import { generateDeepSeekResponse } from "./deepseekService.js";
+import { jsonrepair } from "jsonrepair";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared types
@@ -62,11 +63,12 @@ export interface VideoAnalysis {
 function extractJSON(raw: string | null | undefined): string {
   if (!raw) return "";
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenced) return fenced[1].trim();
-  const first = raw.indexOf("{") !== -1 ? raw.indexOf("{") : raw.indexOf("[");
-  const last  = raw.lastIndexOf("}") !== -1 ? raw.lastIndexOf("}") : raw.lastIndexOf("]");
-  if (first !== -1 && last > first) return raw.slice(first, last + 1);
-  return raw.trim();
+  const candidate = fenced ? fenced[1].trim() : (() => {
+    const first = raw.indexOf("{") !== -1 ? raw.indexOf("{") : raw.indexOf("[");
+    const last  = raw.lastIndexOf("}") !== -1 ? raw.lastIndexOf("}") : raw.lastIndexOf("]");
+    return first !== -1 && last > first ? raw.slice(first, last + 1) : raw.trim();
+  })();
+  return jsonrepair(candidate);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

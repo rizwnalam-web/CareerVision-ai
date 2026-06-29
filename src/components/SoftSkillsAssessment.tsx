@@ -58,7 +58,7 @@ export default function SoftSkillsAssessment({ profile }: { profile?: any }) {
     try {
       const answerData = questions.map((q) => ({
         questionId: q.id, skill: q.skill, question: q.question,
-        chosen: q.options.find((o) => o.id === ans[q.id]),
+        chosen: (q.options ?? []).find((o) => o.id === ans[q.id]),
       }));
       const result = await analyzeSoftSkills(answerData, targetRole);
       setAnalysis(result); setPhase("result");
@@ -95,7 +95,7 @@ export default function SoftSkillsAssessment({ profile }: { profile?: any }) {
   if (phase === "quiz" && questions.length > 0) {
     const q = questions[current];
     const progress = (current / questions.length) * 100;
-    const skillColor = SKILL_COLORS[q.skill.toLowerCase()] ?? "bg-slate-100 text-slate-600 border-slate-200";
+    const skillColor = SKILL_COLORS[(q.skill ?? "").toLowerCase()] ?? "bg-slate-100 text-slate-600 border-slate-200";
     return (
       <div className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center gap-3 mb-4">
@@ -110,7 +110,7 @@ export default function SoftSkillsAssessment({ profile }: { profile?: any }) {
             <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full border capitalize mb-4 ${skillColor}`}>{q.skill}</span>
             <h3 className="text-slate-800 font-semibold text-base mb-5 leading-relaxed">{q.question}</h3>
             <div className="space-y-2">
-              {q.options.map((opt) => (
+              {(q.options ?? []).map((opt) => (
                 <button key={opt.id} onClick={() => selectAnswer(q.id, opt.id)}
                   className={`w-full text-left px-4 py-3.5 rounded-xl border text-sm transition-all flex items-center gap-3 ${answers[q.id] === opt.id ? "bg-rose-50 border-rose-400 text-rose-800" : "bg-white border-slate-200 hover:border-rose-300 hover:bg-rose-50 text-slate-700"}`}>
                   <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 flex-shrink-0">{opt.id.toUpperCase()}</span>

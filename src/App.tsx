@@ -3575,14 +3575,14 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
                   contentStyle={{ background: '#1e293b', border: 'none', borderRadius: 12, padding: '8px 14px' }}
                   labelStyle={{ color: '#94a3b8', fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}
                   itemStyle={{ color: '#a5b4fc', fontSize: 11, fontWeight: 800 }}
-                  formatter={(v: number) => [`$${v.toLocaleString()}`, 'Salary']}
+                  formatter={(v: any) => [`$${Number(v).toLocaleString()}`, 'Salary']}
                 />
-                <Area type="monotone" dataKey="salary" stroke="#6366f1" strokeWidth={2.5} fill="url(#salaryGrad)" dot={{ fill: '#6366f1', r: 3 }} activeDot={{ r: 5 }} />
+                <Area type="monotone" dataKey="v" stroke="#6366f1" strokeWidth={2.5} fill="url(#salaryGrad)" dot={{ fill: '#6366f1', r: 3 }} activeDot={{ r: 5 }} />
               </AreaChart>
             </ResponsiveContainer>
             {/* Min/max callout */}
             {(() => {
-              const vals = salaryTrendData.map(d => d.salary as number).filter(Boolean);
+              const vals = salaryTrendData.map(d => d.v as number).filter(Boolean);
               const min = Math.min(...vals);
               const max = Math.max(...vals);
               return vals.length > 1 ? (
@@ -5463,7 +5463,7 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
             <div className="bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-6 border border-slate-800 backdrop-blur-lg">
                <div className="flex -space-x-3 overflow-hidden">
                  {compareIds.map(id => {
-                   const inst = INSTITUTIONS.find(i => i.id === id);
+                   const inst = institutions.find((i: Institution) => i.id === id);
                    return (
                      <div key={id} className="inline-block h-8 w-8 rounded-full ring-2 ring-slate-900 bg-slate-800 overflow-hidden">
                        <img src={inst?.image} className="h-full w-full object-cover" referrerPolicy="no-referrer" />

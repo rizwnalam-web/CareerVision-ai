@@ -1,4 +1,5 @@
 import { generateDeepSeekResponse, type DeepSeekResult } from "./deepseekService.js";
+import { jsonrepair } from "jsonrepair";
 import { DeepSeekCostCalculator, type DeepSeekCostCalculatorOptions, type MonthlyCostUsage, type MonthlyCostResult } from "./costCalculator.js";
 import { db } from "../db/database.js";
 import {
@@ -47,8 +48,8 @@ import type {
 function extractJSON(raw: string | null | undefined): string {
   if (!raw) return "";
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenced) return fenced[1].trim();
-  return raw.trim();
+  const candidate = fenced ? fenced[1].trim() : raw.trim();
+  return jsonrepair(candidate);
 }
 
 const CAREER_PROFILES: Record<string, {

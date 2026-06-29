@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { generateDeepSeekResponse } from "../services/deepseekService.js";
+import { jsonrepair } from "jsonrepair";
 
 const router = Router();
 
@@ -8,7 +9,7 @@ function extractJSON(raw: string | null | undefined): string {
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
   const candidate = fenced ? fenced[1].trim() : raw.trim();
   if (candidate.length === 0) throw new Error("LLM returned empty response");
-  return candidate;
+  return jsonrepair(candidate);
 }
 
 // ── 1. AI Career Coach — conversational message ──────────────────────────────
@@ -128,7 +129,21 @@ Return JSON array:
 ]`;
 
     const result = await generateDeepSeekResponse(prompt, { temperature: 0.7 });
-    res.json({ success: true, data: JSON.parse(extractJSON(result.text)) });
+    const parsed = JSON.parse(extractJSON(result.text));
+    // Normalise — LLMs sometimes wrap in { questions: [...] } or use "text" instead of "question"
+    const raw: any[] = Array.isArray(parsed) ? parsed : (parsed.questions ?? parsed.data ?? Object.values(parsed)[0] ?? []);
+    const questions = raw.map((q: any, i: number) => ({
+      id:       typeof q.id === "number" ? q.id : i + 1,
+      skill:    q.skill ?? q.category ?? "",
+      question: q.question ?? q.text ?? q.scenario ?? q.question_text ?? "",
+      type:     q.type ?? "scenario",
+      options:  Array.isArray(q.options) ? q.options.map((o: any) => ({
+        id:     o.id ?? o.key ?? String.fromCharCode(97 + (q.options ?? []).indexOf(o)),
+        text:   o.text ?? o.option ?? o.label ?? "",
+        traits: Array.isArray(o.traits) ? o.traits : [],
+      })) : [],
+    }));
+    res.json({ success: true, data: questions });
   } catch (e) {
     console.error("soft-skills/questions error:", e);
     res.status(500).json({ error: "Failed to generate assessment" });

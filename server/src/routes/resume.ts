@@ -1,3 +1,4 @@
+import { jsonrepair } from "jsonrepair";
 import { Router, Request, Response } from "express";
 import multer from "multer";
 import { randomBytes } from "crypto";
@@ -70,11 +71,12 @@ type DeepProfileLoadResult = {
 function extractJSON(raw: string | null | undefined): string {
   if (!raw) return "";
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenced) return fenced[1].trim();
-  const first = raw.indexOf("{");
-  const last = raw.lastIndexOf("}");
-  if (first !== -1 && last > first) return raw.slice(first, last + 1);
-  return raw.trim();
+  const candidate = fenced ? fenced[1].trim() : (() => {
+    const first = raw.indexOf("{");
+    const last  = raw.lastIndexOf("}");
+    return first !== -1 && last > first ? raw.slice(first, last + 1) : raw.trim();
+  })();
+  return jsonrepair(candidate);
 }
 
 function parseDeepResumeAnswer(raw: string | null | undefined): DeepResumeAnswer | null {

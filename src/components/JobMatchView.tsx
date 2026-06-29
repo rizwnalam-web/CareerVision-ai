@@ -979,6 +979,15 @@ const JobMatchView: React.FC<Props> = ({ userId, resumeContent }) => {
     }
   }, [userId]);
 
+  const filteredMatches = matches.filter(m => {
+    if (workTypeFilter !== "any" && m.workType !== workTypeFilter) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (!m.title.toLowerCase().includes(q) && !m.company.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
   const handleBatchAiSubmit = useCallback(async () => {
     const toSubmit = filteredMatches
       .filter(m => !submittedJobIds[m.jobId])
@@ -1010,15 +1019,6 @@ const JobMatchView: React.FC<Props> = ({ userId, resumeContent }) => {
     setBatchSubmitting(false);
     setSubmitMessage(`AI workflow finished: ${successCount} submitted, ${failCount} failed (processed top ${toSubmit.length} matches).`);
   }, [filteredMatches, submittedJobIds, userId]);
-
-  const filteredMatches = matches.filter(m => {
-    if (workTypeFilter !== "any" && m.workType !== workTypeFilter) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      if (!m.title.toLowerCase().includes(q) && !m.company.toLowerCase().includes(q)) return false;
-    }
-    return true;
-  });
 
   const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: "matches", label: "Matches", icon: Brain },

@@ -91,6 +91,7 @@ export interface UserProfile {
   financialProfile?: {
     annualIncome: number;
     currentSavings: number;
+    monthlyBudget?: number;
     monthlyExpenses: { category: string; amount: number }[];
     goals: { id: string; title: string; target: number; current: number; deadline: string }[];
     debt: { id: string; title: string; amount: number; interestRate: number }[];
@@ -207,6 +208,9 @@ export interface DashboardIntelligence {
     news: string[];
   }[];
   salaryTrajectory: { y: string; v: number }[];
+  demandLevel?: 'high' | 'medium' | 'low';
+  salaryRange?: string;
+  topSkillsRequired?: string[];
 }
 
 export interface CareerSkillGap {

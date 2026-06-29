@@ -1,4 +1,5 @@
 import { generateDeepSeekResponse } from "./deepseekService.js";
+import { jsonrepair } from "jsonrepair";
 import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 
@@ -119,12 +120,13 @@ function extractJSON(raw: string | null | undefined): string {
   if (!raw) return "";
   // 1. Try markdown fenced block (```json ... ``` or ``` ... ```)
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenced) return fenced[1].trim();
-  // 2. Slice from first '{' to last '}' to strip preamble/postamble text
-  const first = raw.indexOf("{");
-  const last  = raw.lastIndexOf("}");
-  if (first !== -1 && last > first) return raw.slice(first, last + 1);
-  return raw.trim();
+  const candidate = fenced ? fenced[1].trim() : (() => {
+    // 2. Slice from first '{' to last '}' to strip preamble/postamble text
+    const first = raw.indexOf("{");
+    const last  = raw.lastIndexOf("}");
+    return first !== -1 && last > first ? raw.slice(first, last + 1) : raw.trim();
+  })();
+  return jsonrepair(candidate);
 }
 
 function stripTrailingCommas(raw: string): string {
@@ -737,29 +739,29 @@ function resumeContentToText(content: ResumeContent): string {
   if (p.summary) lines.push(p.summary);
 
   lines.push("\nEXPERIENCE");
-  for (const e of content.experience) {
+  for (const e of (content.experience ?? [])) {
     lines.push(`${e.position} at ${e.company} (${e.startDate} – ${e.isCurrentRole ? "Present" : e.endDate})`);
     if (e.description) lines.push(e.description);
     lines.push(...e.achievements);
   }
 
   lines.push("\nEDUCATION");
-  for (const ed of content.education) {
+  for (const ed of (content.education ?? [])) {
     lines.push(`${ed.degree} in ${ed.fieldOfStudy} – ${ed.institution} (${ed.startDate} – ${ed.endDate})`);
   }
 
   lines.push("\nSKILLS");
-  lines.push(content.skills.technical.join(", "));
-  lines.push(content.skills.certifications.join(", "));
+  lines.push((content.skills?.technical ?? []).join(", "));
+  lines.push((content.skills?.certifications ?? []).join(", "));
 
   lines.push("\nPROJECTS");
-  for (const proj of content.projects) {
+  for (const proj of (content.projects ?? [])) {
     lines.push(`${proj.title}: ${proj.description}`);
   }
 
-  if (content.references.length > 0) {
+  if ((content.references ?? []).length > 0) {
     lines.push("\nREFERENCES");
-    lines.push(...content.references);
+    lines.push(...(content.references ?? []));
   }
 
   return lines.filter(Boolean).join("\n");
