@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard, 
   Map, 
@@ -2855,322 +2855,10 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
 
-      {/* ── LEFT SIDEBAR ── */}
-      <div className="xl:col-span-3 space-y-5">
+      {/* ── LEFT COLUMN (main content) ── */}
+      <div className="xl:col-span-8 space-y-8">
 
-        {/* Profile card — Hero Arc */}
-        <div className="bg-gradient-to-b from-indigo-50/70 to-white p-6 rounded-[2.5rem] border border-indigo-100/50 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-300/10 rounded-full blur-3xl -mt-12 -mr-12 pointer-events-none" />
-          <div className="flex items-center justify-between mb-3 relative z-10">
-            <span className="text-[7px] font-black text-indigo-400 uppercase tracking-[0.2em]">Career Journey</span>
-            {profile.country && <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">{profile.country}</span>}
-          </div>
-          <div className="flex items-start gap-4 mb-6 relative z-10">
-            {/* Circular progress */}
-            <div className="relative shrink-0">
-              <svg width={88} height={88} className="-rotate-90">
-                <circle cx={44} cy={44} r={RADIUS} fill="none" stroke="#f1f5f9" strokeWidth={7} />
-                <motion.circle
-                  cx={44} cy={44} r={RADIUS} fill="none"
-                  stroke="url(#readGrad)" strokeWidth={7} strokeLinecap="round"
-                  strokeDasharray={CIRC}
-                  initial={{ strokeDashoffset: CIRC }}
-                  animate={{ strokeDashoffset: dashOffset }}
-                  transition={{ duration: 1.5, ease: 'easeOut', delay: 0.3 }}
-                />
-                <defs>
-                  <linearGradient id="readGrad" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#818cf8" />
-                    <stop offset="100%" stopColor="#6366f1" />
-                  </linearGradient>
-                </defs>
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-[17px] font-black text-slate-900 leading-none">{READINESS}%</span>
-                <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Ready</span>
-              </div>
-            </div>
-            <div className="flex-1 min-w-0 pt-1">
-              <h4 className="text-sm font-black text-slate-900 leading-none mb-1 truncate">{profile.name}</h4>
-              <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest truncate mb-4">{profile.targetCareerId || 'Career Explorer'}</p>
-              <div className="space-y-2">
-                {isDashboardIntelLoading ? (
-                  [0,1,2].map(i => (
-                    <div key={i} className="flex items-center gap-2">
-                      <div className="w-14 h-2 bg-slate-100 rounded-full animate-pulse" />
-                      <div className="flex-1 h-1 bg-slate-100 rounded-full" />
-                      <div className="w-7 h-2 bg-slate-100 rounded-full animate-pulse" />
-                    </div>
-                  ))
-                ) : readinessBreakdown.map(m => (
-                  <div key={m.label} className="flex items-center gap-2">
-                    <span className="text-[7px] font-black text-slate-400 uppercase w-14 shrink-0">{m.label}</span>
-                    <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
-                      <motion.div initial={{ width: 0 }} animate={{ width: `${m.value}%` }} transition={{ duration: 1, delay: 0.6 }} className="h-full rounded-full" style={{ backgroundColor: m.color }} />
-                    </div>
-                    <span className="text-[7px] font-black w-7 text-right" style={{ color: m.color }}>{m.value}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Next Actions panel */}
-          <div className="border-t border-slate-100 pt-5">
-            <div className="flex items-center justify-between mb-4">
-              <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                {nextActions.length === 0 && !isDashboardIntelLoading ? 'Setup Guide' : 'Next Actions'}
-              </h5>
-              {isDashboardIntelLoading ? (
-                <div className="w-14 h-4 bg-slate-100 rounded-full animate-pulse" />
-              ) : nextActions.length === 0 ? (
-                <span className="text-[7px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">{milestonesProgress}% setup</span>
-              ) : (
-                <span className="text-[7px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">{nextActions.length} pending</span>
-              )}
-            </div>
-            <div className="space-y-2">
-              {isDashboardIntelLoading ? (
-                [0, 1, 2].map(i => (
-                  <div key={i} className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-100">
-                    <div className="w-7 h-7 rounded-xl bg-slate-200 animate-pulse shrink-0" />
-                    <div className="flex-1 space-y-1.5">
-                      <div className="h-2 rounded-full bg-slate-200 animate-pulse" style={{ width: ['75%','60%','50%'][i] }} />
-                      <div className="h-1.5 w-14 rounded-full bg-slate-100 animate-pulse" />
-                    </div>
-                    <div className="w-9 h-3.5 rounded-full bg-slate-200 animate-pulse" />
-                  </div>
-                ))
-              ) : nextActions.length === 0 ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 py-1">
-                    <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${milestonesProgress}%` }}
-                        transition={{ duration: 1, ease: 'easeOut' }}
-                        className="h-full bg-gradient-to-r from-indigo-400 to-indigo-600 rounded-full"
-                      />
-                    </div>
-                    <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest shrink-0">{milestonesDone}/{profileMilestones.length}</span>
-                  </div>
-                  {profileMilestones.map((m, i) => {
-                    const isNext = i === firstPendingMilestoneIdx;
-                    return (
-                      <motion.button
-                        key={i}
-                        whileHover={!m.done ? { x: 2 } : {}}
-                        onClick={() => m.nav && onNavigate(m.nav)}
-                        disabled={!m.nav && !m.done}
-                        className={cn(
-                          'w-full flex items-center gap-3 p-3 rounded-2xl border text-left transition-all',
-                          m.done
-                            ? 'bg-emerald-50/60 border-emerald-100'
-                            : isNext
-                              ? 'bg-amber-50 border-amber-300/60 cursor-pointer ring-1 ring-amber-200/50'
-                              : 'bg-slate-50 border-slate-100 cursor-pointer hover:border-slate-200'
-                        )}
-                      >
-                        <div className={cn(
-                          'w-7 h-7 rounded-xl flex items-center justify-center shrink-0',
-                          m.done ? 'bg-emerald-500' : isNext ? 'bg-amber-500' : 'bg-slate-200'
-                        )}>
-                          {m.done
-                            ? <Check size={11} className="text-white" />
-                            : <span className={cn('text-[9px] font-black', isNext ? 'text-white' : 'text-slate-400')}>{i + 1}</span>}
-                        </div>
-                        <p className={cn(
-                          'flex-1 text-[9px] font-black uppercase tracking-widest truncate',
-                          m.done ? 'text-emerald-700' : isNext ? 'text-amber-900' : 'text-slate-400'
-                        )}>
-                          {m.label}
-                        </p>
-                        <span className={cn(
-                          'text-[8px] font-black px-2 py-0.5 rounded-full shrink-0 uppercase tracking-widest',
-                          m.done
-                            ? 'bg-emerald-100 text-emerald-600'
-                            : isNext
-                              ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                              : 'bg-slate-100 text-slate-400'
-                        )}>
-                          +{m.xp}%
-                        </span>
-                      </motion.button>
-                    );
-                  })}
-                </div>
-              ) : nextActions.map((action, i) => (
-                <motion.div
-                  key={i}
-                  whileHover={{ x: 2 }}
-                  onClick={action.type === 'practice' ? () => onInitInterview(profile.targetCareerId || careers[0]?.id) : undefined}
-                  className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border ${action.urgent ? 'bg-amber-50/90 border-amber-200' : 'bg-slate-50 border-slate-100 hover:border-amber-100 hover:bg-amber-50/50'}`}
-                >
-                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${action.urgent ? 'bg-amber-500' : 'bg-white border border-slate-200'}`}>
-                    {action.type === 'learn' && <BookOpen size={11} className={action.urgent ? 'text-white' : 'text-slate-400'} />}
-                    {action.type === 'build' && <Pencil size={11} className={action.urgent ? 'text-white' : 'text-slate-400'} />}
-                    {action.type === 'practice' && <Mic size={11} className={action.urgent ? 'text-white' : 'text-slate-400'} />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-[9px] font-bold leading-snug truncate ${action.urgent ? 'text-amber-900' : 'text-slate-700'}`}>{action.title}</p>
-                    <p className={`text-[7px] font-black uppercase tracking-widest mt-0.5 ${action.urgent ? 'text-amber-600' : 'text-emerald-600'}`}>{action.impact}</p>
-                  </div>
-                  <ChevronRight size={11} className="text-slate-300 shrink-0" />
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Compact Burn Rate */}
-        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
-          <div className="flex justify-between items-center mb-5">
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Burn Rate</h4>
-            <span className="text-[8px] font-black text-rose-500 bg-rose-50 border border-rose-100 px-2 py-1 rounded-lg uppercase tracking-widest flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse inline-block" /> Live
-            </span>
-          </div>
-          {(profile.financialProfile?.monthlyExpenses || []).length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Financial profile missing</p>
-              <p className="text-[11px] font-bold text-slate-700">Set up your budget to unlock smarter career guidance.</p>
-              <button
-                onClick={() => onNavigate('expenses')}
-                className="px-4 py-2 rounded-2xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 transition-all"
-              >
-                Build Financial Profile
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {(profile.financialProfile?.monthlyExpenses || []).slice(0, 4).map((e, i) => {
-                const total = (profile.financialProfile?.monthlyExpenses || []).reduce((acc, curr) => acc + curr.amount, 0);
-                const pct = total > 0 ? Math.round((e.amount / total) * 100) : 0;
-                const colors = ['bg-indigo-500', 'bg-pink-500', 'bg-amber-400', 'bg-emerald-500'];
-                return (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight w-16 shrink-0 truncate">{e.category}</span>
-                    <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className={`h-full ${colors[i]} rounded-full`} style={{ width: `${pct}%` }} />
-                    </div>
-                    <span className="text-[9px] font-black text-slate-700 w-12 text-right">${e.amount}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          <button onClick={() => onNavigate('expenses')} className="w-full mt-5 py-2.5 bg-slate-50 text-slate-500 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center gap-1.5">
-            Full Budget Analysis <ArrowUpRight size={10} />
-          </button>
-        </div>
-
-        {/* Execution Sync — quick-action tiles */}
-        <div className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-sm">
-          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Execution Sync</h4>
-          <div className="space-y-3">
-            {execSync.some(item => item.urgent) && (
-              <div>
-                <p className="text-[8px] font-black uppercase tracking-[0.25em] text-amber-500 mb-2">Needs attention</p>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {execSync.filter(item => item.urgent).map(item => {
-                    const Icon = item.icon;
-                    return (
-                      <button key={item.label} onClick={() => onNavigate(item.view)}
-                        className={`p-3.5 rounded-[1.5rem] border ${item.border} ${item.bg} flex flex-col items-start gap-1.5 transition-all group active:scale-95 hover:shadow-md text-left`}>
-                        <div className="flex items-start justify-between w-full">
-                          <div className={`w-8 h-8 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform shrink-0`}>
-                            <Icon size={14} className={item.iconColor} />
-                          </div>
-                          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0 mt-1" />
-                        </div>
-                        <div className="w-full min-w-0">
-                          <p className={`text-[13px] font-black leading-none mb-1 ${item.statusColor}`}>{item.kpi}</p>
-                          <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest leading-none">{item.label}</p>
-                          <p className={`text-[7px] font-medium mt-0.5 leading-snug ${item.statusColor} opacity-80`}>{item.sublabel}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            <div>
-              <p className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-500 mb-2">Live insights</p>
-              <div className="grid grid-cols-2 gap-2.5">
-                {execSync.filter(item => !item.urgent).map(item => {
-                  const Icon = item.icon;
-                  return (
-                    <button key={item.label} onClick={() => onNavigate(item.view)}
-                      className={`p-3.5 rounded-[1.5rem] border ${item.border} ${item.bg} flex flex-col items-start gap-1.5 transition-all group active:scale-95 hover:shadow-md text-left`}>
-                      <div className={`w-8 h-8 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform mb-0.5`}>
-                        <Icon size={14} className={item.iconColor} />
-                      </div>
-                      <div className="w-full min-w-0">
-                        <p className={`text-[13px] font-black leading-none mb-1 ${item.statusColor}`}>{item.kpi}</p>
-                        <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest leading-none">{item.label}</p>
-                        <p className={`text-[7px] font-medium mt-0.5 leading-snug ${item.statusColor} opacity-80`}>{item.sublabel}</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Career Streak & XP ── */}
-        <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-5 overflow-hidden relative">
-          <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full bg-amber-400/10 blur-2xl pointer-events-none" />
-          <div className="flex items-center justify-between mb-4 relative z-10">
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Career Streak</h4>
-            <span className={`text-[7px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest ${xpLevelColor}`}>{xpLevel}</span>
-          </div>
-          <div className="flex items-center gap-4 relative z-10">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex flex-col items-center justify-center shadow-lg shadow-amber-200/60 shrink-0">
-              <span className="text-2xl leading-none">🔥</span>
-              <span className="text-[8px] font-black text-white uppercase tracking-widest mt-0.5">Streak</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-baseline gap-1 mb-1">
-                <span className="text-3xl font-black text-slate-900 leading-none">{streak}</span>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">day{streak !== 1 ? 's' : ''}</span>
-              </div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">+{streakXP} XP</span>
-                <span className="text-[9px] font-medium text-slate-400">Keep it going!</span>
-              </div>
-              {/* Mini streak dots */}
-              <div className="flex gap-1">
-                {Array.from({ length: 7 }).map((_, i) => (
-                  <div key={i} className={`w-4 h-1.5 rounded-full ${i < Math.min(streak, 7) ? 'bg-amber-400' : 'bg-slate-100'}`} />
-                ))}
-              </div>
-            </div>
-          </div>
-          {/* Badges row */}
-          <div className="mt-4 pt-4 border-t border-slate-100 relative z-10">
-            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">Badges Earned</p>
-            <div className="flex gap-2 flex-wrap">
-              {[
-                { emoji: '🚀', label: 'First Login',  unlocked: true  },
-                { emoji: '🎯', label: 'Goal Set',     unlocked: !!profile.targetCareerId },
-                { emoji: '📍', label: 'Location Set', unlocked: !!profile.targetLocation },
-                { emoji: '📄', label: 'Resume',       unlocked: false },
-                { emoji: '🏆', label: '7-Day Streak', unlocked: streak >= 7 },
-              ].map(b => (
-                <div key={b.label} className={`flex flex-col items-center gap-0.5 p-2 rounded-xl border transition-all ${b.unlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-100 opacity-40'}`}>
-                  <span className="text-lg leading-none">{b.emoji}</span>
-                  <span className="text-[6px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">{b.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      {/* ── CENTER COLUMN ── */}
-      <div className="xl:col-span-6 space-y-8">
+      {/* ── CENTER items (merged into left column) ── */}
 
         {/* Hero: AI Career Catalyst Hub */}
         <div className="relative group">
@@ -3614,10 +3302,329 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
           />
         </div>
 
+        {/* ── INTERNSHIP WIDGET ── */}
+        <div className="bg-gradient-to-br from-slate-50 to-indigo-50/30 rounded-[2rem] border border-indigo-100/60 p-6 shadow-sm">
+          <InternshipWidget
+            profile={profile}
+            onNavigateToJobs={() => onNavigate('jobs')}
+          />
+        </div>
+
       </div>
 
       {/* ── RIGHT SIDEBAR ── */}
-      <div className="xl:col-span-3 space-y-5">
+      <div className="xl:col-span-4 space-y-5">
+
+        {/* Profile card — Hero Arc */}
+        <div className="bg-gradient-to-b from-indigo-50/70 to-white p-6 rounded-[2.5rem] border border-indigo-100/50 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-300/10 rounded-full blur-3xl -mt-12 -mr-12 pointer-events-none" />
+          <div className="flex items-center justify-between mb-3 relative z-10">
+            <span className="text-[7px] font-black text-indigo-400 uppercase tracking-[0.2em]">Career Journey</span>
+            {profile.country && <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">{profile.country}</span>}
+          </div>
+          <div className="flex items-start gap-4 mb-6 relative z-10">
+            {/* Circular progress */}
+            <div className="relative shrink-0">
+              <svg width={88} height={88} className="-rotate-90">
+                <circle cx={44} cy={44} r={RADIUS} fill="none" stroke="#f1f5f9" strokeWidth={7} />
+                <motion.circle
+                  cx={44} cy={44} r={RADIUS} fill="none"
+                  stroke="url(#readGrad)" strokeWidth={7} strokeLinecap="round"
+                  strokeDasharray={CIRC}
+                  initial={{ strokeDashoffset: CIRC }}
+                  animate={{ strokeDashoffset: dashOffset }}
+                  transition={{ duration: 1.5, ease: 'easeOut', delay: 0.3 }}
+                />
+                <defs>
+                  <linearGradient id="readGrad" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#818cf8" />
+                    <stop offset="100%" stopColor="#6366f1" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-[17px] font-black text-slate-900 leading-none">{READINESS}%</span>
+                <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Ready</span>
+              </div>
+            </div>
+            <div className="flex-1 min-w-0 pt-1">
+              <h4 className="text-sm font-black text-slate-900 leading-none mb-1 truncate">{profile.name}</h4>
+              <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest truncate mb-4">{profile.targetCareerId || 'Career Explorer'}</p>
+              <div className="space-y-2">
+                {isDashboardIntelLoading ? (
+                  [0,1,2].map(i => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="w-14 h-2 bg-slate-100 rounded-full animate-pulse" />
+                      <div className="flex-1 h-1 bg-slate-100 rounded-full" />
+                      <div className="w-7 h-2 bg-slate-100 rounded-full animate-pulse" />
+                    </div>
+                  ))
+                ) : readinessBreakdown.map(m => (
+                  <div key={m.label} className="flex items-center gap-2">
+                    <span className="text-[7px] font-black text-slate-400 uppercase w-14 shrink-0">{m.label}</span>
+                    <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
+                      <motion.div initial={{ width: 0 }} animate={{ width: `${m.value}%` }} transition={{ duration: 1, delay: 0.6 }} className="h-full rounded-full" style={{ backgroundColor: m.color }} />
+                    </div>
+                    <span className="text-[7px] font-black w-7 text-right" style={{ color: m.color }}>{m.value}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Next Actions panel */}
+          <div className="border-t border-slate-100 pt-5">
+            <div className="flex items-center justify-between mb-4">
+              <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                {nextActions.length === 0 && !isDashboardIntelLoading ? 'Setup Guide' : 'Next Actions'}
+              </h5>
+              {isDashboardIntelLoading ? (
+                <div className="w-14 h-4 bg-slate-100 rounded-full animate-pulse" />
+              ) : nextActions.length === 0 ? (
+                <span className="text-[7px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">{milestonesProgress}% setup</span>
+              ) : (
+                <span className="text-[7px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">{nextActions.length} pending</span>
+              )}
+            </div>
+            <div className="space-y-2">
+              {isDashboardIntelLoading ? (
+                [0, 1, 2].map(i => (
+                  <div key={i} className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                    <div className="w-7 h-7 rounded-xl bg-slate-200 animate-pulse shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-2 rounded-full bg-slate-200 animate-pulse" style={{ width: ['75%','60%','50%'][i] }} />
+                      <div className="h-1.5 w-14 rounded-full bg-slate-100 animate-pulse" />
+                    </div>
+                    <div className="w-9 h-3.5 rounded-full bg-slate-200 animate-pulse" />
+                  </div>
+                ))
+              ) : nextActions.length === 0 ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 py-1">
+                    <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${milestonesProgress}%` }}
+                        transition={{ duration: 1, ease: 'easeOut' }}
+                        className="h-full bg-gradient-to-r from-indigo-400 to-indigo-600 rounded-full"
+                      />
+                    </div>
+                    <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest shrink-0">{milestonesDone}/{profileMilestones.length}</span>
+                  </div>
+                  {profileMilestones.map((m, i) => {
+                    const isNext = i === firstPendingMilestoneIdx;
+                    return (
+                      <motion.button
+                        key={i}
+                        whileHover={!m.done ? { x: 2 } : {}}
+                        onClick={() => m.nav && onNavigate(m.nav)}
+                        disabled={!m.nav && !m.done}
+                        className={cn(
+                          'w-full flex items-center gap-3 p-3 rounded-2xl border text-left transition-all',
+                          m.done
+                            ? 'bg-emerald-50/60 border-emerald-100'
+                            : isNext
+                              ? 'bg-amber-50 border-amber-300/60 cursor-pointer ring-1 ring-amber-200/50'
+                              : 'bg-slate-50 border-slate-100 cursor-pointer hover:border-slate-200'
+                        )}
+                      >
+                        <div className={cn(
+                          'w-7 h-7 rounded-xl flex items-center justify-center shrink-0',
+                          m.done ? 'bg-emerald-500' : isNext ? 'bg-amber-500' : 'bg-slate-200'
+                        )}>
+                          {m.done
+                            ? <Check size={11} className="text-white" />
+                            : <span className={cn('text-[9px] font-black', isNext ? 'text-white' : 'text-slate-400')}>{i + 1}</span>}
+                        </div>
+                        <p className={cn(
+                          'flex-1 text-[9px] font-black uppercase tracking-widest truncate',
+                          m.done ? 'text-emerald-700' : isNext ? 'text-amber-900' : 'text-slate-400'
+                        )}>
+                          {m.label}
+                        </p>
+                        <span className={cn(
+                          'text-[8px] font-black px-2 py-0.5 rounded-full shrink-0 uppercase tracking-widest',
+                          m.done
+                            ? 'bg-emerald-100 text-emerald-600'
+                            : isNext
+                              ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                              : 'bg-slate-100 text-slate-400'
+                        )}>
+                          +{m.xp}%
+                        </span>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              ) : nextActions.map((action, i) => (
+                <motion.div
+                  key={i}
+                  whileHover={{ x: 2 }}
+                  onClick={action.type === 'practice' ? () => onInitInterview(profile.targetCareerId || careers[0]?.id) : undefined}
+                  className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border ${action.urgent ? 'bg-amber-50/90 border-amber-200' : 'bg-slate-50 border-slate-100 hover:border-amber-100 hover:bg-amber-50/50'}`}
+                >
+                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${action.urgent ? 'bg-amber-500' : 'bg-white border border-slate-200'}`}>
+                    {action.type === 'learn' && <BookOpen size={11} className={action.urgent ? 'text-white' : 'text-slate-400'} />}
+                    {action.type === 'build' && <Pencil size={11} className={action.urgent ? 'text-white' : 'text-slate-400'} />}
+                    {action.type === 'practice' && <Mic size={11} className={action.urgent ? 'text-white' : 'text-slate-400'} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-[9px] font-bold leading-snug truncate ${action.urgent ? 'text-amber-900' : 'text-slate-700'}`}>{action.title}</p>
+                    <p className={`text-[7px] font-black uppercase tracking-widest mt-0.5 ${action.urgent ? 'text-amber-600' : 'text-emerald-600'}`}>{action.impact}</p>
+                  </div>
+                  <ChevronRight size={11} className="text-slate-300 shrink-0" />
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Compact Burn Rate */}
+        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
+          <div className="flex justify-between items-center mb-5">
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Burn Rate</h4>
+            <span className="text-[8px] font-black text-rose-500 bg-rose-50 border border-rose-100 px-2 py-1 rounded-lg uppercase tracking-widest flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse inline-block" /> Live
+            </span>
+          </div>
+          {(profile.financialProfile?.monthlyExpenses || []).length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Financial profile missing</p>
+              <p className="text-[11px] font-bold text-slate-700">Set up your budget to unlock smarter career guidance.</p>
+              <button
+                onClick={() => onNavigate('expenses')}
+                className="px-4 py-2 rounded-2xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 transition-all"
+              >
+                Build Financial Profile
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {(profile.financialProfile?.monthlyExpenses || []).slice(0, 4).map((e, i) => {
+                const total = (profile.financialProfile?.monthlyExpenses || []).reduce((acc, curr) => acc + curr.amount, 0);
+                const pct = total > 0 ? Math.round((e.amount / total) * 100) : 0;
+                const colors = ['bg-indigo-500', 'bg-pink-500', 'bg-amber-400', 'bg-emerald-500'];
+                return (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight w-16 shrink-0 truncate">{e.category}</span>
+                    <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className={`h-full ${colors[i]} rounded-full`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="text-[9px] font-black text-slate-700 w-12 text-right">${e.amount}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <button onClick={() => onNavigate('expenses')} className="w-full mt-5 py-2.5 bg-slate-50 text-slate-500 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center gap-1.5">
+            Full Budget Analysis <ArrowUpRight size={10} />
+          </button>
+        </div>
+
+        {/* Execution Sync — quick-action tiles */}
+        <div className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-sm">
+          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Execution Sync</h4>
+          <div className="space-y-3">
+            {execSync.some(item => item.urgent) && (
+              <div>
+                <p className="text-[8px] font-black uppercase tracking-[0.25em] text-amber-500 mb-2">Needs attention</p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {execSync.filter(item => item.urgent).map(item => {
+                    const Icon = item.icon;
+                    return (
+                      <button key={item.label} onClick={() => onNavigate(item.view)}
+                        className={`p-3.5 rounded-[1.5rem] border ${item.border} ${item.bg} flex flex-col items-start gap-1.5 transition-all group active:scale-95 hover:shadow-md text-left`}>
+                        <div className="flex items-start justify-between w-full">
+                          <div className={`w-8 h-8 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform shrink-0`}>
+                            <Icon size={14} className={item.iconColor} />
+                          </div>
+                          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0 mt-1" />
+                        </div>
+                        <div className="w-full min-w-0">
+                          <p className={`text-[13px] font-black leading-none mb-1 ${item.statusColor}`}>{item.kpi}</p>
+                          <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest leading-none">{item.label}</p>
+                          <p className={`text-[7px] font-medium mt-0.5 leading-snug ${item.statusColor} opacity-80`}>{item.sublabel}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            <div>
+              <p className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-500 mb-2">Live insights</p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {execSync.filter(item => !item.urgent).map(item => {
+                  const Icon = item.icon;
+                  return (
+                    <button key={item.label} onClick={() => onNavigate(item.view)}
+                      className={`p-3.5 rounded-[1.5rem] border ${item.border} ${item.bg} flex flex-col items-start gap-1.5 transition-all group active:scale-95 hover:shadow-md text-left`}>
+                      <div className={`w-8 h-8 rounded-xl ${item.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform mb-0.5`}>
+                        <Icon size={14} className={item.iconColor} />
+                      </div>
+                      <div className="w-full min-w-0">
+                        <p className={`text-[13px] font-black leading-none mb-1 ${item.statusColor}`}>{item.kpi}</p>
+                        <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest leading-none">{item.label}</p>
+                        <p className={`text-[7px] font-medium mt-0.5 leading-snug ${item.statusColor} opacity-80`}>{item.sublabel}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Career Streak & XP ── */}
+        <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-5 overflow-hidden relative">
+          <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full bg-amber-400/10 blur-2xl pointer-events-none" />
+          <div className="flex items-center justify-between mb-4 relative z-10">
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Career Streak</h4>
+            <span className={`text-[7px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest ${xpLevelColor}`}>{xpLevel}</span>
+          </div>
+          <div className="flex items-center gap-4 relative z-10">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex flex-col items-center justify-center shadow-lg shadow-amber-200/60 shrink-0">
+              <span className="text-2xl leading-none">🔥</span>
+              <span className="text-[8px] font-black text-white uppercase tracking-widest mt-0.5">Streak</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-1 mb-1">
+                <span className="text-3xl font-black text-slate-900 leading-none">{streak}</span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">day{streak !== 1 ? 's' : ''}</span>
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">+{streakXP} XP</span>
+                <span className="text-[9px] font-medium text-slate-400">Keep it going!</span>
+              </div>
+              {/* Mini streak dots */}
+              <div className="flex gap-1">
+                {Array.from({ length: 7 }).map((_, i) => (
+                  <div key={i} className={`w-4 h-1.5 rounded-full ${i < Math.min(streak, 7) ? 'bg-amber-400' : 'bg-slate-100'}`} />
+                ))}
+              </div>
+            </div>
+          </div>
+          {/* Badges row */}
+          <div className="mt-4 pt-4 border-t border-slate-100 relative z-10">
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">Badges Earned</p>
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { emoji: '🚀', label: 'First Login',  unlocked: true  },
+                { emoji: '🎯', label: 'Goal Set',     unlocked: !!profile.targetCareerId },
+                { emoji: '📍', label: 'Location Set', unlocked: !!profile.targetLocation },
+                { emoji: '📄', label: 'Resume',       unlocked: false },
+                { emoji: '🏆', label: '7-Day Streak', unlocked: streak >= 7 },
+              ].map(b => (
+                <div key={b.label} className={`flex flex-col items-center gap-0.5 p-2 rounded-xl border transition-all ${b.unlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-100 opacity-40'}`}>
+                  <span className="text-lg leading-none">{b.emoji}</span>
+                  <span className="text-[6px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">{b.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+
 
         {/* My Market — localized insights */}
         <MyMarketCard
@@ -3775,14 +3782,6 @@ const Dashboard = ({ profile, onSelectPath, onSelectByTitle, careers, isLoading,
       </div>
 
     </div>{/* end xl:grid-cols-12 */}
-
-      {/* ── INTERNSHIP WIDGET — full width below the 3-col grid ── */}
-      <div className="mt-8 bg-gradient-to-br from-slate-50 to-indigo-50/30 rounded-[2rem] border border-indigo-100/60 p-6 shadow-sm">
-        <InternshipWidget
-          profile={profile}
-          onNavigateToJobs={() => onNavigate('jobs')}
-        />
-      </div>
 
     </div>
   );
@@ -7612,17 +7611,7 @@ const OnboardingWizard: React.FC<{
 // AI Coach Hub — self-contained shell with built-in tab navigation
 // Replaces reliance on the global sub-nav for the AI Coach pillar
 // ─────────────────────────────────────────────────────────────────────────────
-type AICoachView = 'career-coach' | 'interview' | 'resume' | 'job-match' | 'industry-sim' | 'soft-skills' | 'salary-coach';
-
-const AI_COACH_TABS: { id: AICoachView; label: string; icon: React.ElementType; desc: string }[] = [
-  { id: 'career-coach', label: 'AI Coach',       icon: MessageSquare,  desc: 'Spark.E career coach' },
-  { id: 'interview',    label: 'Interview Prep',  icon: Mic,            desc: 'Mock interview simulator' },
-  { id: 'resume',       label: 'Resume',          icon: FileText,       desc: 'Build & score your resume' },
-  { id: 'job-match',    label: 'AI Match',        icon: Zap,            desc: 'Smart job-fit scoring' },
-  { id: 'industry-sim', label: 'Industry Sim',    icon: Building2,      desc: 'Role-play scenarios' },
-  { id: 'soft-skills',  label: 'Soft Skills',     icon: Users,          desc: 'Personality & communication' },
-  { id: 'salary-coach', label: 'Salary Coach',    icon: DollarSign,     desc: 'Negotiation training' },
-];
+type AICoachView = 'interview' | 'resume' | 'job-match' | 'industry-sim' | 'soft-skills' | 'salary-coach';
 
 function AICoachHub({ activeView, onNavigate, profile, userId, isMobile }: {
   activeView: AICoachView;
@@ -7634,48 +7623,17 @@ function AICoachHub({ activeView, onNavigate, profile, userId, isMobile }: {
   const defaultRole = profile.targetCareerId?.replace(/-/g, ' ') || 'Software Engineer';
 
   return (
-    <div className="flex flex-col gap-0">
-      {/* ── Tab bar (always visible, horizontally scrollable) ── */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-slate-200 -mx-4 lg:-mx-10 px-4 lg:px-10 mb-6">
-        <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide py-2">
-          {AI_COACH_TABS.map(tab => {
-            const TabIcon = tab.icon;
-            const isActive = activeView === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => onNavigate(tab.id)}
-                aria-current={isActive ? 'page' : undefined}
-                title={tab.desc}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap shrink-0',
-                  isActive
-                    ? 'bg-purple-600 text-white shadow-sm shadow-purple-200'
-                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
-                )}
-              >
-                <TabIcon size={12} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Content ── */}
-      <div className="flex-1">
-        {activeView === 'career-coach' && <CareerCoachChat profile={profile} />}
-        {activeView === 'interview' && (
-          isMobile
-            ? <MobileInterviewView userId={userId} defaultRole={defaultRole} />
-            : <InterviewPrepView userId={userId} defaultRole={defaultRole} />
-        )}
-        {activeView === 'resume'       && <ResumeManager profile={profile} userId={userId} />}
-        {activeView === 'job-match'    && <JobMatchView userId={userId} resumeContent={null} />}
-        {activeView === 'industry-sim' && <IndustrySimulator profile={profile} />}
-        {activeView === 'soft-skills'  && <SoftSkillsAssessment profile={profile} />}
-        {activeView === 'salary-coach' && <SalaryNegotiationCoach profile={profile} />}
-      </div>
+    <div className="flex-1">
+      {activeView === 'interview' && (
+        isMobile
+          ? <MobileInterviewView userId={userId} defaultRole={defaultRole} />
+          : <InterviewPrepView userId={userId} defaultRole={defaultRole} />
+      )}
+      {activeView === 'resume'       && <ResumeManager profile={profile} userId={userId} />}
+      {activeView === 'job-match'    && <JobMatchView userId={userId} resumeContent={null} />}
+      {activeView === 'industry-sim' && <IndustrySimulator profile={profile} />}
+      {activeView === 'soft-skills'  && <SoftSkillsAssessment profile={profile} />}
+      {activeView === 'salary-coach' && <SalaryNegotiationCoach profile={profile} />}
     </div>
   );
 }
@@ -7714,19 +7672,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
         { label: t('pillars.subs.directory'),    view: 'directory',     icon: Layers,      desc: 'Browse careers by your target location' },
       ],
     },
-    {
-      id: 'ai-coach', label: t('pillars.aiCoach'), icon: BrainCircuit, primaryView: 'career-coach', views: ['interview', 'resume', 'job-match', 'career-coach', 'industry-sim', 'soft-skills', 'salary-coach'],
-      accent: { bg: 'bg-purple-600', text: 'text-white' },
-      subs: [
-        { label: t('pillars.subs.careerCoach'),    view: 'career-coach', icon: MessageSquare,  desc: 'AI career coach chatbot' },
-        { label: t('pillars.subs.interviewPrep'), view: 'interview',    icon: Mic,            desc: 'AI mock interview simulator' },
-        { label: t('pillars.subs.resume'),         view: 'resume',       icon: FileText,       desc: 'Build & score your resume' },
-        { label: t('pillars.subs.aiMatch'),        view: 'job-match',    icon: Zap,            desc: 'Smart job-fit scoring' },
-        { label: t('pillars.subs.industrySim'),    view: 'industry-sim', icon: Building2,      desc: 'Role-play industry scenarios' },
-        { label: t('pillars.subs.softSkills'),     view: 'soft-skills',  icon: Users,          desc: 'Personality & communication' },
-        { label: t('pillars.subs.salaryCoach'),    view: 'salary-coach', icon: DollarSign,     desc: 'Salary negotiation training' },
-      ],
-    },
+
     {
       id: 'mobility', label: t('pillars.mobility'), icon: Globe, primaryView: 'expenses', views: ['expenses', 'heatmap', 'jobs', 'applications', 'side-hustle'],
       accent: { bg: 'bg-teal-600', text: 'text-white' },
@@ -7748,11 +7694,17 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       ],
     },
     {
-      id: 'analytics', label: t('pillars.analytics'), icon: BarChart3, primaryView: 'analytics', views: ['analytics', 'burnout'],
+      id: 'analytics', label: 'AI Insights', icon: BrainCircuit, primaryView: 'analytics', views: ['analytics', 'burnout', 'interview', 'resume', 'job-match', 'industry-sim', 'soft-skills', 'salary-coach'],
       accent: { bg: 'bg-indigo-600', text: 'text-white' },
       subs: [
         { label: t('pillars.subs.marketTrends'),  view: 'analytics', icon: TrendingUp, desc: 'AI-powered job market intelligence' },
         { label: t('pillars.subs.burnout'),        view: 'burnout',   icon: Heart,      desc: 'Work-life balance & burnout check' },
+        { label: t('pillars.subs.interviewPrep'), view: 'interview',    icon: Mic,            desc: 'AI mock interview simulator' },
+        { label: t('pillars.subs.resume'),         view: 'resume',       icon: FileText,       desc: 'Build & score your resume' },
+        { label: t('pillars.subs.aiMatch'),        view: 'job-match',    icon: Zap,            desc: 'Smart job-fit scoring' },
+        { label: t('pillars.subs.industrySim'),    view: 'industry-sim', icon: Building2,      desc: 'Role-play industry scenarios' },
+        { label: t('pillars.subs.softSkills'),     view: 'soft-skills',  icon: Users,          desc: 'Personality & communication' },
+        { label: t('pillars.subs.salaryCoach'),    view: 'salary-coach', icon: DollarSign,     desc: 'Salary negotiation training' },
       ],
     },
     {
@@ -7789,15 +7741,16 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
   }, [activeView]);
   const activePillar = PILLAR_DEFS.find(p => p.views.includes(activeView)) || PILLAR_DEFS[0];
   const LANG_OPTIONS = [
-    { code: 'en' as const, flag: '🇬🇧', label: 'EN' },
-    { code: 'es' as const, flag: '🇪🇸', label: 'ES' },
-    { code: 'fr' as const, flag: '🇫🇷', label: 'FR' },
-    { code: 'ar' as const, flag: '🇸🇦', label: 'AR' },
-    { code: 'zh' as const, flag: '🇨🇳', label: 'ZH' },
+    { code: 'en' as const, flag: 'GB', label: 'EN' },
+    { code: 'es' as const, flag: 'ES', label: 'ES' },
+    { code: 'fr' as const, flag: 'FR', label: 'FR' },
+    { code: 'ar' as const, flag: 'SA', label: 'AR' },
+    { code: 'zh' as const, flag: 'CN', label: 'ZH' },
   ];
   const [showMoreNav, setShowMoreNav] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [showLangPopup, setShowLangPopup] = useState(false);
+  const [showHeaderPopup, setShowHeaderPopup] = useState(false);
   const [scholarshipHighlightId, setScholarshipHighlightId] = useState<string | null>(null);
   const [selectedPathId, setSelectedPathId] = useState<string>("ai-engineer");
   const [institutionSearchQuery, setInstitutionSearchQuery] = useState("");
@@ -8382,55 +8335,49 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
             <svg width="16" height="16" viewBox="0 0 18 18" fill="none"><rect y="3" width="18" height="1.8" rx="0.9" fill="currentColor"/><rect y="8.1" width="18" height="1.8" rx="0.9" fill="currentColor"/><rect y="13.2" width="18" height="1.8" rx="0.9" fill="currentColor"/></svg>
           </button>
 
-          {/* Auth + logout — only on xl+ */}
-          <div className="hidden xl:flex flex-col items-end gap-0.5">
-            <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-300 rounded-lg px-2.5 py-1.5">
-              <ShieldCheck size={11} className="text-emerald-600" />
-              <span className="text-[9px] font-black text-emerald-700 uppercase tracking-widest">Secure</span>
-            </div>
+          {/* Header actions hover popup */}
+          <div
+            className="relative hidden md:block"
+            onMouseEnter={() => setShowHeaderPopup(true)}
+            onMouseLeave={() => setShowHeaderPopup(false)}
+          >
             <button
-              onClick={handleLogout}
-              className="flex items-center gap-1 text-[9px] font-black text-rose-500 hover:text-white hover:bg-rose-500 border border-rose-200 hover:border-rose-500 bg-rose-50 rounded-md px-2 py-0.5 transition-all"
+              className="flex items-center gap-1.5 h-9 px-3 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50 transition-colors shadow-sm"
+              aria-label="Quick settings"
             >
-              <LogOut size={9} /> Sign out
+              <Settings size={15} className="text-slate-600" />
+              <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest hidden xl:block">Menu</span>
             </button>
-          </div>
 
-          {/* Language switcher popup — next to profile */}
-          <div className="relative">
-            <button
-              onClick={() => setShowLangPopup(v => !v)}
-              aria-label="Change language"
-              aria-expanded={showLangPopup}
-              className="flex items-center gap-1.5 h-9 px-3 rounded-xl border border-slate-300 bg-white hover:border-indigo-400 hover:bg-indigo-50 transition-colors shadow-sm"
-            >
-              <Globe size={15} className="text-slate-600" />
-              {/* Show flag + lang text on xl+ */}
-              <span className="text-[11px] font-black text-slate-700 uppercase tracking-widest hidden xl:block">
-                {LANG_OPTIONS.find(l => l.code === language)?.flag ?? '🌐'} {language.toUpperCase()}
-              </span>
-              {/* Show just flag on md-xl */}
-              <span className="text-base xl:hidden" aria-hidden="true">
-                {LANG_OPTIONS.find(l => l.code === language)?.flag ?? '🌐'}
-              </span>
-            </button>
             <AnimatePresence>
-              {showLangPopup && (
-                <>
-                  <div className="fixed inset-0 z-[9000]" onClick={() => setShowLangPopup(false)} />
-                  <motion.div
-                    key="lang-popup"
-                    initial={{ opacity: 0, y: -6, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -6, scale: 0.96 }}
-                    transition={{ duration: 0.15 }}
-                    className="fixed top-[64px] right-4 z-[9001] bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-200/60 p-2 min-w-[160px]"
-                  >
+              {showHeaderPopup && (
+                <motion.div
+                  key="header-popup"
+                  initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute top-full right-0 mt-2 z-[9001] bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-200/60 p-3 min-w-[200px]"
+                >
+                  {/* Secure badge */}
+                  <div className="flex items-center gap-2 px-2.5 py-2 bg-emerald-50 border border-emerald-200 rounded-xl mb-2">
+                    <ShieldCheck size={14} className="text-emerald-600" />
+                    <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Secure</span>
+                  </div>
+
+                  {/* Credits */}
+                  <div className="flex items-center gap-2 px-2.5 py-2 bg-amber-50 border border-amber-200 rounded-xl mb-2">
+                    <Wallet size={14} className="text-amber-600" />
+                    <span className="text-[10px] font-black text-amber-800 uppercase tracking-widest">{creditBalance} Credits</span>
+                  </div>
+
+                  {/* Language selector */}
+                  <div className="mb-2">
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 py-1">Language</p>
                     {LANG_OPTIONS.map(lang => (
                       <button
                         key={lang.code}
-                        onClick={() => { setLanguage(lang.code); setShowLangPopup(false); }}
+                        onClick={() => { setLanguage(lang.code); setShowHeaderPopup(false); }}
                         className={cn(
                           'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-bold transition-all',
                           language === lang.code
@@ -8438,22 +8385,24 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                             : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                         )}
                       >
-                        <span className="text-base leading-none">{lang.flag}</span>
+                        <Globe size={13} className={language === lang.code ? 'text-white' : 'text-slate-400'} />
                         <span className="font-black tracking-wider">{lang.label}</span>
                         {language === lang.code && <span className="ml-auto text-[9px] text-indigo-200 uppercase font-black">Active</span>}
                       </button>
                     ))}
-                  </motion.div>
-                </>
+                  </div>
+
+                  {/* Sign out */}
+                  <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-2 px-2.5 py-2 text-[10px] font-black text-rose-600 hover:text-white hover:bg-rose-500 border border-rose-200 hover:border-rose-500 bg-rose-50 rounded-xl transition-all uppercase tracking-widest"
+                  >
+                    <LogOut size={12} /> Sign Out
+                  </button>
+                </motion.div>
               )}
             </AnimatePresence>
           </div>
-
-          <div className="hidden md:flex items-center gap-1.5 h-9 px-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 shadow-sm">
-            <Wallet size={14} className="text-amber-600" />
-            <span className="text-[10px] font-black uppercase tracking-widest">{creditBalance} credits</span>
-          </div>
-
           {/* Profile button — icon+name on xl+, icon-only on md-lg */}
           <button className="flex items-center gap-2 bg-white pl-1.5 pr-2 xl:pr-3 py-1.5 rounded-2xl border border-slate-300 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all group" onClick={() => setShowProfileModal(true)}>
             <div className="h-8 w-8 rounded-xl bg-indigo-100 border border-indigo-200 flex items-center justify-center group-hover:bg-indigo-600 transition-colors overflow-hidden shrink-0">
@@ -8589,7 +8538,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                 {/* Group: Discover & Coaching & Mobility */}
                 <div className="mb-1">
                   <p className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400 px-3 mb-1">Discover & Grow</p>
-                  {PILLAR_DEFS.filter(p => ['explore', 'ai-coach', 'mobility'].includes(p.id)).map(pillar => {
+                  {PILLAR_DEFS.filter(p => ['explore', 'analytics', 'mobility'].includes(p.id)).map(pillar => {
                     const isPillarActive = activePillar.id === pillar.id;
                     const PillarIcon = pillar.icon;
                     return (
@@ -8654,7 +8603,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                 {/* Group: Community, Analytics, Plans */}
                 <div className="mb-1">
                   <p className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400 px-3 mb-1">Community & Plans</p>
-                  {PILLAR_DEFS.filter(p => ['network', 'analytics', 'plans'].includes(p.id)).map(pillar => {
+                  {PILLAR_DEFS.filter(p => ['network', 'plans'].includes(p.id)).map(pillar => {
                     const isPillarActive = activePillar.id === pillar.id;
                     const PillarIcon = pillar.icon;
                     return (
@@ -8799,7 +8748,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                    {activeView === 'parent' && <ParentalDashboard profile={profile} onBack={() => setActiveView('dashboard')} careers={careers} />}
                    {activeView === 'expenses' && <FinancialView profile={profile} setProfile={setProfile} highlightScholarshipId={scholarshipHighlightId} onClearHighlight={() => setScholarshipHighlightId(null)} />}
                    {/* ── AI Coach Hub (self-contained with built-in tab navigation) ── */}
-                   {(['career-coach', 'interview', 'resume', 'job-match', 'industry-sim', 'soft-skills', 'salary-coach'] as AICoachView[]).includes(activeView as AICoachView) && (
+                   {(['interview', 'resume', 'job-match', 'industry-sim', 'soft-skills', 'salary-coach'] as AICoachView[]).includes(activeView as AICoachView) && (
                      <AICoachHub
                        activeView={activeView as AICoachView}
                        onNavigate={(v) => handleNavigate(v)}
