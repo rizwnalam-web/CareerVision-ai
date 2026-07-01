@@ -25,6 +25,7 @@ import * as migration022 from "./022_job_aggregation_indexes.js";
 import * as migration023 from "./023_add_submission_tracking_to_job_applications.js";
 import * as migration024 from "./024_add_deep_resume_sharing_and_history.js";
 import * as migration025 from "./025_fix_deep_resume_shares_slug_unique_constraint.js";
+import * as migration026 from "./026_fix_credit_transactions_reference_unique_constraint.js";
 
 const migrations = [
   { name: "001_initial_schema",        module: migration001 },
@@ -53,6 +54,7 @@ const migrations = [
   { name: "023_add_submission_tracking_to_job_applications", module: migration023 },
   { name: "024_add_deep_resume_sharing_and_history", module: migration024 },
   { name: "025_fix_deep_resume_shares_slug_unique_constraint", module: migration025 },
+  { name: "026_fix_credit_transactions_reference_unique_constraint", module: migration026 },
 ];
 
 export async function runMigrations() {
@@ -88,7 +90,65 @@ export async function runMigrations() {
     }
   }
 
+  await ensureSchemaFallbacks();
+
   console.log("\n✓ All migrations completed successfully!");
+}
+
+async function ensureSchemaFallbacks() {
+  await db.none(`
+    CREATE TABLE IF NOT EXISTS user_work_preferences (
+      user_identifier        TEXT PRIMARY KEY,
+      work_type_preference   VARCHAR(20) NOT NULL DEFAULT 'any'
+                               CHECK (work_type_preference IN ('remote','hybrid','onsite','any')),
+      min_salary             INTEGER,
+      max_salary             INTEGER,
+      salary_currency        VARCHAR(10) DEFAULT 'USD',
+      preferred_locations    TEXT[] DEFAULT '{}',
+      preferred_industries   TEXT[] DEFAULT '{}',
+      target_role            TEXT,
+      setup_completed_at     TIMESTAMPTZ,
+      updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    ALTER TABLE user_work_preferences
+      ADD COLUMN IF NOT EXISTS setup_completed_at TIMESTAMPTZ;
+
+    CREATE TABLE IF NOT EXISTS user_credits (
+      user_identifier   TEXT PRIMARY KEY,
+      balance           INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0),
+      lifetime_earned   INTEGER NOT NULL DEFAULT 0 CHECK (lifetime_earned >= 0),
+      lifetime_spent    INTEGER NOT NULL DEFAULT 0 CHECK (lifetime_spent >= 0),
+      updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS credit_transactions (
+      id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_identifier  TEXT NOT NULL,
+      direction        VARCHAR(10) NOT NULL CHECK (direction IN ('credit','debit')),
+      amount           INTEGER NOT NULL CHECK (amount > 0),
+      balance_after    INTEGER NOT NULL CHECK (balance_after >= 0),
+      source           VARCHAR(60) NOT NULL,
+      reference_key    VARCHAR(120),
+      metadata         JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_credit_transactions_reference
+      ON credit_transactions(user_identifier, source, reference_key);
+
+    CREATE TABLE IF NOT EXISTS deep_resume_shares (
+      user_identifier TEXT PRIMARY KEY,
+      share_slug VARCHAR(64) NOT NULL UNIQUE,
+      is_public BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_shared_at TIMESTAMPTZ
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_deep_resume_shares_slug_unique
+      ON deep_resume_shares(share_slug);
+  `);
 }
 
 if (import.meta.url === process.argv[1] || import.meta.url === new URL(process.argv[1], import.meta.url).href) {

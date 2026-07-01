@@ -1,4 +1,5 @@
 import { db } from "../db/database.js";
+import type { ITask } from "pg-promise";
 
 export interface WorkPreferencesInput {
   workTypePreference?: "remote" | "hybrid" | "onsite" | "any";
@@ -236,34 +237,59 @@ export async function completeInitialSetupAndAwardCredits(input: {
   wallet: CreditWallet;
 }> {
   return db.tx(async t => {
+    await ensureCreditSetupSchema(t);
+
     const prefs = input.preferences || {};
 
-    await t.none(
-      `INSERT INTO user_work_preferences
-         (user_identifier, work_type_preference, min_salary, max_salary, salary_currency,
-          preferred_locations, preferred_industries, target_role, setup_completed_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
-       ON CONFLICT (user_identifier) DO UPDATE SET
-         work_type_preference = EXCLUDED.work_type_preference,
-         min_salary           = EXCLUDED.min_salary,
-         max_salary           = EXCLUDED.max_salary,
-         salary_currency      = EXCLUDED.salary_currency,
-         preferred_locations  = EXCLUDED.preferred_locations,
-         preferred_industries = EXCLUDED.preferred_industries,
-         target_role          = EXCLUDED.target_role,
-         setup_completed_at   = COALESCE(user_work_preferences.setup_completed_at, NOW()),
-         updated_at           = NOW()`,
-      [
-        input.userIdentifier,
-        prefs.workTypePreference ?? "any",
-        prefs.minSalary ?? null,
-        prefs.maxSalary ?? null,
-        prefs.salaryCurrency ?? "USD",
-        Array.isArray(prefs.preferredLocations) ? prefs.preferredLocations : [],
-        Array.isArray(prefs.preferredIndustries) ? prefs.preferredIndustries : [],
-        prefs.targetRole ?? null,
-      ]
+    const existingPreferences = await t.oneOrNone(
+      `SELECT user_identifier, setup_completed_at
+       FROM user_work_preferences
+       WHERE user_identifier = $1`,
+      [input.userIdentifier]
     );
+
+    if (existingPreferences) {
+      await t.none(
+        `UPDATE user_work_preferences
+         SET work_type_preference   = $2,
+             min_salary             = $3,
+             max_salary             = $4,
+             salary_currency        = $5,
+             preferred_locations    = $6,
+             preferred_industries   = $7,
+             target_role            = $8,
+             setup_completed_at     = COALESCE(setup_completed_at, NOW()),
+             updated_at             = NOW()
+         WHERE user_identifier = $1`,
+        [
+          input.userIdentifier,
+          prefs.workTypePreference ?? "any",
+          prefs.minSalary ?? null,
+          prefs.maxSalary ?? null,
+          prefs.salaryCurrency ?? "USD",
+          Array.isArray(prefs.preferredLocations) ? prefs.preferredLocations : [],
+          Array.isArray(prefs.preferredIndustries) ? prefs.preferredIndustries : [],
+          prefs.targetRole ?? null,
+        ]
+      );
+    } else {
+      await t.none(
+        `INSERT INTO user_work_preferences
+           (user_identifier, work_type_preference, min_salary, max_salary, salary_currency,
+            preferred_locations, preferred_industries, target_role, setup_completed_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())`,
+        [
+          input.userIdentifier,
+          prefs.workTypePreference ?? "any",
+          prefs.minSalary ?? null,
+          prefs.maxSalary ?? null,
+          prefs.salaryCurrency ?? "USD",
+          Array.isArray(prefs.preferredLocations) ? prefs.preferredLocations : [],
+          Array.isArray(prefs.preferredIndustries) ? prefs.preferredIndustries : [],
+          prefs.targetRole ?? null,
+        ]
+      );
+    }
 
     await t.none(
       `INSERT INTO user_credits (user_identifier)
@@ -285,8 +311,14 @@ export async function completeInitialSetupAndAwardCredits(input: {
     const inserted = await t.oneOrNone(
       `INSERT INTO credit_transactions
          (user_identifier, direction, amount, balance_after, source, reference_key, metadata)
-       VALUES ($1,'credit',$2,$3,'onboarding_setup_bonus',$4,$5)
-       ON CONFLICT (user_identifier, source, reference_key) DO NOTHING
+       SELECT $1, 'credit', $2, $3, 'onboarding_setup_bonus', $4, $5
+       WHERE NOT EXISTS (
+         SELECT 1
+         FROM credit_transactions
+         WHERE user_identifier = $1
+           AND source = 'onboarding_setup_bonus'
+           AND ((reference_key IS NULL AND $4 IS NULL) OR reference_key = $4)
+       )
        RETURNING id`,
       [
         input.userIdentifier,
@@ -332,6 +364,47 @@ export async function completeInitialSetupAndAwardCredits(input: {
       wallet: mapWallet(walletRow),
     };
   });
+}
+
+async function ensureCreditSetupSchema(t: ITask<{}>) {
+  await t.none(`
+    CREATE TABLE IF NOT EXISTS user_work_preferences (
+      user_identifier        TEXT PRIMARY KEY,
+      work_type_preference   VARCHAR(20) NOT NULL DEFAULT 'any'
+                               CHECK (work_type_preference IN ('remote','hybrid','onsite','any')),
+      min_salary             INTEGER,
+      max_salary             INTEGER,
+      salary_currency        VARCHAR(10) DEFAULT 'USD',
+      preferred_locations    TEXT[] DEFAULT '{}',
+      preferred_industries   TEXT[] DEFAULT '{}',
+      target_role            TEXT,
+      setup_completed_at     TIMESTAMPTZ,
+      updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS user_credits (
+      user_identifier   TEXT PRIMARY KEY,
+      balance           INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0),
+      lifetime_earned   INTEGER NOT NULL DEFAULT 0 CHECK (lifetime_earned >= 0),
+      lifetime_spent    INTEGER NOT NULL DEFAULT 0 CHECK (lifetime_spent >= 0),
+      updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS credit_transactions (
+      id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_identifier  TEXT NOT NULL,
+      direction        VARCHAR(10) NOT NULL CHECK (direction IN ('credit','debit')),
+      amount           INTEGER NOT NULL CHECK (amount > 0),
+      balance_after    INTEGER NOT NULL CHECK (balance_after >= 0),
+      source           VARCHAR(60) NOT NULL,
+      reference_key    VARCHAR(120),
+      metadata         JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_credit_transactions_reference
+      ON credit_transactions(user_identifier, source, reference_key);
+  `);
 }
 
 export async function awardCreditPackPurchase(input: {

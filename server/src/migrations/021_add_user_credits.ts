@@ -33,8 +33,7 @@ export async function up() {
       ON credit_transactions(user_identifier, created_at DESC);
 
     CREATE UNIQUE INDEX IF NOT EXISTS ux_credit_transactions_reference
-      ON credit_transactions(user_identifier, source, reference_key)
-      WHERE reference_key IS NOT NULL;
+      ON credit_transactions(user_identifier, source, reference_key);
 
     ALTER TABLE user_work_preferences
       ADD COLUMN IF NOT EXISTS setup_completed_at TIMESTAMPTZ;
