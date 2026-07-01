@@ -24,7 +24,7 @@ export async function up() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
-    CREATE INDEX IF NOT EXISTS idx_deep_resume_shares_slug
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_deep_resume_shares_slug
       ON deep_resume_shares(share_slug);
 
     CREATE INDEX IF NOT EXISTS idx_deep_resume_qa_history_user_created
