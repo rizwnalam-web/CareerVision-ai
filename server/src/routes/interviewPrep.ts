@@ -6,6 +6,8 @@ import {
   evaluateAnswer,
   generateSessionFeedback,
   analyseVideoTranscript,
+  generateMockFromJD,
+  evaluateSTARResponse,
   type PrepQuestion,
   type AnswerScore,
 } from "../services/interviewPrepService.js";
@@ -359,6 +361,48 @@ router.get("/peer/my/:userId", async (req: Request, res: Response) => {
   } catch (err) {
     console.error("[interview-prep/peer/my]", err);
     res.status(500).json({ error: "Failed to fetch peer sessions" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/interview-prep/mock/generate — JD-targeted mock questions
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/mock/generate", async (req: Request, res: Response) => {
+  try {
+    const { jobDescription, role, company, count, focus } = req.body;
+    if (!jobDescription || !role) {
+      return res.status(400).json({ error: "jobDescription and role are required" });
+    }
+
+    const questions = await generateMockFromJD(
+      jobDescription, role, company, count || 6, focus || "mixed"
+    );
+    res.json({ success: true, questions });
+  } catch (err: any) {
+    console.error("[interview-prep/mock/generate]", err);
+    res.status(500).json({ error: err.message || "Failed to generate mock questions" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/interview-prep/mock/evaluate-star — STAR method evaluation
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/mock/evaluate-star", async (req: Request, res: Response) => {
+  try {
+    const { question, transcript, role, durationSeconds } = req.body;
+    if (!question || !transcript || !role) {
+      return res.status(400).json({ error: "question, transcript, and role are required" });
+    }
+
+    const feedback = await evaluateSTARResponse(
+      question, transcript, role, durationSeconds || 60
+    );
+    res.json({ success: true, feedback });
+  } catch (err: any) {
+    console.error("[interview-prep/mock/evaluate-star]", err);
+    res.status(500).json({ error: err.message || "STAR evaluation failed" });
   }
 });
 

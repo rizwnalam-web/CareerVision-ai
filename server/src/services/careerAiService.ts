@@ -2451,3 +2451,257 @@ Output ONLY the JSON array.`;
 }
 
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Learning Trajectories — Skill Gap → Certification Roadmap
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface LearningStep {
+  id: string;
+  title: string;
+  provider: string;       // Coursera, Udemy, AWS, Google, etc.
+  type: "course" | "certification" | "project" | "bootcamp";
+  duration: string;       // "4 weeks", "3 months"
+  cost: string;           // "$49/mo", "Free", "$299"
+  url: string;
+  difficulty: "beginner" | "intermediate" | "advanced";
+  skills: string[];
+  priority: number;       // 1 = highest
+  reason: string;         // Why this step bridges the gap
+}
+
+export interface LearningTrajectory {
+  skill: string;
+  currentLevel: number;   // 0-100
+  targetLevel: number;    // 0-100
+  gap: number;            // percentage gap
+  estimatedWeeks: number;
+  steps: LearningStep[];
+}
+
+export async function getLearningTrajectories(
+  profile: UserProfile,
+  careerTitle: string,
+  skillGaps: CareerSkillGap[]
+): Promise<LearningTrajectory[]> {
+  const missingSkills = skillGaps.filter(s => !s.owned).map(s => s.skill);
+  const weakSkills = skillGaps.filter(s => s.owned && s.demand > 70).map(s => s.skill);
+  const targetSkills = [...missingSkills, ...weakSkills].slice(0, 6);
+
+  if (targetSkills.length === 0) return [];
+
+  const cacheKey = `learning-traj:${careerTitle}:${targetSkills.sort().join(',')}`;
+  const cached = await getAiCache<LearningTrajectory[]>(cacheKey);
+  if (cached && cached.length > 0) return cached;
+
+  const systemInstruction = `You are a learning path architect. Return ONLY a valid JSON array. No markdown, no explanation.`;
+
+  const prompt = `Create personalized learning trajectories for a student targeting "${careerTitle}".
+
+Student profile:
+- Education: ${profile.education || 'Unknown'}
+- Country: ${profile.country || 'Global'}
+- Existing interests: ${profile.interests?.join(', ') || 'General'}
+
+Skills that need development (from skill gap analysis):
+- Missing entirely: ${missingSkills.join(', ') || 'None'}
+- Owned but need strengthening (demand >70%): ${weakSkills.join(', ') || 'None'}
+
+For EACH skill below, create a learning trajectory with 3-4 concrete steps:
+${targetSkills.map((s, i) => `${i + 1}. "${s}"`).join('\n')}
+
+Return a JSON array of trajectory objects:
+{
+  "skill": "Skill Name",
+  "currentLevel": 0-100 (0 if missing, 30-50 if weak),
+  "targetLevel": 80-95,
+  "gap": percentage difference,
+  "estimatedWeeks": total weeks to close gap,
+  "steps": [
+    {
+      "id": "step-1",
+      "title": "Exact Course/Cert Name",
+      "provider": "Coursera|Udemy|AWS|Google|Microsoft|LinkedIn Learning|edX|Pluralsight",
+      "type": "course|certification|project|bootcamp",
+      "duration": "X weeks",
+      "cost": "$XX/mo or Free or $XXX one-time",
+      "url": "https://www.coursera.org/learn/SLUG or realistic platform URL",
+      "difficulty": "beginner|intermediate|advanced",
+      "skills": ["sub-skill-1", "sub-skill-2"],
+      "priority": 1-4 (order to complete),
+      "reason": "Why this specifically bridges the gap"
+    }
+  ]
+}
+
+Rules:
+- Use REAL course/cert names from major platforms (Coursera, Udemy, AWS Training, Google Cloud Skills Boost, etc.)
+- URLs should be realistic search/course URLs
+- Order steps from foundational → advanced
+- Include at least one free option per trajectory
+- Total estimated weeks should be realistic (4-16 weeks per skill)
+- Mix types: start with courses, end with projects or certifications`;
+
+  try {
+    const text = await callLLM(prompt, systemInstruction, { temperature: 0.4, maxTokens: 4000 });
+    const result = parseAIJson<LearningTrajectory[]>(text);
+    if (Array.isArray(result) && result.length > 0) {
+      const normalized = result.map(traj => ({
+        ...traj,
+        currentLevel: Math.max(0, Math.min(100, traj.currentLevel || 0)),
+        targetLevel: Math.max(50, Math.min(100, traj.targetLevel || 85)),
+        gap: Math.max(0, Math.min(100, traj.gap || 50)),
+        estimatedWeeks: Math.max(1, traj.estimatedWeeks || 8),
+        steps: (traj.steps || []).map((s, i) => ({
+          ...s,
+          id: s.id || `step-${i + 1}`,
+          priority: s.priority || i + 1,
+          skills: Array.isArray(s.skills) ? s.skills : [],
+          url: s.url?.startsWith('http') ? s.url : `https://www.coursera.org/search?query=${encodeURIComponent(s.title)}`,
+        })),
+      }));
+      setAiCache(cacheKey, normalized, 24).catch(() => {}); // 24-hour cache
+      return normalized;
+    }
+    return [];
+  } catch (error) {
+    console.warn('[LearningTrajectories] LLM unavailable:', error instanceof Error ? error.message : String(error));
+    return await getAiCacheStale<LearningTrajectory[]>(cacheKey) ?? [];
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Networking Copilot — Contact Discovery & Outreach Drafting
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface NetworkContact {
+  id: string;
+  name: string;
+  role: string;
+  company: string;
+  department: string;
+  seniority: "entry" | "mid" | "senior" | "director" | "vp" | "c-suite";
+  connectionType: "alumni" | "recruiter" | "hiring-manager" | "team-lead" | "referral";
+  linkedinUrl: string;
+  mutualConnections: number;
+  relevanceScore: number;        // 0-100
+  reason: string;                // Why this person is relevant
+  reachOutTiming: string;        // "Now — actively hiring" etc.
+}
+
+export interface OutreachDraft {
+  contactId: string;
+  channel: "linkedin" | "email" | "twitter";
+  subject?: string;
+  body: string;
+  tone: "professional" | "warm" | "concise";
+  callToAction: string;
+  personalizationNotes: string;
+}
+
+export interface NetworkingCopilotResult {
+  contacts: NetworkContact[];
+  outreachDrafts: OutreachDraft[];
+  strategy: string;              // Overall networking strategy summary
+  followUpSchedule: { contactId: string; action: string; daysFromNow: number }[];
+}
+
+export async function getNetworkingCopilot(
+  profile: UserProfile,
+  targetCompany: string,
+  targetRole: string,
+  existingApplicationId?: string
+): Promise<NetworkingCopilotResult> {
+  const cacheKey = `netcop:${targetCompany}:${targetRole}:${profile.country || 'global'}`;
+  const cached = await getAiCache<NetworkingCopilotResult>(cacheKey);
+  if (cached && cached.contacts?.length > 0) return cached;
+
+  const systemInstruction = `You are a professional networking strategist and contact intelligence engine. Return ONLY valid JSON. No markdown, no explanation.`;
+
+  const prompt = `Generate a networking action plan for a job seeker targeting "${targetRole}" at "${targetCompany}".
+
+Seeker profile:
+- Education: ${profile.education || 'Bachelor\'s'}
+- Country: ${profile.country || 'Global'}
+- Interests: ${profile.interests?.join(', ') || 'Technology'}
+${existingApplicationId ? '- Has an active application at this company' : '- Exploring / pre-application stage'}
+
+Return a JSON object with this structure:
+{
+  "contacts": [
+    {
+      "id": "contact-1",
+      "name": "Realistic Full Name",
+      "role": "Their Current Job Title",
+      "company": "${targetCompany}",
+      "department": "Engineering|Product|HR|Recruiting|etc",
+      "seniority": "entry|mid|senior|director|vp|c-suite",
+      "connectionType": "alumni|recruiter|hiring-manager|team-lead|referral",
+      "linkedinUrl": "https://www.linkedin.com/search/results/people/?keywords=ROLE%20${encodeURIComponent(targetCompany)}",
+      "mutualConnections": 0-15,
+      "relevanceScore": 60-98,
+      "reason": "Why reaching out to this person helps",
+      "reachOutTiming": "Now — actively hiring | This week — team expanding | After applying — follow up"
+    }
+  ],
+  "outreachDrafts": [
+    {
+      "contactId": "contact-1",
+      "channel": "linkedin",
+      "subject": "Optional subject for email",
+      "body": "The actual message (3-5 sentences, personalized)",
+      "tone": "professional|warm|concise",
+      "callToAction": "What you're asking them to do",
+      "personalizationNotes": "What to customize before sending"
+    }
+  ],
+  "strategy": "2-3 sentence overall networking strategy for this company",
+  "followUpSchedule": [
+    { "contactId": "contact-1", "action": "Send connection request", "daysFromNow": 0 },
+    { "contactId": "contact-1", "action": "Follow up if no response", "daysFromNow": 5 }
+  ]
+}
+
+Rules:
+- Generate 4-6 contacts with diverse connection types (at least 1 recruiter, 1 hiring manager, 1 team member)
+- Generate outreach drafts for at least 3 contacts
+- Messages must be personalized, not generic templates
+- Include specific details about the company and role
+- LinkedIn URLs should be real search URLs
+- Follow-up schedule should span 2-3 weeks
+- Tone should match the seniority level (more formal for VPs, warmer for peers)
+- ${existingApplicationId ? 'Include a follow-up message referencing their active application' : 'Focus on informational interviews and company culture questions'}`;
+
+  try {
+    const text = await callLLM(prompt, systemInstruction, { temperature: 0.6, maxTokens: 4000 });
+    const result = parseAIJson<NetworkingCopilotResult>(text);
+    if (result && result.contacts?.length > 0) {
+      const normalized: NetworkingCopilotResult = {
+        contacts: result.contacts.map((c, i) => ({
+          ...c,
+          id: c.id || `contact-${i + 1}`,
+          relevanceScore: Math.max(0, Math.min(100, c.relevanceScore || 70)),
+          mutualConnections: Math.max(0, c.mutualConnections || 0),
+          linkedinUrl: c.linkedinUrl?.startsWith('http')
+            ? c.linkedinUrl
+            : `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(c.role + ' ' + c.company)}`,
+        })),
+        outreachDrafts: (result.outreachDrafts || []).map(d => ({
+          ...d,
+          contactId: d.contactId || 'contact-1',
+          channel: d.channel || 'linkedin',
+          tone: d.tone || 'professional',
+        })),
+        strategy: result.strategy || '',
+        followUpSchedule: result.followUpSchedule || [],
+      };
+      setAiCache(cacheKey, normalized, 12).catch(() => {}); // 12-hour cache
+      return normalized;
+    }
+    return { contacts: [], outreachDrafts: [], strategy: '', followUpSchedule: [] };
+  } catch (error) {
+    console.warn('[NetworkingCopilot] LLM unavailable:', error instanceof Error ? error.message : String(error));
+    const stale = await getAiCacheStale<NetworkingCopilotResult>(cacheKey);
+    return stale ?? { contacts: [], outreachDrafts: [], strategy: '', followUpSchedule: [] };
+  }
+}

@@ -169,44 +169,57 @@ router.put("/:userId/:id", async (req: Request, res: Response) => {
 
     const { id } = req.params;
     const existing = await db.oneOrNone(
-      "SELECT id, status FROM job_applications WHERE id = $1 AND user_identifier = $2",
+      "SELECT * FROM job_applications WHERE id = $1 AND user_identifier = $2",
       [id, userId]
     );
     if (!existing) return res.status(404).json({ error: "Application not found" });
 
-    const {
-      jobTitle, company, location, workType, salaryMin, salaryMax, salaryCurrency,
-      jobUrl, jobDescription, status, appliedAt, deadline, resumeVersionId,
-      coverLetterSent, notes, nextStep, followUpDate, source, tags,
-    } = req.body;
+    const oldStatus = existing.status;
 
-    const row = await db.one(
-      `UPDATE job_applications
-       SET job_title=$1, company=$2, location=$3, work_type=$4,
-           salary_min=$5, salary_max=$6, salary_currency=$7,
-           job_url=$8, job_description=$9, status=$10,
-           applied_at=$11, deadline=$12, resume_version_id=$13,
-           cover_letter_sent=$14, notes=$15, next_step=$16,
-           follow_up_date=$17, source=$18, tags=$19, updated_at=NOW()
-       WHERE id=$20 AND user_identifier=$21
-       RETURNING *`,
-      [
-        jobTitle, company, location || null, workType || null,
-        salaryMin || null, salaryMax || null, salaryCurrency || "USD",
-        jobUrl || null, jobDescription || null, status,
-        appliedAt || null, deadline || null, resumeVersionId || null,
-        coverLetterSent || false, notes || null, nextStep || null,
-        followUpDate || null, source || "manual", tags || [],
-        id, userId,
-      ]
-    );
+    // Build dynamic SET clause — only update fields that are explicitly provided
+    const fieldMap: Record<string, { column: string; value: any }> = {};
+    const body = req.body;
+
+    if (body.jobTitle !== undefined)        fieldMap.job_title = { column: "job_title", value: body.jobTitle };
+    if (body.company !== undefined)         fieldMap.company = { column: "company", value: body.company };
+    if (body.location !== undefined)        fieldMap.location = { column: "location", value: body.location || null };
+    if (body.workType !== undefined)        fieldMap.work_type = { column: "work_type", value: body.workType || null };
+    if (body.salaryMin !== undefined)       fieldMap.salary_min = { column: "salary_min", value: body.salaryMin || null };
+    if (body.salaryMax !== undefined)       fieldMap.salary_max = { column: "salary_max", value: body.salaryMax || null };
+    if (body.salaryCurrency !== undefined)  fieldMap.salary_currency = { column: "salary_currency", value: body.salaryCurrency || "USD" };
+    if (body.jobUrl !== undefined)          fieldMap.job_url = { column: "job_url", value: body.jobUrl || null };
+    if (body.jobDescription !== undefined)  fieldMap.job_description = { column: "job_description", value: body.jobDescription || null };
+    if (body.status !== undefined)          fieldMap.status = { column: "status", value: body.status };
+    if (body.appliedAt !== undefined)       fieldMap.applied_at = { column: "applied_at", value: body.appliedAt || null };
+    if (body.deadline !== undefined)        fieldMap.deadline = { column: "deadline", value: body.deadline || null };
+    if (body.resumeVersionId !== undefined) fieldMap.resume_version_id = { column: "resume_version_id", value: body.resumeVersionId || null };
+    if (body.coverLetterSent !== undefined) fieldMap.cover_letter_sent = { column: "cover_letter_sent", value: !!body.coverLetterSent };
+    if (body.notes !== undefined)           fieldMap.notes = { column: "notes", value: body.notes || null };
+    if (body.nextStep !== undefined)        fieldMap.next_step = { column: "next_step", value: body.nextStep || null };
+    if (body.followUpDate !== undefined)    fieldMap.follow_up_date = { column: "follow_up_date", value: body.followUpDate || null };
+    if (body.source !== undefined)          fieldMap.source = { column: "source", value: body.source || "manual" };
+    if (body.tags !== undefined)            fieldMap.tags = { column: "tags", value: body.tags || [] };
+
+    const entries = Object.values(fieldMap);
+    if (entries.length === 0) {
+      return res.status(400).json({ error: "No fields to update" });
+    }
+
+    // Build parameterized query
+    const setClauses = entries.map((e, i) => `${e.column}=$${i + 1}`);
+    setClauses.push("updated_at=NOW()");
+    const values = entries.map((e) => e.value);
+    const paramOffset = values.length;
+
+    const query = `UPDATE job_applications SET ${setClauses.join(", ")} WHERE id=$${paramOffset + 1} AND user_identifier=$${paramOffset + 2} RETURNING *`;
+    const row = await db.one(query, [...values, id, userId]);
 
     // Log status change event
-    if (status && status !== existing.status) {
+    if (body.status && body.status !== oldStatus) {
       await db.none(
         `INSERT INTO application_events (application_id, event_type, description)
          VALUES ($1, $2, $3)`,
-        [id, "status_change", `Status changed from ${existing.status} → ${status}`]
+        [id, "status_change", `Status changed from ${oldStatus} → ${body.status}`]
       );
     }
 

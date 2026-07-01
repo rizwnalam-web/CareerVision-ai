@@ -647,5 +647,37 @@ router.post("/open-internships", async (req: Request, res: Response) => {
   }
 });
 
+// ─── Learning Trajectories ────────────────────────────────────────────────────
+
+router.post("/learning-trajectories", async (req: Request, res: Response) => {
+  try {
+    const { profile, careerTitle, skillGaps } = req.body;
+    if (!profile || !careerTitle || !skillGaps) {
+      return res.status(400).json({ error: "profile, careerTitle, and skillGaps are required" });
+    }
+    const result = await careerAiService.getLearningTrajectories(profile, careerTitle, skillGaps);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error("[careers-ai] learning-trajectories error:", error);
+    res.status(500).json({ error: "Failed to generate learning trajectories" });
+  }
+});
+
+// ─── Networking Copilot ───────────────────────────────────────────────────────
+
+router.post("/networking-copilot", async (req: Request, res: Response) => {
+  try {
+    const { profile, targetCompany, targetRole, existingApplicationId } = req.body;
+    if (!profile || !targetCompany || !targetRole) {
+      return res.status(400).json({ error: "profile, targetCompany, and targetRole are required" });
+    }
+    const result = await careerAiService.getNetworkingCopilot(profile, targetCompany, targetRole, existingApplicationId);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error("[careers-ai] networking-copilot error:", error);
+    res.status(500).json({ error: "Failed to generate networking plan" });
+  }
+});
+
 export default router;
 

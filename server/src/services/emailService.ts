@@ -61,6 +61,16 @@ export function isEmailConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY);
 }
 
+// ─── Config helpers (domain / email) ─────────────────────────────────────────
+
+function getAppDomain(): string {
+  return process.env.APP_DOMAIN || "careervision.ai";
+}
+
+function getAdminEmail(): string {
+  return process.env.ADMIN_EMAIL || "support@careervision.ai";
+}
+
 // ─── HTML utility ────────────────────────────────────────────────────────────
 
 /** Escape user-supplied strings before embedding in HTML email bodies. */
@@ -99,14 +109,14 @@ export async function sendContactNotification(params: {
   try {
     const { data, error } = await getClient().emails.send({
       from:    getFromAddress(),
-      to:      "cviinfo79@gmail.com",
+      to:      process.env.ADMIN_EMAIL || "support@careervision.ai",
       replyTo: email,                     // raw value for RFC header
       subject: `[CareerVision Contact] ${safeSubject}`,
       html: `
         <div style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:32px;border-radius:12px;">
           <div style="background:#1e293b;padding:24px;border-radius:10px;margin-bottom:24px;">
             <h2 style="color:white;margin:0;font-size:20px;">New Contact Form Submission</h2>
-            <p style="color:#94a3b8;margin:6px 0 0;font-size:13px;">CareerVision AI — easycareer-ai.decodflow.com</p>
+            <p style="color:#94a3b8;margin:6px 0 0;font-size:13px;">CareerVision AI — ${getAppDomain()}</p>
           </div>
           <table style="width:100%;border-collapse:collapse;background:white;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);">
             <tr style="background:#f1f5f9;">
@@ -174,12 +184,12 @@ export async function sendContactAutoReply(params: {
           <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin-top:20px;">
             <p style="color:#1e40af;font-size:13px;margin:0;">
               In the meantime, explore your career roadmap at
-              <a href="https://easycareer-ai.decodflow.com" style="color:#4f46e5;font-weight:700;">easycareer-ai.decodflow.com</a>
+              <a href="https://${getAppDomain()}" style="color:#4f46e5;font-weight:700;">${getAppDomain()}</a>
             </p>
           </div>
           <p style="margin-top:24px;font-size:11px;color:#94a3b8;text-align:center;">
-            &copy; 2026 CareerVision AI &middot; decodflow.com<br/>
-            <a href="mailto:cviinfo79@gmail.com" style="color:#94a3b8;">cviinfo79@gmail.com</a>
+            &copy; 2026 CareerVision AI &middot; ${getAppDomain()}<br/>
+            <a href="mailto:${getAdminEmail()}" style="color:#94a3b8;">${getAdminEmail()}</a>
           </p>
         </div>`,
     });
@@ -262,7 +272,7 @@ export async function sendWelcomeEmail(params: {
             preparing for interviews, and discovering the best opportunities for your goals.
           </p>
           <div style="margin:28px 0;text-align:center;">
-            <a href="https://easycareer-ai.decodflow.com"
+            <a href="https://${getAppDomain()}"
                style="background:#4f46e5;color:white;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;">
               Launch CareerVision AI
             </a>
@@ -277,8 +287,8 @@ export async function sendWelcomeEmail(params: {
             </ul>
           </div>
           <p style="margin-top:24px;font-size:11px;color:#94a3b8;text-align:center;">
-            &copy; 2026 CareerVision AI &middot; decodflow.com<br/>
-            <a href="mailto:cviinfo79@gmail.com" style="color:#94a3b8;">cviinfo79@gmail.com</a>
+            &copy; 2026 CareerVision AI &middot; ${getAppDomain()}<br/>
+            <a href="mailto:${getAdminEmail()}" style="color:#94a3b8;">${getAdminEmail()}</a>
           </p>
         </div>`,
     });

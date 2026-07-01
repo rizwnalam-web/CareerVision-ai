@@ -358,6 +358,89 @@ export async function getDeepResumeHistory(
   return Array.isArray(data.history) ? data.history : [];
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Keyword Gap Analysis — instant ATS-style match scoring
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface KeywordGapResult {
+  matchPercentage: number;
+  matched: string[];
+  missing: string[];
+  partial: string[];
+  rephraseHints: { keyword: string; currentPhrase: string; suggestedPhrase: string }[];
+  categoryBreakdown: { category: string; score: number; keywords: string[] }[];
+}
+
+export async function analyzeKeywordGap(
+  content: ResumeContent,
+  jobDescription: string
+): Promise<KeywordGapResult> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
+  try {
+    const res = await fetch(`${API_BASE}/api/resume/keyword-gap`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, jobDescription }),
+      signal: controller.signal,
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || "Keyword gap analysis failed");
+    return data.result;
+  } catch (err: any) {
+    if (err.name === "AbortError") throw new Error("Analysis timed out. Please try again.");
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hyper-Targeted Cover Letter — hooks into matching analytics
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface TargetedCoverLetterInput {
+  content: ResumeContent;
+  jobDescription: string;
+  hiringManagerName?: string;
+  hiringManagerTitle?: string;
+  companyName: string;
+  targetRole: string;
+  tone?: "professional" | "conversational" | "bold";
+  emphasis?: string[];
+}
+
+export interface TargetedCoverLetterResult {
+  coverLetter: string;
+  emailOutreach: string;
+  linkedinMessage: string;
+  keyAlignments: string[];
+  differentiators: string[];
+}
+
+export async function generateTargetedCoverLetter(
+  input: TargetedCoverLetterInput
+): Promise<TargetedCoverLetterResult> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90_000);
+  try {
+    const res = await fetch(`${API_BASE}/api/resume/targeted-cover-letter`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+      signal: controller.signal,
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || "Cover letter generation failed");
+    return data.result;
+  } catch (err: any) {
+    if (err.name === "AbortError") throw new Error("Generation timed out. Please try again.");
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function getPublicDeepResumeProfile(
   shareSlug: string
 ): Promise<{ profileSnapshot: DeepResumeProfileSnapshot }> {

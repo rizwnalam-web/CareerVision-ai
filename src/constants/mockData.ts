@@ -929,7 +929,7 @@ export const JOB_LISTINGS: JobListing[] = [
     url: "https://example.com/jobs/3",
     careerId: "nursing",
     description: "Manage nursing staff in our high-acuity surgical unit.",
-    logo: "https://images.unsplash.com/photo-1505751172157-c72859554829?auto=format&fit=crop&q=80&w=200"
+    logo: "https://images.unsplash.com/photo-1538108149393-fbbd81895907?auto=format&fit=crop&q=80&w=200"
   },
   {
     id: "job-4",

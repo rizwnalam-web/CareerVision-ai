@@ -788,7 +788,13 @@ const MaterialCard = ({
     >
       {/* Thumbnail Area */}
       <div className={cn("relative overflow-hidden", isCompact ? "aspect-video" : "aspect-[16/10]")}>
-        <img src={material.thumbnail} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" referrerPolicy="no-referrer" />
+        {material.thumbnail ? (
+          <img src={material.thumbnail} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" referrerPolicy="no-referrer" />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center">
+            <span className="text-slate-400 text-xs font-medium">No preview</span>
+          </div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-900/20 to-transparent" />
         
         {/* Floating Info */}

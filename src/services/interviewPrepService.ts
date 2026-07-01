@@ -149,3 +149,67 @@ export async function getMyPeerSessions(userId: string): Promise<PeerSession[]> 
   const data = await get<{ sessions: PeerSession[] }>(`/peer/my/${userId}`);
   return data.sessions;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JD-Targeted Mock Interview
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface MockInterviewQuestion {
+  id: string;
+  text: string;
+  type: "behavioral" | "technical" | "situational" | "architectural";
+  difficulty: "medium" | "hard";
+  context: string;
+  expectedTopics: string[];
+  followUp: string;
+}
+
+export interface STARFeedback {
+  overall: number;
+  situation: { score: number; present: boolean; feedback: string };
+  task: { score: number; present: boolean; feedback: string };
+  action: { score: number; present: boolean; feedback: string };
+  result: { score: number; present: boolean; feedback: string };
+  metrics: { hasQuantification: boolean; suggestions: string[] };
+  vagueLanguage: string[];
+  strengths: string[];
+  improvements: string[];
+  rewrittenAnswer: string;
+}
+
+export async function generateMockQuestions(opts: {
+  jobDescription: string;
+  role: string;
+  company?: string;
+  count?: number;
+  focus?: "behavioral" | "technical" | "mixed";
+}): Promise<MockInterviewQuestion[]> {
+  const data = await post<{ questions: MockInterviewQuestion[] }>("/mock/generate", opts);
+  return data.questions;
+}
+
+export async function evaluateSTAR(opts: {
+  question: string;
+  transcript: string;
+  role: string;
+  durationSeconds: number;
+}): Promise<STARFeedback> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
+  try {
+    const res = await fetch(`${BASE}/mock/evaluate-star`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(opts),
+      signal: controller.signal,
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || "STAR evaluation failed");
+    return data.feedback as STARFeedback;
+  } catch (e: any) {
+    if (e.name === "AbortError") throw new Error("Evaluation timed out");
+    throw e;
+  } finally {
+    clearTimeout(timeout);
+  }
+}

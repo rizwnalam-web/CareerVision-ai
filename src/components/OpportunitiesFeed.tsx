@@ -37,6 +37,7 @@ interface Opportunity {
   tags: string[];
   urgent?: boolean;
   isNew?: boolean;
+  url?: string;
 }
 
 // ─── Match engine ──────────────────────────────────────────────────────────────
@@ -108,11 +109,12 @@ function buildFeed(profile: UserProfile, careers: CareerPath[]): Opportunity[] {
   careers.slice(0, 3).forEach((c, i) => {
     const safeTags = Array.isArray(c.tags) ? c.tags : [];
     const { score, reason } = scoreMatch(profile, c.title, safeTags, 72 + i * 3);
+    const orgName = (c as unknown as { employer?: string })?.employer ?? "Top Employer";
     ops.push({
       id: `job-real-${c.id}`,
       type: "job",
       title: c.title,
-      org: (c as unknown as { employer?: string })?.employer ?? "Top Employer",
+      org: orgName,
       location: profile.targetLocation ?? "Remote",
       matchScore: score,
       whyMatch: reason,
@@ -120,6 +122,7 @@ function buildFeed(profile: UserProfile, careers: CareerPath[]): Opportunity[] {
       tags: safeTags.slice(0, 3),
       badge: score >= 90 ? "Top Match" : undefined,
       isNew: i === 0,
+      url: `https://www.google.com/search?q=${encodeURIComponent(c.title + " " + orgName + " careers")}`,
     });
   });
 
@@ -139,6 +142,7 @@ function buildFeed(profile: UserProfile, careers: CareerPath[]): Opportunity[] {
         tags: j.tags,
         badge: score >= 88 ? "High Match" : undefined,
         isNew: i < 2,
+        url: `https://www.google.com/search?q=${encodeURIComponent(j.title + " " + j.org + " apply")}`,
       });
     });
   }
@@ -164,14 +168,15 @@ function buildFeed(profile: UserProfile, careers: CareerPath[]): Opportunity[] {
       tags: tags.slice(0, 3),
       badge: score >= 85 ? "Strong Match" : undefined,
       urgent: !!f.deadline && new Date(f.deadline).getTime() - Date.now() < 30 * 86400000,
+      url: `https://www.google.com/search?q=${encodeURIComponent(f.name + " " + f.organization + " scholarship apply")}`,
     });
   });
 
   // ── Impact Projects ──
   const projectSamples: Omit<Opportunity, "id" | "matchScore" | "whyMatch">[] = [
-    { type: "project", title: "AI Literacy for Rural Schools", org: "Khan Academy", location: "Remote", tags: ["EdTech", "AI", "Volunteer"], badge: "High Impact", salary: "Portfolio + Certificate" },
-    { type: "project", title: "Climate Data Dashboard", org: "Climate Reality Project", location: "Remote", tags: ["Data Viz", "Open Source", "Climate"], badge: "New", salary: "Portfolio + Recognition" },
-    { type: "project", title: "Women in Tech Mentorship App", org: "AnitaB.org", location: "Remote", tags: ["Full Stack", "Social Impact"], salary: "Portfolio + Reference" },
+    { type: "project", title: "AI Literacy for Rural Schools", org: "Khan Academy", location: "Remote", tags: ["EdTech", "AI", "Volunteer"], badge: "High Impact", salary: "Portfolio + Certificate", url: "https://www.khanacademy.org/contribute" },
+    { type: "project", title: "Climate Data Dashboard", org: "Climate Reality Project", location: "Remote", tags: ["Data Viz", "Open Source", "Climate"], badge: "New", salary: "Portfolio + Recognition", url: "https://www.climaterealityproject.org/join" },
+    { type: "project", title: "Women in Tech Mentorship App", org: "AnitaB.org", location: "Remote", tags: ["Full Stack", "Social Impact"], salary: "Portfolio + Reference", url: "https://anitab.org/" },
   ];
 
   projectSamples.forEach((p, i) => {
@@ -251,10 +256,12 @@ function OpportunityCard({
   op,
   shortlisted,
   onToggleShortlist,
+  onView,
 }: {
   op: Opportunity;
   shortlisted: boolean;
   onToggleShortlist: (id: string) => void;
+  onView: (op: Opportunity) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const cfg = TYPE_CONFIG[op.type];
@@ -361,7 +368,10 @@ function OpportunityCard({
                   <p className="text-[10px] text-indigo-600 leading-relaxed">{op.whyMatch} · {op.matchScore}% profile fit</p>
                 </div>
               </div>
-              <button className="mt-2.5 w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest hover:bg-indigo-500 transition-all">
+              <button
+                onClick={(e) => { e.stopPropagation(); onView(op); }}
+                className="mt-2.5 w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest hover:bg-indigo-500 transition-all"
+              >
                 <ExternalLink size={10} />View Opportunity
               </button>
             </div>
@@ -400,6 +410,16 @@ export default function OpportunitiesFeed({ profile, careers, onNavigate }: Prop
       return next;
     });
 
+  const handleViewOpportunity = (op: Opportunity) => {
+    if (op.url) {
+      window.open(op.url, "_blank", "noopener,noreferrer");
+    } else {
+      // Fallback: search for the opportunity online
+      const query = encodeURIComponent(`${op.title} ${op.org} apply`);
+      window.open(`https://www.google.com/search?q=${query}`, "_blank", "noopener,noreferrer");
+    }
+  };
+
   const displayed = feed.filter(op => {
     if (showShortlistOnly && !shortlisted.has(op.id)) return false;
     if (activeFilter !== "all" && op.type !== activeFilter) return false;
@@ -412,17 +432,17 @@ export default function OpportunitiesFeed({ profile, careers, onNavigate }: Prop
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-base font-black text-slate-900 tracking-tight">My Opportunities</h3>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-base font-black text-slate-900 tracking-tight whitespace-nowrap">My Opportunities</h3>
             {newCount > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500 text-white text-[8px] font-black uppercase tracking-widest">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500 text-white text-[8px] font-black uppercase tracking-widest whitespace-nowrap">
                 {newCount} new
               </span>
             )}
             {urgentCount > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 text-[8px] font-black uppercase tracking-widest">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 text-[8px] font-black uppercase tracking-widest whitespace-nowrap">
                 <Clock size={7} />{urgentCount} urgent
               </span>
             )}
@@ -431,7 +451,7 @@ export default function OpportunitiesFeed({ profile, careers, onNavigate }: Prop
             AI-Curated · {feed.length} matches · Updated today
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setShowShortlistOnly(v => !v)}
             className={cn(
@@ -486,7 +506,7 @@ export default function OpportunitiesFeed({ profile, careers, onNavigate }: Prop
           <AnimatePresence mode="popLayout">
             {displayed.slice(0, 8).map((op, i) => (
               <motion.div key={op.id} layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ delay: i * 0.04 }}>
-                <OpportunityCard op={op} shortlisted={shortlisted.has(op.id)} onToggleShortlist={toggleShortlist} />
+                <OpportunityCard op={op} shortlisted={shortlisted.has(op.id)} onToggleShortlist={toggleShortlist} onView={handleViewOpportunity} />
               </motion.div>
             ))}
           </AnimatePresence>

@@ -339,7 +339,7 @@ export default function MobileInterviewView({ userId, defaultRole, onClose }: Pr
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-slate-950 flex flex-col"
+      className="relative z-0 bg-slate-950 flex flex-col min-h-[calc(100vh-10rem)] rounded-2xl overflow-hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       {/* Header */}

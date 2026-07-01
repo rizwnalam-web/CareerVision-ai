@@ -1183,4 +1183,162 @@ router.delete("/:userId/portfolio/:projectId", async (req: Request, res: Respons
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/resume/keyword-gap — ATS keyword gap analysis with match %
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/keyword-gap", async (req: Request, res: Response) => {
+  try {
+    const { content, jobDescription } = req.body;
+    if (!content || !jobDescription) {
+      return res.status(400).json({ error: "content and jobDescription are required" });
+    }
+
+    const resumeText = flattenResumeToText(content);
+
+    const prompt = `You are an expert ATS (Applicant Tracking System) analyzer. Perform a precise keyword gap analysis between this resume and job description.
+
+RESUME:
+${resumeText}
+
+JOB DESCRIPTION:
+${jobDescription}
+
+Analyze and return a JSON object with:
+1. "matchPercentage": An integer 0-100 representing overall keyword/competency alignment
+2. "matched": Array of keywords/skills found in BOTH the resume and JD
+3. "missing": Array of important keywords in the JD that are NOT in the resume
+4. "partial": Array of keywords that are partially represented (e.g., "project management" in JD but only "managed projects" in resume)
+5. "rephraseHints": Array of objects {keyword, currentPhrase, suggestedPhrase} showing how to rephrase existing resume text to better match ATS patterns
+6. "categoryBreakdown": Array of {category, score, keywords} grouping analysis by: "Technical Skills", "Soft Skills", "Tools & Platforms", "Industry Knowledge", "Certifications"
+
+Focus on:
+- Technical competencies and tools
+- Industry-specific terminology
+- Action verbs and quantified achievements
+- Certification/qualification keywords
+
+Return ONLY valid JSON, no markdown or explanation.`;
+
+    const raw = await generateDeepSeekResponse(prompt, "You are an expert ATS keyword analyzer. Return only valid JSON.");
+    const repaired = jsonrepair(raw);
+    const result = JSON.parse(repaired);
+
+    res.json({ success: true, result });
+  } catch (err: any) {
+    console.error("[resume/keyword-gap]", err);
+    res.status(500).json({ error: err.message || "Keyword gap analysis failed" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/resume/targeted-cover-letter — Hyper-targeted cover letter + outreach
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/targeted-cover-letter", async (req: Request, res: Response) => {
+  try {
+    const {
+      content, jobDescription, hiringManagerName, hiringManagerTitle,
+      companyName, targetRole, tone, emphasis,
+    } = req.body;
+
+    if (!content || !jobDescription || !companyName || !targetRole) {
+      return res.status(400).json({ error: "content, jobDescription, companyName, and targetRole are required" });
+    }
+
+    const resumeText = flattenResumeToText(content);
+    const hmInfo = hiringManagerName
+      ? `Addressed to: ${hiringManagerName}${hiringManagerTitle ? ` (${hiringManagerTitle})` : ""}`
+      : "Address to hiring manager (name unknown)";
+    const toneGuide = tone === "conversational" ? "warm and personable" : tone === "bold" ? "confident and assertive" : "professional and polished";
+    const emphasisGuide = emphasis?.length ? `Emphasize these strengths: ${emphasis.join(", ")}` : "";
+
+    const prompt = `You are an elite career communications specialist. Using the candidate's resume and the target job description, generate THREE documents:
+
+CANDIDATE RESUME:
+${resumeText}
+
+TARGET JOB DESCRIPTION:
+${jobDescription}
+
+CONTEXT:
+- Company: ${companyName}
+- Role: ${targetRole}
+- ${hmInfo}
+- Tone: ${toneGuide}
+${emphasisGuide}
+
+Generate a JSON object with exactly these fields:
+1. "coverLetter": A compelling 3-4 paragraph cover letter (under 400 words) that:
+   - Opens with a hook demonstrating knowledge of ${companyName}'s mission/challenges
+   - Maps specific resume achievements to the JD's requirements with quantified results
+   - Shows cross-functional alignment between the candidate's experience and the role
+   - Closes with a confident call-to-action
+   ${hiringManagerName ? `- Addresses ${hiringManagerName} directly` : ""}
+
+2. "emailOutreach": A concise networking email (under 150 words) suitable for reaching out to the hiring manager or team lead on email. Be direct, mention specific mutual interests, suggest a brief call.
+
+3. "linkedinMessage": A brief LinkedIn connection request message (under 300 characters) that is personalized and non-generic.
+
+4. "keyAlignments": Array of 4-6 strings describing the strongest cross-functional alignments between candidate and role
+
+5. "differentiators": Array of 3-5 strings showing what makes this candidate uniquely qualified vs. typical applicants
+
+Return ONLY valid JSON, no markdown.`;
+
+    const raw = await generateDeepSeekResponse(prompt, "You are an elite career communications specialist. Return only valid JSON.");
+    const repaired = jsonrepair(raw);
+    const result = JSON.parse(repaired);
+
+    res.json({ success: true, result });
+  } catch (err: any) {
+    console.error("[resume/targeted-cover-letter]", err);
+    res.status(500).json({ error: err.message || "Cover letter generation failed" });
+  }
+});
+
+// ─── Helper: Flatten ResumeContent to plain text ────────────────────────────
+
+function flattenResumeToText(content: any): string {
+  const parts: string[] = [];
+  const pi = content.personalInfo || {};
+  if (pi.name) parts.push(`Name: ${pi.name}`);
+  if (pi.summary) parts.push(`Summary: ${pi.summary}`);
+
+  if (content.experience?.length) {
+    parts.push("\nExperience:");
+    for (const exp of content.experience) {
+      parts.push(`- ${exp.position} at ${exp.company} (${exp.startDate} - ${exp.endDate})`);
+      if (exp.description) parts.push(`  ${exp.description}`);
+      if (exp.achievements?.length) {
+        exp.achievements.forEach((a: string) => parts.push(`  • ${a}`));
+      }
+    }
+  }
+
+  if (content.education?.length) {
+    parts.push("\nEducation:");
+    for (const edu of content.education) {
+      parts.push(`- ${edu.degree} in ${edu.fieldOfStudy} from ${edu.institution}`);
+    }
+  }
+
+  if (content.skills) {
+    const sk = content.skills;
+    if (sk.technical?.length) parts.push(`\nTechnical Skills: ${sk.technical.join(", ")}`);
+    if (sk.soft?.length) parts.push(`Soft Skills: ${sk.soft.join(", ")}`);
+    if (sk.certifications?.length) parts.push(`Certifications: ${sk.certifications.join(", ")}`);
+    if (sk.languages?.length) parts.push(`Languages: ${sk.languages.join(", ")}`);
+  }
+
+  if (content.projects?.length) {
+    parts.push("\nProjects:");
+    for (const p of content.projects) {
+      parts.push(`- ${p.title}: ${p.description} [${p.technologies?.join(", ")}]`);
+    }
+  }
+
+  return parts.join("\n");
+}
+
 export default router;

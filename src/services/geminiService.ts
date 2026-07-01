@@ -37,9 +37,11 @@ export {
   createQAPost,
   voteQAPost,
   getOpenInternships,
+  getLearningTrajectories,
+  getNetworkingCopilot,
 } from "./careerAiProxy.js";
 
-export type { GlobalInsight, CareerDirectoryEntry, CareerDirectoryResult, CountryCareerEntry, CareerMilestone, JobDirectory, JobDirectorySector, JobDirectoryCategory, CareerRequirements, EligibilityCriterion, SelectionStage, KeyExam, ArtifactItem, ArtifactCategory, PreparationPhase, OpenInternship, QAPostPayload } from "./careerAiProxy.js";
+export type { GlobalInsight, CareerDirectoryEntry, CareerDirectoryResult, CountryCareerEntry, CareerMilestone, JobDirectory, JobDirectorySector, JobDirectoryCategory, CareerRequirements, EligibilityCriterion, SelectionStage, KeyExam, ArtifactItem, ArtifactCategory, PreparationPhase, OpenInternship, QAPostPayload, LearningStep, LearningTrajectory, NetworkContact, OutreachDraft, NetworkingCopilotResult } from "./careerAiProxy.js";
 /*
   const model = "gemini-2.0-flash";
   

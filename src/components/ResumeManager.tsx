@@ -23,12 +23,13 @@ import {
   tailorResumeToJD, translateResume, generateCoverLetter, deleteResumeVersion,
   askDeepResumeQuestion, createDeepResumeShareLink, getDeepResumeHistory,
 } from "../services/resumeService";
+import ResumeDocEngineer from "./ResumeDocEngineer";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-type Tab = "editor" | "tailor" | "translate" | "cover-letter" | "deep-profile" | "ats" | "versions" | "portfolio";
+type Tab = "editor" | "tailor" | "doc-engineer" | "translate" | "cover-letter" | "deep-profile" | "ats" | "versions" | "portfolio";
 
 interface DeepResumeTurn {
   question: string;
@@ -704,6 +705,7 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
 
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: "editor",       label: "Resume Editor", icon: Edit3 },
+    { id: "doc-engineer", label: "Doc Engineer",  icon: Target },
     { id: "tailor",       label: "AI Tailor",     icon: Wand2 },
     { id: "translate",    label: "Translate",     icon: Languages },
     { id: "cover-letter", label: "Cover Letter",  icon: FileEdit },
@@ -1012,6 +1014,13 @@ const ResumeManager: React.FC<Props> = ({ profile, userId }) => {
                 {isSaving ? "Saving…" : "Save & Run ATS Check"}
               </button>
             </div>
+          </motion.div>
+        )}
+
+        {/* ── TAB: DOC ENGINEER ── */}
+        {activeTab === "doc-engineer" && (
+          <motion.div key="doc-engineer" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            <ResumeDocEngineer content={content} targetRole={targetRole} />
           </motion.div>
         )}
 

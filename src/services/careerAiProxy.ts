@@ -435,3 +435,81 @@ export async function getOpenInternships(params: {
 }): Promise<OpenInternship[]> {
   return callBackend<OpenInternship[]>('/open-internships', 'POST', params);
 }
+
+// ─── Learning Trajectories ────────────────────────────────────────────────────
+
+export interface LearningStep {
+  id: string;
+  title: string;
+  provider: string;
+  type: "course" | "certification" | "project" | "bootcamp";
+  duration: string;
+  cost: string;
+  url: string;
+  difficulty: "beginner" | "intermediate" | "advanced";
+  skills: string[];
+  priority: number;
+  reason: string;
+}
+
+export interface LearningTrajectory {
+  skill: string;
+  currentLevel: number;
+  targetLevel: number;
+  gap: number;
+  estimatedWeeks: number;
+  steps: LearningStep[];
+}
+
+export async function getLearningTrajectories(
+  profile: any,
+  careerTitle: string,
+  skillGaps: any[]
+): Promise<LearningTrajectory[]> {
+  return callBackend<LearningTrajectory[]>('/learning-trajectories', 'POST', { profile, careerTitle, skillGaps });
+}
+
+// ─── Networking Copilot ───────────────────────────────────────────────────────
+
+export interface NetworkContact {
+  id: string;
+  name: string;
+  role: string;
+  company: string;
+  department: string;
+  seniority: "entry" | "mid" | "senior" | "director" | "vp" | "c-suite";
+  connectionType: "alumni" | "recruiter" | "hiring-manager" | "team-lead" | "referral";
+  linkedinUrl: string;
+  mutualConnections: number;
+  relevanceScore: number;
+  reason: string;
+  reachOutTiming: string;
+}
+
+export interface OutreachDraft {
+  contactId: string;
+  channel: "linkedin" | "email" | "twitter";
+  subject?: string;
+  body: string;
+  tone: "professional" | "warm" | "concise";
+  callToAction: string;
+  personalizationNotes: string;
+}
+
+export interface NetworkingCopilotResult {
+  contacts: NetworkContact[];
+  outreachDrafts: OutreachDraft[];
+  strategy: string;
+  followUpSchedule: { contactId: string; action: string; daysFromNow: number }[];
+}
+
+export async function getNetworkingCopilot(
+  profile: any,
+  targetCompany: string,
+  targetRole: string,
+  existingApplicationId?: string
+): Promise<NetworkingCopilotResult> {
+  return callBackend<NetworkingCopilotResult>('/networking-copilot', 'POST', {
+    profile, targetCompany, targetRole, existingApplicationId,
+  });
+}

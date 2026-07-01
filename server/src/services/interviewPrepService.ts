@@ -290,3 +290,151 @@ keyThemes: main topics or competencies demonstrated in the answer`;
     };
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. Generate JD-targeted mock interview questions
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface MockInterviewQuestion {
+  id: string;
+  text: string;
+  type: "behavioral" | "technical" | "situational" | "architectural";
+  difficulty: "medium" | "hard";
+  context: string;
+  expectedTopics: string[];
+  followUp: string;
+}
+
+export async function generateMockFromJD(
+  jobDescription: string,
+  role: string,
+  company: string | undefined,
+  count = 6,
+  focus: "behavioral" | "technical" | "mixed" = "mixed"
+): Promise<MockInterviewQuestion[]> {
+  const safeCount = Math.min(count, 8);
+  const focusGuide = focus === "mixed"
+    ? "Mix behavioral (STAR-style), technical deep-dives, and situational/architectural questions."
+    : focus === "behavioral"
+    ? "Focus on behavioral questions requiring STAR-method answers."
+    : "Focus on technical/architectural questions testing domain expertise.";
+
+  const prompt = `You are a senior technical interviewer at ${company || "a top company"}. Based on this job description, generate ${safeCount} realistic interview questions that would be asked for this specific role.
+
+JOB DESCRIPTION:
+${jobDescription.slice(0, 3000)}
+
+ROLE: ${role}
+${focusGuide}
+
+Return ONLY a JSON array:
+[{
+  "id": "mock-1",
+  "text": "The actual question that would be asked",
+  "type": "behavioral|technical|situational|architectural",
+  "difficulty": "medium|hard",
+  "context": "Why this question matters for this role (1 sentence)",
+  "expectedTopics": ["topic1", "topic2", "topic3"],
+  "followUp": "A likely follow-up question the interviewer would ask"
+}]
+
+Rules:
+- Questions should directly reference skills/requirements from the JD
+- Include at least one question about the company's domain/industry
+- Make questions specific, not generic (reference actual JD requirements)
+- expectedTopics: 3-5 key points a strong answer should cover
+- Difficulty should be medium or hard (this is a real interview)`;
+
+  const result = await generateDeepSeekResponse(prompt, { maxTokens: 2048, temperature: 0.7 });
+  if (!result.text) throw new Error("LLM did not return mock questions");
+
+  try {
+    const parsed = JSON.parse(extractJSON(result.text));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    throw new Error("Could not parse mock interview questions");
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. STAR-Method evaluation with detailed structural feedback
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface STARFeedback {
+  overall: number;
+  situation: { score: number; present: boolean; feedback: string };
+  task: { score: number; present: boolean; feedback: string };
+  action: { score: number; present: boolean; feedback: string };
+  result: { score: number; present: boolean; feedback: string };
+  metrics: { hasQuantification: boolean; suggestions: string[] };
+  vagueLanguage: string[];
+  strengths: string[];
+  improvements: string[];
+  rewrittenAnswer: string;
+}
+
+export async function evaluateSTARResponse(
+  question: string,
+  transcript: string,
+  role: string,
+  durationSeconds: number
+): Promise<STARFeedback> {
+  const wpm = Math.round((transcript.split(/\s+/).length / Math.max(durationSeconds, 1)) * 60);
+
+  const prompt = `You are an expert interview coach specializing in the STAR method (Situation, Task, Action, Result). Evaluate this candidate's response with surgical precision.
+
+INTERVIEW QUESTION: "${question}"
+TARGET ROLE: ${role}
+SPEAKING PACE: ${wpm} wpm (ideal: 130-160)
+
+CANDIDATE'S RESPONSE:
+"${transcript.slice(0, 4000)}"
+
+Evaluate the response and return ONLY this JSON structure:
+{
+  "overall": <integer 0-100>,
+  "situation": {
+    "score": <0-25>,
+    "present": <boolean - did they clearly describe the context/background?>,
+    "feedback": "Specific feedback on their situation description"
+  },
+  "task": {
+    "score": <0-25>,
+    "present": <boolean - did they articulate their specific responsibility/challenge?>,
+    "feedback": "Specific feedback on task articulation"
+  },
+  "action": {
+    "score": <0-25>,
+    "present": <boolean - did they describe specific steps THEY took?>,
+    "feedback": "Specific feedback on action description"
+  },
+  "result": {
+    "score": <0-25>,
+    "present": <boolean - did they quantify outcomes or describe impact?>,
+    "feedback": "Specific feedback on results/metrics"
+  },
+  "metrics": {
+    "hasQuantification": <boolean - did they use numbers, percentages, or measurable outcomes?>,
+    "suggestions": ["Add specific metric suggestion 1", "Add specific metric suggestion 2"]
+  },
+  "vagueLanguage": ["List any vague phrases like 'worked on', 'helped with', 'was involved in'"],
+  "strengths": ["2-3 specific things done well in this answer"],
+  "improvements": ["2-3 specific, actionable improvements"],
+  "rewrittenAnswer": "Rewrite their answer in ideal STAR format (under 200 words) showing what a perfect response would look like"
+}
+
+Scoring rules:
+- Each STAR component is scored 0-25 (total = 100 if perfect)
+- Mark as "present: false" if that component is completely absent
+- vagueLanguage: flag phrases that should be replaced with specific actions
+- Be strict about quantification — "improved performance" without numbers is weak`;
+
+  const result = await generateDeepSeekResponse(prompt, { maxTokens: 2048 });
+  if (!result.text) throw new Error("LLM did not return STAR evaluation");
+
+  try {
+    return JSON.parse(extractJSON(result.text)) as STARFeedback;
+  } catch {
+    throw new Error("Could not parse STAR evaluation response");
+  }
+}

@@ -1,6 +1,6 @@
 import { RegistrationRequest, LoginRequest, AuthResponse, ForgotPasswordRequest, ResetPasswordRequest } from '../types/auth';
 
-const RAW_API_URL = import.meta.env.VITE_API_URL || 'https://careervision-ai-skn4.onrender.com/api';
+const RAW_API_URL = import.meta.env.VITE_API_URL || '/api';
 
 function normalizeApiUrl(url: string) {
   return url.replace(/\/+$/, '').replace(/\/api\/api(\/|$)/g, '/api$1');

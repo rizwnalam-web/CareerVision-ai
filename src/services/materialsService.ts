@@ -1,7 +1,7 @@
 import { StudyMaterial } from '../types/career';
 import { getCachedStudyMaterialsByCareer, saveCachedStudyMaterials } from './cacheService';
 
-const RAW_API_URL = import.meta.env.VITE_API_URL || 'https://careervision-ai-skn4.onrender.com/api';
+const RAW_API_URL = import.meta.env.VITE_API_URL || '/api';
 
 function normalizeApiUrl(url: string) {
   return url.replace(/\/+$/, '').replace(/\/api\/api(\/|$)/g, '/api$1');

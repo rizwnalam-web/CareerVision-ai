@@ -77,7 +77,7 @@ export const TermsConditions: React.FC<TermsConditionsProps> = ({ onBack }) => {
 
         <Section icon={<FileText size={16} className="text-slate-600" />} title="1. Acceptance of Terms" delay={0.05}>
           <p>
-            By accessing or using CareerVision AI ("the Service") through any interface including <strong>easycareer-ai.decodflow.com</strong> or any subdomain thereof, you confirm that:
+            By accessing or using CareerVision AI ("the Service") through any interface including <strong>{import.meta.env.VITE_APP_DOMAIN || 'careervision.ai'}</strong> or any subdomain thereof, you confirm that:
           </p>
           <ul className="list-disc pl-5 space-y-2 mt-2">
             <li>You are at least 16 years of age (or the minimum age of digital consent in your jurisdiction).</li>
@@ -206,7 +206,7 @@ export const TermsConditions: React.FC<TermsConditionsProps> = ({ onBack }) => {
 
         <div className="mt-8 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
           <p className="text-xs text-slate-500 font-medium">
-            These Terms &amp; Conditions were last reviewed on <strong>June 19, 2026</strong>. If you accessed this page after that date, please check for the most recent version at easycareer-ai.decodflow.com.
+            These Terms &amp; Conditions were last reviewed on <strong>June 19, 2026</strong>. If you accessed this page after that date, please check for the most recent version at {import.meta.env.VITE_APP_DOMAIN || 'careervision.ai'}.
           </p>
         </div>
 

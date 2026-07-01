@@ -19,6 +19,10 @@ interface ContactModalProps {
 
 type FormState = 'idle' | 'loading' | 'success' | 'error';
 
+const CONTACT_EMAIL = import.meta.env.VITE_CONTACT_EMAIL || 'support@careervision.ai';
+const CONTACT_PHONE = import.meta.env.VITE_CONTACT_PHONE || '';
+const APP_DOMAIN = import.meta.env.VITE_APP_DOMAIN || 'careervision.ai';
+
 const SUBJECTS = [
   'General Enquiry',
   'Technical Support',
@@ -116,7 +120,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ onClose }) => {
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Direct Contact</p>
                 <div className="space-y-3">
                   <a
-                    href="mailto:cviinfo79@gmail.com"
+                    href={`mailto:${CONTACT_EMAIL}`}
                     className="flex items-center gap-3 group"
                     style={{ textDecoration: 'none' }}
                   >
@@ -126,13 +130,13 @@ export const ContactModal: React.FC<ContactModalProps> = ({ onClose }) => {
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email</p>
                       <p className="text-xs font-bold text-slate-700 group-hover:text-indigo-600 transition-colors break-all">
-                        cviinfo79@gmail.com
+                        {CONTACT_EMAIL}
                       </p>
                     </div>
                   </a>
 
                   <a
-                    href="tel:+14379974711"
+                    href={`tel:${CONTACT_PHONE}`}
                     className="flex items-center gap-3 group"
                     style={{ textDecoration: 'none' }}
                   >
@@ -142,7 +146,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ onClose }) => {
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Phone</p>
                       <p className="text-xs font-bold text-slate-700 group-hover:text-emerald-600 transition-colors">
-                        +1 437 997 4711
+                        {CONTACT_PHONE}
                       </p>
                     </div>
                   </a>
@@ -153,7 +157,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ onClose }) => {
                     </div>
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Website</p>
-                      <p className="text-xs font-bold text-slate-700">https://easycareer-ai.decodflow.com</p>
+                      <p className="text-xs font-bold text-slate-700">https://{APP_DOMAIN}</p>
                     </div>
                   </div>
                 </div>

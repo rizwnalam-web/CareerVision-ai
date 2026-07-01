@@ -103,7 +103,7 @@ export interface PeerSession {
 // UI state types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type PrepTab = "simulator" | "questions" | "video" | "peer" | "history";
+export type PrepTab = "mock-sandbox" | "simulator" | "questions" | "video" | "peer" | "history";
 
 export interface SimulatorConfig {
   sessionType: SessionType;

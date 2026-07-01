@@ -52,13 +52,16 @@ interface EntryCardProps {
 }
 
 const EntryCard: React.FC<EntryCardProps> = ({ entry, rank, onSelect }) => (
-  <motion.button
+  <motion.div
+    role="button"
+    tabIndex={0}
     initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
     whileHover={{ y: -2 }}
     transition={{ duration: 0.25 }}
     onClick={() => onSelect(entry)}
-    className="bg-white rounded-3xl border border-slate-100 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-50 p-5 text-left transition-all group w-full"
+    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(entry); } }}
+    className="bg-white rounded-3xl border border-slate-100 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-50 p-5 text-left transition-all group w-full cursor-pointer"
   >
     {/* Header row */}
     <div className="flex items-start justify-between gap-3 mb-3">
@@ -156,7 +159,7 @@ const EntryCard: React.FC<EntryCardProps> = ({ entry, rank, onSelect }) => (
         />
       </div>
     )}
-  </motion.button>
+  </motion.div>
 );
 
 // ─── Detail Drawer ────────────────────────────────────────────────────────────

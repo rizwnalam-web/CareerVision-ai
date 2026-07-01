@@ -115,6 +115,7 @@ import { LandingPage } from './components/LandingPage';
 import Logo from './components/Logo';
 import { CareerDirectoryView } from './components/CareerDirectoryView';
 import NetworkView from './components/NetworkView';
+import SkillsNetworkHub from './components/SkillsNetworkHub';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsConditions } from './components/TermsConditions';
 import { FAQPage } from './components/FAQPage';
@@ -142,6 +143,7 @@ import CoachingHub from './components/CoachingHub';
 import WhyThisMatch from './components/WhyThisMatch';
 import ImpactLab from './components/ImpactLab';
 import OpportunitiesFeed from './components/OpportunitiesFeed';
+import CampusAccessDrawer from './components/CampusAccessDrawer';
 import CareerSpark, { SPARK_DONE_KEY } from './components/CareerSpark';
 import { trackView } from './services/analyticsService';
 import { prefetchVariants } from './lib/abTesting';
@@ -4581,6 +4583,7 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
   const [selectedInstitution, setSelectedInstitution] = useState<Institution | null>(null);
   const [selectedInstitutionVisaGuidance, setSelectedInstitutionVisaGuidance] = useState<any>(null);
   const [isSelectedInstitutionVisaLoading, setIsSelectedInstitutionVisaLoading] = useState(false);
+  const [campusAccessInstitution, setCampusAccessInstitution] = useState<Institution | null>(null);
 
   // AI Recommendation States
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -5006,6 +5009,12 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
                 >
                   <Mic size={10} /> Interview Prep
                 </button>
+                <button 
+                  onClick={() => setCampusAccessInstitution(selectedInstitution)}
+                  className="w-full py-2 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-500 transition-all flex items-center justify-center gap-2"
+                >
+                  <MapPin size={10} /> Campus Access
+                </button>
               </div>
             </div>
           </div>
@@ -5223,6 +5232,12 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
                           >
                             {compareIds.includes(inst.id) ? '✓ Selected' : 'Compare'}
                           </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setCampusAccessInstitution(inst); }}
+                            className="flex-1 py-1.5 rounded-xl bg-violet-100 text-violet-700 text-[8px] font-black uppercase text-center hover:bg-violet-200 transition-all"
+                          >
+                            Transit
+                          </button>
                           <a
                             href={inst.website}
                             target="_blank"
@@ -5348,6 +5363,12 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
                     >
                       Visit
                     </a>
+                    <button
+                      onClick={e => { e.stopPropagation(); setCampusAccessInstitution(inst); }}
+                      className="flex-1 py-1.5 text-[8px] font-black uppercase rounded-lg bg-violet-100 text-violet-700 hover:bg-violet-200 transition-all"
+                    >
+                      Transit
+                    </button>
                     <button
                       onClick={e => { e.stopPropagation(); toggleCompare(inst.id); }}
                       className={`flex-1 py-1.5 text-[8px] font-black uppercase rounded-lg transition-all ${compareIds.includes(inst.id) ? 'bg-indigo-100 text-indigo-700 border border-indigo-300' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
@@ -5505,6 +5526,15 @@ const InstitutionsView = ({ profile, selectedPathId, careerTitle, initialSearch 
           />
         )}
       </AnimatePresence>
+
+      {/* Campus Access & Transit Drawer */}
+      {campusAccessInstitution && (
+        <CampusAccessDrawer
+          institution={campusAccessInstitution}
+          onClose={() => setCampusAccessInstitution(null)}
+          profile={profile}
+        />
+      )}
 
       {/* Visa Details Panel */}
       {(selectedInstitutionVisaGuidance || visaGuidance || isSelectedInstitutionVisaLoading || isVisaLoading) && (
@@ -7654,15 +7684,15 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
     try { return !localStorage.getItem(onboardingKey); } catch { return false; }
   });
 
-  type AppView = 'dashboard' | 'roadmap' | 'digital-twin' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'applications' | 'resume' | 'job-match' | 'interview' | 'directory' | 'network' | 'coaching-hub' | 'impact-lab' | 'analytics' | 'pricing' | 'enterprise' | 'career-coach' | 'industry-sim' | 'soft-skills' | 'salary-coach' | 'side-hustle' | 'burnout' | 'admin';
-  const VALID_VIEWS: AppView[] = ['dashboard', 'roadmap', 'digital-twin', 'institutions', 'materials', 'expenses', 'advisor', 'parent', 'heatmap', 'jobs', 'applications', 'resume', 'job-match', 'interview', 'directory', 'network', 'coaching-hub', 'impact-lab', 'analytics', 'pricing', 'enterprise', 'career-coach', 'industry-sim', 'soft-skills', 'salary-coach', 'side-hustle', 'burnout', 'admin'];
+  type AppView = 'dashboard' | 'roadmap' | 'digital-twin' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'applications' | 'resume' | 'job-match' | 'interview' | 'directory' | 'network' | 'coaching-hub' | 'impact-lab' | 'analytics' | 'pricing' | 'enterprise' | 'career-coach' | 'industry-sim' | 'soft-skills' | 'salary-coach' | 'side-hustle' | 'burnout' | 'skills-hub' | 'admin';
+  const VALID_VIEWS: AppView[] = ['dashboard', 'roadmap', 'digital-twin', 'institutions', 'materials', 'expenses', 'advisor', 'parent', 'heatmap', 'jobs', 'applications', 'resume', 'job-match', 'interview', 'directory', 'network', 'coaching-hub', 'impact-lab', 'analytics', 'pricing', 'enterprise', 'career-coach', 'industry-sim', 'soft-skills', 'salary-coach', 'side-hustle', 'burnout', 'skills-hub', 'admin'];
   // ── Pillar Definitions ──
   type PillarSub = { label: string; view: AppView; icon: React.ElementType; desc: string };
   type Pillar = { id: string; label: string; icon: React.ElementType; primaryView: AppView; views: AppView[]; accent: { bg: string; text: string }; subs: PillarSub[] };
   const PILLAR_DEFS: Pillar[] = [
     { id: 'dashboard', label: t('pillars.dashboard'), icon: LayoutDashboard, primaryView: 'dashboard', views: ['dashboard'], accent: { bg: 'bg-slate-950', text: 'text-white' }, subs: [] },
     {
-      id: 'explore', label: t('pillars.explore'), icon: Layers, primaryView: 'roadmap', views: ['roadmap', 'digital-twin', 'institutions', 'materials', 'directory'],
+      id: 'explore', label: t('pillars.explore'), icon: Layers, primaryView: 'roadmap', views: ['roadmap', 'digital-twin', 'institutions', 'materials', 'directory', 'skills-hub'],
       accent: { bg: 'bg-violet-600', text: 'text-white' },
       subs: [
         { label: t('pillars.subs.careerMaps'),  view: 'roadmap',        icon: Map,         desc: 'Visual nodes & trajectory mapping' },
@@ -7670,6 +7700,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
         { label: t('pillars.subs.institutions'), view: 'institutions',  icon: School,      desc: 'Global universities & bootcamps' },
         { label: t('pillars.subs.academy'),      view: 'materials',     icon: BookOpen,    desc: 'Study materials & guides' },
         { label: t('pillars.subs.directory'),    view: 'directory',     icon: Layers,      desc: 'Browse careers by your target location' },
+        { label: 'Skills & Network',            view: 'skills-hub',    icon: GraduationCap, desc: 'Learning paths & networking copilot' },
       ],
     },
 
@@ -8710,7 +8741,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
               </nav>
               {/* Drawer footer — kept minimal now that actions live in the nav */}
               <div className="px-5 py-3 border-t border-slate-100">
-                <p className="text-[9px] text-slate-400 text-center font-medium">CareerVision AI · easycareer-ai.decodflow.com</p>
+                <p className="text-[9px] text-slate-400 text-center font-medium">CareerVision AI · {import.meta.env.VITE_APP_DOMAIN || 'careervision.ai'}</p>
               </div>
             </motion.div>
           </>
@@ -8758,6 +8789,7 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                      />
                    )}
                    {activeView === 'directory' && <CareerDirectoryView profile={profile} />}
+                   {activeView === 'skills-hub' && <SkillsNetworkHub profile={profile} careerTitle={careers.find(c => c.id === profile.targetCareerId)?.title || careers[0]?.title || ''} skillGaps={[]} />}
                    {activeView === 'network' && <NetworkView profile={profile} />}
                    {activeView === 'coaching-hub' && <CoachingHub profile={profile} />}
                    {activeView === 'impact-lab' && <ImpactLab profile={profile} />}

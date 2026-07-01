@@ -4,9 +4,10 @@ import {
   Briefcase, Plus, Loader2, Search, Filter, CalendarDays, Clock3,
   CheckCircle2, CircleDashed, XCircle, Trophy, Trash2, Edit3,
   ExternalLink, Sparkles, FileText, Building2, MapPin, Target,
-  MessageSquareQuote, Save, X,
+  MessageSquareQuote, Save, X, LayoutGrid, List,
 } from "lucide-react";
 import { cn } from "../lib/utils";
+import KanbanBoard from "./KanbanBoard";
 import {
   getApplications,
   createApplication,
@@ -128,6 +129,7 @@ export default function ApplicationDashboard({ userId }: Props) {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("all");
+  const [viewMode, setViewMode] = useState<"list" | "kanban">("kanban");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<JobApplication | null>(null);
   const [form, setForm] = useState<Partial<JobApplicationInput>>(emptyForm);
@@ -305,12 +307,37 @@ export default function ApplicationDashboard({ userId }: Props) {
             Clear overview of jobs tracked, resumes sent, statuses, follow-ups, and next actions
           </p>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-200"
-        >
-          <Plus size={14} /> Add Application
-        </button>
+        <div className="flex items-center gap-3">
+          {/* View Toggle */}
+          <div className="flex items-center rounded-xl border border-slate-200 p-0.5">
+            <button
+              onClick={() => setViewMode("kanban")}
+              className={cn(
+                "p-2.5 rounded-lg transition-all",
+                viewMode === "kanban" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-400 hover:text-slate-600"
+              )}
+              title="Kanban Board"
+            >
+              <LayoutGrid size={14} />
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={cn(
+                "p-2.5 rounded-lg transition-all",
+                viewMode === "list" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-400 hover:text-slate-600"
+              )}
+              title="List View"
+            >
+              <List size={14} />
+            </button>
+          </div>
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-200"
+          >
+            <Plus size={14} /> Add Application
+          </button>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -341,6 +368,20 @@ export default function ApplicationDashboard({ userId }: Props) {
         <StatCard label="Follow-Ups Due" value={overdueCount} tone="bg-rose-50 border-rose-200" icon={Clock3} sublabel="Applications needing action" />
       </div>
 
+      {/* Kanban View */}
+      {viewMode === "kanban" && !loading && (
+        <KanbanBoard
+          applications={applications}
+          userId={userId}
+          onRefresh={refresh}
+          onOpenCreate={openCreate}
+          onOpenEdit={openEdit}
+          onSelect={openDetails}
+        />
+      )}
+
+      {/* List View */}
+      {viewMode === "list" && (
       <div className="grid grid-cols-12 gap-6">
         <section className="col-span-12 xl:col-span-8 space-y-6">
           <SectionCard
@@ -529,6 +570,7 @@ export default function ApplicationDashboard({ userId }: Props) {
           </SectionCard>
         </section>
       </div>
+      )}
 
       <AnimatePresence>
         {showForm && (

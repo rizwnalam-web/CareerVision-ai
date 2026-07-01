@@ -20,6 +20,7 @@ import {
   analyseVideoTranscript, createPeerSession, getPeerSession,
   submitPeerReview, getMyPeerSessions,
 } from "../services/interviewPrepService";
+import MockInterviewSandbox from "./MockInterviewSandbox";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Props
@@ -1268,9 +1269,10 @@ const HistoryTab: React.FC<{ userId: string }> = ({ userId }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const InterviewPrepView: React.FC<Props> = ({ userId, defaultRole }) => {
-  const [activeTab, setActiveTab] = useState<PrepTab>("simulator");
+  const [activeTab, setActiveTab] = useState<PrepTab>("mock-sandbox");
 
   const TABS: { id: PrepTab; label: string; icon: React.ElementType; description: string }[] = [
+    { id: "mock-sandbox", label: "Mock Interview", icon: Target, description: "JD-targeted mock interview with STAR coaching" },
     { id: "simulator", label: "Simulator",     icon: Brain,         description: "AI-powered interview simulation with speech-to-text" },
     { id: "questions", label: "Question Bank", icon: BookOpen,      description: "Industry-specific questions with hints & model answers" },
     { id: "video",     label: "Video Lab",     icon: Video,         description: "Record, review and get AI analysis of your delivery" },
@@ -1308,6 +1310,11 @@ const InterviewPrepView: React.FC<Props> = ({ userId, defaultRole }) => {
       <p className="text-xs text-slate-400 -mt-2">{TABS.find(t => t.id === activeTab)?.description}</p>
 
       <AnimatePresence mode="wait">
+        {activeTab === "mock-sandbox" && (
+          <motion.div key="mock-sandbox" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            <MockInterviewSandbox userId={userId} defaultRole={defaultRole} />
+          </motion.div>
+        )}
         {activeTab === "simulator" && (
           <motion.div key="simulator" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
             <SimulatorTab userId={userId} defaultRole={defaultRole} />

@@ -50,7 +50,7 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ onBack }) => {
             Last updated: <strong className="text-slate-300">June 19, 2026</strong> &nbsp;·&nbsp; Effective: June 19, 2026
           </p>
           <p className="text-slate-400 text-sm font-medium mt-2 max-w-2xl">
-            CareerVision AI ("we", "us", "our") is operated by decodflow.com. This policy explains how we collect, use, and protect your personal data when you use our platform at <strong className="text-slate-300">easycareer-ai.decodflow.com</strong> and related services.
+            CareerVision AI ("we", "us", "our") is operated by decodflow.com. This policy explains how we collect, use, and protect your personal data when you use our platform at <strong className="text-slate-300">{import.meta.env.VITE_APP_DOMAIN || 'careervision.ai'}</strong> and related services.
           </p>
         </div>
       </div>

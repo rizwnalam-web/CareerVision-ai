@@ -50,7 +50,8 @@ router.post("/send", async (req: Request, res: Response) => {
 
   if (!isEmailConfigured()) {
     console.error("[Contact] RESEND_API_KEY is not set");
-    return res.status(500).json({ error: "Email service is not configured. Please email us directly at cviinfo79@gmail.com" });
+    const adminEmail = process.env.ADMIN_EMAIL || "support@careervision.ai";
+    return res.status(500).json({ error: `Email service is not configured. Please email us directly at ${adminEmail}` });
   }
 
   try {
@@ -64,7 +65,8 @@ router.post("/send", async (req: Request, res: Response) => {
 
     if (!notifResult.success) {
       console.error("[Contact] Resend notification error:", notifResult.error);
-      return res.status(500).json({ error: "Failed to send message. Please email us directly at cviinfo79@gmail.com" });
+      const adminEmail = process.env.ADMIN_EMAIL || "support@careervision.ai";
+      return res.status(500).json({ error: `Failed to send message. Please email us directly at ${adminEmail}` });
     }
 
     // Auto-reply to sender (non-critical — sandbox may reject unverified recipients)
@@ -83,7 +85,8 @@ router.post("/send", async (req: Request, res: Response) => {
 
   } catch (error) {
     console.error("[Contact] Email send error:", error);
-    res.status(500).json({ error: "Failed to send message. Please email us directly at cviinfo79@gmail.com" });
+    const adminEmail = process.env.ADMIN_EMAIL || "support@careervision.ai";
+    res.status(500).json({ error: `Failed to send message. Please email us directly at ${adminEmail}` });
   }
 });
 
