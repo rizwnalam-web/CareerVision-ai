@@ -1220,8 +1220,8 @@ Focus on:
 
 Return ONLY valid JSON, no markdown or explanation.`;
 
-    const raw = await generateDeepSeekResponse(prompt, "You are an expert ATS keyword analyzer. Return only valid JSON.");
-    const repaired = jsonrepair(raw);
+    const raw = await generateDeepSeekResponse(prompt, { systemInstruction: "You are an expert ATS keyword analyzer. Return only valid JSON." });
+    const repaired = jsonrepair(raw.text ?? "");
     const result = JSON.parse(repaired);
 
     res.json({ success: true, result });
@@ -1286,8 +1286,8 @@ Generate a JSON object with exactly these fields:
 
 Return ONLY valid JSON, no markdown.`;
 
-    const raw = await generateDeepSeekResponse(prompt, "You are an elite career communications specialist. Return only valid JSON.");
-    const repaired = jsonrepair(raw);
+    const raw = await generateDeepSeekResponse(prompt, { systemInstruction: "You are an elite career communications specialist. Return only valid JSON." });
+    const repaired = jsonrepair(raw.text ?? "");
     const result = JSON.parse(repaired);
 
     res.json({ success: true, result });
