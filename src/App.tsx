@@ -5576,6 +5576,51 @@ const AIAdvisor = ({ profile, embedded }: { profile: UserProfile; embedded?: boo
   const [isAnalyzingLinkedIn, setIsAnalyzingLinkedIn] = useState(false);
   const [analyzedSkills, setAnalyzedSkills] = useState<{name: string, strength: number}[]>([]);
 
+  // ── Cover Letter Wizard State ──────────────────────────────────────────────
+  type CoverLetterStep = null | 'collect-inputs' | 'probing-question' | 'generating';
+  const [clStep, setClStep] = useState<CoverLetterStep>(null);
+  const [clJobAd, setClJobAd] = useState<string>('');
+  const [clResume, setClResume] = useState<string>('');
+  const [clProudest, setClProudest] = useState<string>('');
+
+  const isCoverLetterIntent = (text: string) =>
+    /cover\s*letter|write.*letter.*job|draft.*letter|application\s*letter/i.test(text);
+
+  const generateStructuredCoverLetter = async (jobAd: string, resume: string, proudest: string) => {
+    const systemPrompt = `You are an advanced career coaching assistant. Your task is to draft a personalized, less formal, and highly compelling cover letter.
+
+CRITICAL INSTRUCTIONS:
+1. DO NOT simply regurgitate or rephrase the text provided in the job advertisement. The user already knows what is written in their job ad.
+2. TONE: Write in a genuine, professional yet warm, human voice. Avoid robotic, overly formal SaaS buzzwords (e.g., "Enclosed please find...", "I am writing to express my profound enthusiasm...").
+3. STRUCTURE & FOCUS:
+   - Open with an authentic hook explaining why the candidate genuinely connects with the company's space or project goals.
+   - Put a direct spotlight on the top 2-3 most relevant, quantitative achievements from the candidate's CV that perfectly align with the core problem the job ad solves.
+   - Use a personal storytelling approach to showcase what the candidate is like as a peer, collaborator, and professional.
+4. Cross-reference the candidate's proudest achievement with the job requirements to create a unique narrative angle.
+5. Keep it concise (250-350 words) and format in Markdown.
+
+---
+JOB ADVERTISEMENT:
+${jobAd}
+
+---
+CANDIDATE RESUME:
+${resume}
+
+---
+CANDIDATE'S PROUDEST ACHIEVEMENT (in their own words):
+${proudest}
+
+---
+Now generate the cover letter.`;
+
+    const response = await getCareerAdvice(systemPrompt, profile, {
+      resume: resume || undefined,
+    });
+    return response;
+  };
+  // ── End Cover Letter Wizard ────────────────────────────────────────────────
+
   const clearContext = () => {
     if (window.confirm("Are you sure you want to purge all career context? This will remove your analyzed resume and LinkedIn data from Spark.E's focus.")) {
       setResumeText(null);
@@ -5789,6 +5834,68 @@ const AIAdvisor = ({ profile, embedded }: { profile: UserProfile; embedded?: boo
     const userMsg = input || (linkedinData ? `Analyze my LinkedIn profile context.` : "Analyze my uploaded resume for career advice.");
     setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
     setInput("");
+
+    // ── Cover Letter Flow: Step Detection ──────────────────────────────────
+    // Step 0 → 1: User triggers cover letter intent
+    if (!clStep && isCoverLetterIntent(userMsg)) {
+      setClStep('collect-inputs');
+      setClJobAd('');
+      setClResume('');
+      setClProudest('');
+      setMessages(prev => [...prev, {
+        role: 'ai',
+        text: `**Let's build you a standout cover letter.** I'll need two things from you:\n\n1. **Paste the target Job Advertisement** (the full text)\n2. **Paste your Resume text** (or I'll use the one you've already uploaded)\n\nPlease paste the **Job Ad** first, then your **Resume** below it. Separate them with a line like \`---\` so I can tell them apart.`
+      }]);
+      return;
+    }
+
+    // Step 1 → 2: User provides job ad + resume
+    if (clStep === 'collect-inputs') {
+      const parts = userMsg.split(/^-{3,}$/m);
+      const jobAd = parts[0]?.trim() || userMsg.trim();
+      const resume = parts[1]?.trim() || resumeText || '';
+
+      if (jobAd.length < 30) {
+        setMessages(prev => [...prev, {
+          role: 'ai',
+          text: `That seems too short for a job ad. Please paste the **full job advertisement text**, then add \`---\` on a new line, followed by your resume.`
+        }]);
+        return;
+      }
+
+      setClJobAd(jobAd);
+      setClResume(resume || resumeText || '');
+      setClStep('probing-question');
+      setMessages(prev => [...prev, {
+        role: 'ai',
+        text: `Got it — I've captured the job ad${resume ? ' and your resume' : (resumeText ? ' (using your uploaded resume)' : '')}.\n\nNow, one quick question before I write:\n\n> **What is the absolute proudest achievement on your resume that makes you uniquely built for this specific role? Tell me in plain English as if you're explaining it to a teammate.**\n\nThis helps me craft a letter that sounds like *you*, not a template.`
+      }]);
+      return;
+    }
+
+    // Step 2 → 3: User provides their proudest achievement → generate
+    if (clStep === 'probing-question') {
+      setClProudest(userMsg);
+      setClStep('generating');
+      setIsLoading(true);
+      setMessages(prev => [...prev, {
+        role: 'ai',
+        text: `*Cross-referencing your achievement with the job requirements... crafting your personalized cover letter now.*`
+      }]);
+
+      try {
+        const letter = await generateStructuredCoverLetter(clJobAd, clResume || resumeText || '', userMsg);
+        setMessages(prev => [...prev, { role: 'ai', text: letter || "I couldn't generate the letter right now. Please try again." }]);
+      } catch {
+        setMessages(prev => [...prev, { role: 'ai', text: "Something went wrong generating your cover letter. Please try again." }]);
+      } finally {
+        setIsLoading(false);
+        setClStep(null); // Reset wizard
+      }
+      return;
+    }
+    // ── End Cover Letter Flow ──────────────────────────────────────────────
+
     setIsLoading(true);
 
     const advice = await getCareerAdvice(userMsg, profile, {

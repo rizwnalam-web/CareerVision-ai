@@ -86,8 +86,8 @@ export const InitialSetupModal: React.FC<InitialSetupModalProps> = ({
             transition={{ type: "spring", stiffness: 280, damping: 28 }}
             className="fixed inset-0 z-[91] flex items-center justify-center p-4"
           >
-            <div className="w-full max-w-3xl rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
-              <div className="bg-gradient-to-br from-indigo-600 to-cyan-600 px-6 py-5 text-white">
+            <div className="w-full max-w-3xl max-h-[90vh] rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+              <div className="bg-gradient-to-br from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-100">First-time setup</p>
@@ -104,7 +104,7 @@ export const InitialSetupModal: React.FC<InitialSetupModalProps> = ({
                 </div>
               </div>
 
-              <div className="p-6 space-y-5">
+              <div className="p-6 space-y-5 overflow-y-auto flex-1">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Target role</label>
