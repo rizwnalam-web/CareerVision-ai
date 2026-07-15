@@ -26,6 +26,7 @@ import * as migration023 from "./023_add_submission_tracking_to_job_applications
 import * as migration024 from "./024_add_deep_resume_sharing_and_history.js";
 import * as migration025 from "./025_fix_deep_resume_shares_slug_unique_constraint.js";
 import * as migration026 from "./026_fix_credit_transactions_reference_unique_constraint.js";
+import * as migration027 from "./027_email_reengagement_log.js";
 
 const migrations = [
   { name: "001_initial_schema",        module: migration001 },
@@ -55,6 +56,7 @@ const migrations = [
   { name: "024_add_deep_resume_sharing_and_history", module: migration024 },
   { name: "025_fix_deep_resume_shares_slug_unique_constraint", module: migration025 },
   { name: "026_fix_credit_transactions_reference_unique_constraint", module: migration026 },
+  { name: "027_email_reengagement_log", module: migration027 },
 ];
 
 export async function runMigrations() {

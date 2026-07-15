@@ -35,10 +35,17 @@ import {
   Lightbulb,
   Crown,
   Briefcase,
+  ScanSearch,
+  Fingerprint,
+  Theater,
+  Eye,
+  Ban,
+  Lock,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getTopFeedbacks, Feedback } from '../services/feedbackService';
 import { ContactModal } from './ContactModal';
+import { ResumeDropZone } from './ResumeDropZone';
 
 interface LandingPageProps {
   onStart: () => void;
@@ -133,37 +140,35 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, onShowPrivacy
         )}
       </nav>
 
-      {/* Hero Section - Recipe 11: Split Layout Inspiration */}
+      {/* Hero Section — Loss Aversion & Instant Value Hook */}
       <main className="max-w-7xl mx-auto px-8 py-12 lg:py-24 grid lg:grid-cols-2 gap-16 items-center">
         <motion.div 
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 mb-8">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-50 border border-rose-100 mb-8">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
             </span>
-            <span className="text-[10px] font-black uppercase tracking-widest text-indigo-700">2026 Workforce Sync Active</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-rose-700">75% of resumes are filtered before a human sees them</span>
           </div>
           
-          <h1 className="text-6xl md:text-8xl font-black leading-[0.9] tracking-tighter text-slate-900 mb-8">
-            Pioneer Your <br />
-            <span className="text-indigo-600 italic">Global</span> Legacy.
+          <h1 className="text-5xl md:text-7xl font-black leading-[0.95] tracking-tighter text-slate-900 mb-6">
+            Stop Applying to <br />
+            the <span className="text-indigo-600 italic">Black Box.</span>
           </h1>
           
-          <p className="text-lg text-slate-500 max-w-lg mb-10 leading-relaxed font-medium">
-            The era of linear careers is over. CareerVision AI synthesizes real-time global demand, institutional data, and financial modeling into a singular, executable trajectory.
+          <p className="text-lg text-slate-500 max-w-lg mb-6 leading-relaxed font-medium">
+            Find out exactly why your resume is getting ghosted. Most qualified candidates are filtered out by Applicant Tracking Systems before a human ever sees their application.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-4">
-            <button 
-              onClick={onStart}
-              className="flex items-center justify-center gap-3 bg-indigo-600 text-white px-8 py-4 rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-2xl shadow-indigo-200 group"
-            >
-              Sign Up & Initialize <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
-            </button>
+          <p className="text-sm text-slate-800 font-black mb-8">
+            Scan your resume against modern ATS algorithms for free — no signup required.
+          </p>
+
+          <div className="flex items-center gap-4 flex-wrap">
             <div className="flex -space-x-3 items-center">
               {[1, 2, 3, 4].map((i) => (
                 <img 
@@ -175,72 +180,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, onShowPrivacy
                 />
               ))}
               <div className="pl-6">
-                <p className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Joined by 12,000+</p>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Global Students</p>
+                <p className="text-[10px] font-black text-slate-800 uppercase tracking-widest">12,000+ professionals</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">already scanned & fixed</p>
               </div>
             </div>
           </div>
         </motion.div>
 
+        {/* Right column — inline drag & drop widget */}
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.8 }}
           className="relative"
         >
-          {/* Decorative Elements - Recipe 5 Brutalist Tool Vibes */}
-          <div className="aspect-square bg-slate-50 rounded-[4rem] relative overflow-hidden border-2 border-slate-100 shadow-2xl ring-1 ring-slate-200">
-            <img 
-              src="https://picsum.photos/seed/vision/1200/1200" 
-              className="absolute inset-0 w-full h-full object-cover opacity-20 grayscale brightness-125"
-              referrerPolicy="no-referrer"
-              alt="Vision"
-            />
-            
-            {/* Floating Widget 1 */}
-            <motion.div 
-              animate={{ y: [0, -10, 0] }}
-              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute top-12 left-12 bg-white p-4 rounded-2xl shadow-xl border border-slate-100 w-48 z-10"
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <TrendingUp size={16} className="text-emerald-500" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Growth Forecast</span>
-              </div>
-              <div className="h-12 flex items-end gap-1 px-2">
-                {[4, 7, 5, 9, 6].map((h, i) => (
-                  <div key={i} className="flex-1 bg-emerald-100 rounded-t-sm" style={{ height: `${h * 10}%` }}></div>
-                ))}
-              </div>
-              <p className="mt-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">+12.4% Annual Demand</p>
-            </motion.div>
-
-            {/* Floating Widget 2 */}
-            <motion.div 
-              animate={{ y: [0, 10, 0] }}
-              transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-              className="absolute bottom-12 right-12 bg-slate-900 p-4 rounded-2xl shadow-2xl w-56 z-10"
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <ShieldCheck size={16} className="text-indigo-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-white">Migration Support</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex flex-col">
-                  <span className="text-xl font-black text-white">L1-A Ready</span>
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Executive Track</span>
-                </div>
-                <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center">
-                  <Globe size={20} className="text-indigo-400" />
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Central Visual */}
-            <div className="absolute inset-0 flex items-center justify-center opacity-5">
-              <Cpu size={300} strokeWidth={0.5} className="text-slate-900" />
-            </div>
-          </div>
+          <ResumeDropZone onSignUp={onStart} compact />
         </motion.div>
       </main>
 
@@ -268,39 +222,94 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, onShowPrivacy
       {/* Testimonials Section */}
       <TestimonialsSection />
 
-      {/* Feature Grid */}
+      {/* Core Product Features — Solving Pain Points */}
       <section id="features" className="py-24 bg-slate-50">
         <div id="roadmap" className="absolute" style={{marginTop:'-80px',visibility:'hidden'}} />
         <div className="max-w-7xl mx-auto px-8">
-          <div className="flex flex-col md:flex-row justify-between items-end gap-8 mb-16">
-            <div>
-              <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em] mb-4">Core Systems</p>
-              <h2 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight">Proprietary Architecture for <br /> Future-Ready Success.</h2>
-            </div>
-            <p className="text-sm text-slate-500 max-w-xs font-medium leading-relaxed">
-              We track over 4,000 data points across global labor markets to ensure your roadmap remains relevant.
+          <div className="text-center mb-16">
+            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em] mb-4">Why You're Getting Ghosted</p>
+            <h2 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight">
+              Three problems. <span className="text-indigo-600 italic">Three solutions.</span>
+            </h2>
+            <p className="text-slate-400 font-medium max-w-lg mx-auto mt-4 text-sm">
+              CareerVision AI doesn't just build resumes — it dismantles the exact barriers between you and your next role.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-px bg-slate-200 border border-slate-200 overflow-hidden rounded-3xl">
-            <FeatureCard 
-              icon={<Zap className="text-amber-500" />}
-              title="Real-Time Sync" 
-              description="Our LLM engine pulls daily updates from IPEDS and O*NET to reflect current hiring trends."
-            />
-            <FeatureCard 
-              icon={<MapIcon className="text-indigo-500" />}
-              title="Adaptive roadmaps" 
-              description="Your path adjusts to your age, performance, and financial context automatically."
-            />
-            <FeatureCard 
-              icon={<Target className="text-emerald-500" />}
-              title="Goal Alignment" 
-              description="Connect with elite institutions that match your target career and migration goals."
-            />
+          <div className="grid md:grid-cols-3 gap-6">
+            {/* Feature 1: ATS Semantic Scanner */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="bg-white rounded-3xl border border-slate-100 p-8 shadow-lg shadow-slate-100 hover:shadow-xl transition-all group"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mb-6">
+                <ScanSearch size={24} className="text-indigo-600" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900 mb-3">Unmask the &ldquo;Semantic Gap.&rdquo;</h3>
+              <p className="text-sm text-slate-500 font-medium leading-relaxed mb-4">
+                Hiring systems don't just look for words — they evaluate structural relationships. If a job says &ldquo;CI/CD Pipeline Architecture&rdquo; and your resume says &ldquo;managed software deployments,&rdquo; legacy parsers score you as a zero.
+              </p>
+              <p className="text-sm text-slate-700 font-bold leading-relaxed">
+                Our engine maps the hidden semantic gaps and tells you exactly which industry keywords you are missing.
+              </p>
+              <div className="mt-4 flex items-center gap-2">
+                <span className="text-[9px] font-black px-2.5 py-1 rounded-full bg-indigo-600 text-white uppercase tracking-widest">ATS Scanner</span>
+              </div>
+            </motion.div>
+
+            {/* Feature 2: Anti-Hallucination Customizer */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+              className="bg-white rounded-3xl border border-slate-100 p-8 shadow-lg shadow-slate-100 hover:shadow-xl transition-all group"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-6">
+                <Fingerprint size={24} className="text-emerald-600" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900 mb-3">Tailor your experience. <span className="text-emerald-600 italic">Never lie.</span></h3>
+              <p className="text-sm text-slate-500 font-medium leading-relaxed mb-4">
+                Competitor platforms rewrite your history, creating &ldquo;Frankenstein&rdquo; resumes with fictional job titles that get you blacklisted.
+              </p>
+              <p className="text-sm text-slate-700 font-bold leading-relaxed">
+                CareerVision AI strictly respects your authentic experience. Our customizer dynamically adjusts the <em>emphasis</em> of your real achievements — elevating the right metrics for each role.
+              </p>
+              <div className="mt-4 flex items-center gap-2">
+                <span className="text-[9px] font-black px-2.5 py-1 rounded-full bg-emerald-600 text-white uppercase tracking-widest">Anti-Hallucination</span>
+              </div>
+            </motion.div>
+
+            {/* Feature 3: Interview Simulator */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+              className="bg-white rounded-3xl border border-slate-100 p-8 shadow-lg shadow-slate-100 hover:shadow-xl transition-all group"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center mb-6">
+                <Theater size={24} className="text-amber-600" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900 mb-3">Shake off the pre-interview <span className="text-amber-600 italic">rust.</span></h3>
+              <p className="text-sm text-slate-500 font-medium leading-relaxed mb-4">
+                The worst place to draw a blank or scramble your words is in front of a live interviewer.
+              </p>
+              <p className="text-sm text-slate-700 font-bold leading-relaxed">
+                Our simulator generates role-specific interview loops from your resume and target JD. Get instant STAR-framework feedback — zero pressure, zero bias, absolute privacy.
+              </p>
+              <div className="mt-4 flex items-center gap-2">
+                <span className="text-[9px] font-black px-2.5 py-1 rounded-full bg-amber-500 text-white uppercase tracking-widest">Safe-Space Simulator</span>
+              </div>
+            </motion.div>
           </div>
         </div>
       </section>
+
+      {/* Trust & Transparency Pillar */}
+      <TrustTransparencySection />
 
       {/* FAQ Section */}
       <FAQSection onShowFaq={onShowFaq} />
@@ -311,16 +320,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, onShowPrivacy
       {/* CTA Footer */}
       <section id="global" className="py-24 bg-slate-900 text-white overflow-hidden relative">
         <div className="max-w-4xl mx-auto px-8 text-center relative z-10">
-          <h2 className="text-5xl md:text-7xl font-black mb-8 leading-tight">Ready to map <br /> the unknown?</h2>
+          <h2 className="text-5xl md:text-7xl font-black mb-8 leading-tight">Stop getting <br /> <span className="text-indigo-400 italic">ghosted.</span></h2>
           <p className="text-lg text-slate-400 mb-12 max-w-xl mx-auto font-medium">
-            Join the students securing the highest-demand positions of 2026. Data-driven, AI-validated, globally focused.
+            Your experience is real. Your skills are valuable. The only thing standing between you and your next role is a system that can't read your resume. Fix it in 45 seconds.
           </p>
           <button 
             onClick={onStart}
             className="inline-flex items-center gap-3 bg-white text-slate-900 px-10 py-5 rounded-2xl text-sm font-black uppercase tracking-[0.2em] hover:bg-indigo-500 hover:text-white transition-all shadow-2xl hover:shadow-indigo-500/50"
           >
-            Start Your Registration <ChevronRight size={20} />
+            Create Free Account &amp; Fix It <ChevronRight size={20} />
           </button>
+          <p className="mt-4 text-[10px] text-slate-500 font-bold uppercase tracking-widest">No credit card required · Full workspace in 45 seconds</p>
         </div>
         
         {/* Decorative Background Pattern */}
@@ -442,22 +452,22 @@ const HOW_STEPS = [
     step: '01',
     icon: Brain,
     color: 'indigo',
-    title: 'Build Your Profile',
-    desc: 'Tell us your background, goals, and preferred country. Takes less than 2 minutes.',
+    title: 'Scan Your Resume',
+    desc: 'Drag & drop your resume on the landing page — no signup needed. Our AI instantly scans it against modern ATS algorithms.',
   },
   {
     step: '02',
     icon: Lightbulb,
     color: 'amber',
-    title: 'AI Analyses Global Demand',
-    desc: 'Spark.E cross-references 4,000+ live data points from O*NET, IPEDS, and job boards.',
+    title: 'See Your Gaps',
+    desc: 'Get your ATS compatibility score and see exactly how many semantic gaps, formatting issues, and missing keywords you have.',
   },
   {
     step: '03',
     icon: ArrowRight,
     color: 'emerald',
-    title: 'Get Your Executable Roadmap',
-    desc: 'Receive a personalised step-by-step career plan with institution recommendations, skill gaps, and salary projections.',
+    title: 'Fix It in 45 Seconds',
+    desc: 'Create a free account to unlock exact keyword fixes, download your tailored anti-hallucination PDF, and practice in the Interview Simulator.',
   },
 ];
 
@@ -467,10 +477,10 @@ const HowItWorksSection: React.FC<{ onStart: () => void }> = ({ onStart }) => (
       <div className="text-center mb-16">
         <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em] mb-4">Simple Process</p>
         <h2 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight">
-          From Zero to Roadmap <span className="text-indigo-600 italic">in Minutes.</span>
+          From Ghosted to <span className="text-indigo-600 italic">Interview-Ready</span> in Minutes.
         </h2>
         <p className="text-slate-400 font-medium max-w-md mx-auto mt-4 text-sm">
-          No career counsellor. No guesswork. Just AI-driven clarity.
+          No career counsellor. No guesswork. Just AI-driven clarity on why you're being filtered out — and the fix.
         </p>
       </div>
 
@@ -690,6 +700,70 @@ const COMPARISON_ROWS = [
   { feature: 'Multi-language support (5 langs)', us: true, competitor1: false, competitor2: true },
   { feature: 'Free tier available', us: true, competitor1: false, competitor2: true },
 ];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Trust & Transparency Pillar
+// ─────────────────────────────────────────────────────────────────────────────
+const TRUST_PILLARS = [
+  {
+    icon: Eye,
+    title: 'Zero Hidden Paywalls',
+    desc: 'Absolute transparency. No hidden billing traps, no auto-billing loopholes, and no paying extra for essential features.',
+    color: 'indigo',
+  },
+  {
+    icon: Ban,
+    title: 'System-Safe Design',
+    desc: 'We never spam recruiters with blind bot submissions. High-accuracy, human-in-the-loop applications put you back in the driver\u2019s seat.',
+    color: 'emerald',
+  },
+  {
+    icon: Lock,
+    title: 'Pure Data Privacy',
+    desc: 'Your personal information is yours. We encrypt your profile end-to-end and never sell your career data to third-party databases.',
+    color: 'amber',
+  },
+];
+
+const TrustTransparencySection = () => (
+  <section className="py-24 bg-white">
+    <div className="max-w-5xl mx-auto px-8">
+      <div className="text-center mb-14">
+        <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em] mb-4">Trust & Transparency</p>
+        <h2 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight">
+          Built by Engineers. <span className="text-indigo-600 italic">Engineered for Professionals.</span>
+        </h2>
+        <p className="text-slate-400 font-medium max-w-lg mx-auto mt-4 text-sm">
+          We believe career tools should be honest, safe, and private. No exceptions.
+        </p>
+      </div>
+
+      <div className="grid md:grid-cols-3 gap-6">
+        {TRUST_PILLARS.map(({ icon: Icon, title, desc, color }, i) => (
+          <motion.div
+            key={title}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: i * 0.1 }}
+            className="relative bg-slate-50 rounded-3xl border border-slate-100 p-8 text-center hover:border-indigo-200 hover:bg-indigo-50/30 transition-all"
+          >
+            <div className={cn(
+              'w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-md',
+              color === 'indigo' && 'bg-indigo-600',
+              color === 'emerald' && 'bg-emerald-600',
+              color === 'amber' && 'bg-amber-500',
+            )}>
+              <Icon size={24} className="text-white" />
+            </div>
+            <h3 className="text-lg font-black text-slate-900 mb-3">{title}</h3>
+            <p className="text-sm text-slate-500 font-medium leading-relaxed">{desc}</p>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  </section>
+);
 
 const PlatformComparisonSection: React.FC<{ onStart: () => void }> = ({ onStart }) => (
   <section className="py-24 bg-slate-50">

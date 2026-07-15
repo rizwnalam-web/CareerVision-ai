@@ -20,6 +20,7 @@ import {
   analyseVideoTranscript, createPeerSession, getPeerSession,
   submitPeerReview, getMyPeerSessions,
 } from "../services/interviewPrepService";
+import { track } from "../services/analyticsService";
 import MockInterviewSandbox from "./MockInterviewSandbox";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -329,6 +330,14 @@ const SimulatorTab: React.FC<{ userId: string; defaultRole?: string }> = ({ user
 
       setQuestions(qs); setSessionId(sid); setAnswers([]); setCurrentIdx(0);
       setPhase("ready");
+      track({
+        userIdentifier: userId,
+        eventType: "interview_session_started",
+        eventCategory: "interview",
+        eventLabel: config.role || config.industry,
+        view: "interview",
+        properties: { sessionType: config.sessionType, industry: config.industry, role: config.role, questionCount: config.questionCount },
+      });
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -389,6 +398,14 @@ const SimulatorTab: React.FC<{ userId: string; defaultRole?: string }> = ({ user
         });
         setSessionFeedback(feedback);
         setPhase("complete");
+        track({
+          userIdentifier: userId,
+          eventType: "interview_session_completed",
+          eventCategory: "interview",
+          eventLabel: config.role || config.industry,
+          view: "interview",
+          properties: { sessionId, questionsAnswered: answers.length, avgScore: feedback?.overallScore },
+        });
       } catch (e: any) { setError(e.message); }
       finally { setLoading(false); }
     } else {

@@ -20,6 +20,46 @@ const API_BASE = (
 // Resume – upload & parse
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface AnonymousATSResult {
+  score: number;
+  summary: string;
+  sectionScores: {
+    keywords: number;
+    formatting: number;
+    content: number;
+    structure: number;
+  };
+  foundKeywordsCount: number;
+  missingKeywordsCount: number;
+  suggestionsCount: number;
+}
+
+export async function runAnonymousATSCheck(file: File): Promise<AnonymousATSResult> {
+  const form = new FormData();
+  form.append("file", file);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120_000);
+
+  try {
+    const res = await fetch(`${API_BASE}/api/resume/anonymous-ats`, {
+      method: "POST",
+      body: form,
+      signal: controller.signal,
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || "ATS analysis failed");
+    return data;
+  } catch (err: any) {
+    if (err.name === "AbortError") {
+      throw new Error("Analysis timed out. The file may be large — please try again.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function uploadAndParseResume(
   file: File,
   userId: string,

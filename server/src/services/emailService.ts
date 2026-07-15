@@ -299,3 +299,117 @@ export async function sendWelcomeEmail(params: {
     return { success: false, error: err };
   }
 }
+
+// ─── Interview Abandonment Re-engagement ─────────────────────────────────────
+
+/**
+ * Send a re-engagement email when a user abandons the Interview Simulator.
+ * Triggered ~24 hours after visiting / starting but not completing a session.
+ */
+export async function sendInterviewAbandonmentEmail(params: {
+  toEmail: string;
+  firstName: string;
+}): Promise<SendResult> {
+  const { toEmail, firstName } = params;
+  const safeName = escHtml(firstName);
+  const domain = getAppDomain();
+  const fromRaw = getFromAddress();
+  const fromAddr = fromRaw.match(/<(.+)>/)?.[1] || fromRaw;
+
+  try {
+    const { data, error } = await getClient().emails.send({
+      from:    `Alex from CareerVision AI <${fromAddr}>`,
+      to:      resolveRecipient(toEmail),
+      subject: `Ready to finish your mock interview, ${safeName}? (Zero stress)`,
+      html: `
+        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:32px;border-radius:12px;">
+          <div style="background:#1e293b;padding:24px;border-radius:10px;margin-bottom:24px;text-align:center;">
+            <span style="color:white;font-size:22px;font-weight:900;">CareerVision<span style="color:#818cf8;font-style:italic;">AI</span></span>
+          </div>
+
+          <p style="color:#1e293b;font-size:15px;line-height:1.7;margin-bottom:16px;">
+            Hi ${safeName},
+          </p>
+
+          <p style="color:#334155;font-size:14px;line-height:1.7;margin-bottom:16px;">
+            We noticed you checked out the <strong>CareerVision AI Interview Simulator</strong> yesterday, but you didn&rsquo;t get a chance to finish your session.
+          </p>
+
+          <p style="color:#334155;font-size:14px;line-height:1.7;margin-bottom:16px;">
+            We completely get it. Mock interviews can feel incredibly daunting&mdash;even when you&rsquo;re just practicing with an AI.
+          </p>
+
+          <p style="color:#334155;font-size:14px;line-height:1.7;margin-bottom:16px;">
+            But here&rsquo;s the truth: <strong style="color:#1e293b;">The best place to draw a blank, stumble on your words, or fail a system design question is right here, in a completely private environment.</strong>
+          </p>
+
+          <p style="color:#334155;font-size:14px;line-height:1.7;margin-bottom:20px;">
+            Our simulator is built to be a safe, low-stakes sandbox. There is no recruiter watching, no grading bias, and absolutely no pressure. Just raw, transparent feedback designed to help you align your technical project metrics with the STAR framework before the stakes are real.
+          </p>
+
+          <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:24px;margin-bottom:24px;">
+            <p style="color:#1e293b;font-size:14px;font-weight:700;margin:0 0 16px;">Why finish your first simulation today?</p>
+            <table style="width:100%;border-collapse:collapse;">
+              <tr>
+                <td style="padding:8px 0;vertical-align:top;width:24px;"><span style="font-size:16px;">&#127919;</span></td>
+                <td style="padding:8px 0 8px 8px;">
+                  <strong style="color:#1e293b;font-size:13px;">Adaptive Flow</strong>
+                  <p style="color:#64748b;font-size:12px;line-height:1.5;margin:4px 0 0;">Our AI dynamically tailors its questions based on your actual resume experience&mdash;no generic listicles.</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:8px 0;vertical-align:top;"><span style="font-size:16px;">&#11088;</span></td>
+                <td style="padding:8px 0 8px 8px;">
+                  <strong style="color:#1e293b;font-size:13px;">Instant STAR Alignment</strong>
+                  <p style="color:#64748b;font-size:12px;line-height:1.5;margin:4px 0 0;">Get immediate, structured feedback on how to rephrase your answers to emphasize your business impact.</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:8px 0;vertical-align:top;"><span style="font-size:16px;">&#127381;</span></td>
+                <td style="padding:8px 0 8px 8px;">
+                  <strong style="color:#1e293b;font-size:13px;">Completely Free</strong>
+                  <p style="color:#64748b;font-size:12px;line-height:1.5;margin:4px 0 0;">Your first interactive loops are 100% on us.</p>
+                </td>
+              </tr>
+            </table>
+          </div>
+
+          <p style="color:#334155;font-size:14px;line-height:1.7;margin-bottom:24px;">
+            Your custom workspace is waiting. Let&rsquo;s shake off the pre-interview rust and get you ready to land that next offer.
+          </p>
+
+          <div style="text-align:center;margin-bottom:28px;">
+            <a href="https://${escHtml(domain)}/dashboard/interview"
+               style="background:#4f46e5;color:white;text-decoration:none;padding:16px 36px;border-radius:10px;font-size:15px;font-weight:700;display:inline-block;box-shadow:0 4px 12px rgba(79,70,229,0.3);">
+              Finish Your Mock Interview in 5 Minutes
+            </a>
+          </div>
+
+          <p style="color:#334155;font-size:14px;line-height:1.7;margin-bottom:8px;">
+            Let&rsquo;s get the interviews your real-world talent deserves,
+          </p>
+
+          <p style="color:#1e293b;font-size:14px;margin-bottom:4px;">
+            <strong>Alex</strong>
+          </p>
+          <p style="color:#94a3b8;font-size:12px;margin:0;">
+            Product Engineer, CareerVision AI
+          </p>
+
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:28px 0 16px;" />
+
+          <p style="font-size:10px;color:#94a3b8;text-align:center;line-height:1.6;">
+            &copy; 2026 CareerVision AI &middot; ${escHtml(domain)}<br/>
+            You received this email because you have an account on CareerVision AI.<br/>
+            <a href="mailto:${getAdminEmail()}" style="color:#94a3b8;">Unsubscribe</a> &middot;
+            <a href="mailto:${getAdminEmail()}" style="color:#94a3b8;">${getAdminEmail()}</a>
+          </p>
+        </div>`,
+    });
+
+    if (error) return { success: false, error };
+    return { success: true, id: data?.id };
+  } catch (err) {
+    return { success: false, error: err };
+  }
+}

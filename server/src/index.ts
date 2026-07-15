@@ -33,6 +33,7 @@ import innovativeRouter from "./routes/innovative.js";
 import applicationsRouter from "./routes/applications.js";
 import creditsRouter from "./routes/credits.js";
 import { startJobAggregationScheduler, stopJobAggregationScheduler } from "./services/jobAggregationScheduler.js";
+import { startInterviewReengagementScheduler } from "./services/interviewReengagementScheduler.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -170,6 +171,7 @@ async function startServer() {
         location: process.env.JOB_AGGREGATION_DEFAULT_LOCATION || "",
         limitPerProvider: Number.parseInt(process.env.JOB_AGGREGATION_LIMIT_PER_PROVIDER || "50", 10),
       });
+      startInterviewReengagementScheduler();
     }
 
     // Warn early if email delivery is not configured

@@ -30,6 +30,7 @@ import { INDUSTRIES } from "../types/interviewPrep";
 import {
   fetchQuestions, createSession, evaluateAnswer, completeSession,
 } from "../services/interviewPrepService";
+import { track } from "../services/analyticsService";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Props
@@ -243,6 +244,14 @@ export default function MobileInterviewView({ userId, defaultRole, onClose }: Pr
       setAnswers([]); setIdx(0);
       setPhase("ready");
       vibrate([50, 30, 50]);
+      track({
+        userIdentifier: userId,
+        eventType: "interview_session_started",
+        eventCategory: "interview",
+        eventLabel: config.role || config.industry,
+        view: "interview",
+        properties: { sessionType: config.sessionType, industry: config.industry, role: config.role, mobile: true },
+      });
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -316,6 +325,14 @@ export default function MobileInterviewView({ userId, defaultRole, onClose }: Pr
         setFeedback(fb);
         setPhase("complete");
         vibrate([100, 50, 100, 50, 200]);
+        track({
+          userIdentifier: userId,
+          eventType: "interview_session_completed",
+          eventCategory: "interview",
+          eventLabel: config.role || config.industry,
+          view: "interview",
+          properties: { sessionId, questionsAnswered: answers.length, mobile: true },
+        });
       } catch (e: any) { setError(e.message); }
       finally { setLoading(false); }
     } else {

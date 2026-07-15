@@ -710,6 +710,64 @@ router.delete("/:userId/version/:versionId", async (req: Request, res: Response)
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/resume/anonymous-ats — no auth, returns gated score only
+// ---------------------------------------------------------------------------
+router.post(
+  "/anonymous-ats",
+  (req: Request, res: Response, next) => {
+    upload.single("file")(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message || "File upload failed" });
+      next();
+    });
+  },
+  async (req: Request, res: Response) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+      const mime = req.file.mimetype;
+      const ext = (req.file.originalname || "").split(".").pop()?.toLowerCase();
+      const isPdf = mime === "application/pdf" || ext === "pdf";
+      const isDocx = mime.includes("wordprocessingml") || ext === "docx";
+
+      let rawText = "";
+      try {
+        if (isPdf) rawText = await parsePdf(req.file.buffer);
+        else if (isDocx) rawText = await parseDocx(req.file.buffer);
+        else rawText = parseTxt(req.file.buffer);
+      } catch (parseErr: any) {
+        return res.status(422).json({ error: `Could not read file: ${parseErr.message}` });
+      }
+
+      if (!rawText.trim()) {
+        return res.status(422).json({ error: "No text could be extracted. Is this a scanned image PDF?" });
+      }
+
+      const content = await structureResumeFromText(rawText);
+      const report = await runATSCheck(content);
+
+      // Return only gated data — score + summary (no missing keywords or suggestions)
+      res.json({
+        success: true,
+        score: report.score,
+        summary: report.summary,
+        sectionScores: {
+          keywords: report.sections.keywords.score,
+          formatting: report.sections.formatting.score,
+          content: report.sections.content.score,
+          structure: report.sections.structure.score,
+        },
+        foundKeywordsCount: report.sections.keywords.found.length,
+        missingKeywordsCount: report.sections.keywords.missing.length,
+        suggestionsCount: report.suggestions.length,
+      });
+    } catch (err: any) {
+      console.error("[resume/anonymous-ats]", err);
+      res.status(500).json({ error: "ATS analysis failed. Please try again." });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
 // POST /api/resume/ats-check
 // ---------------------------------------------------------------------------
 router.post("/ats-check", async (req: Request, res: Response) => {
