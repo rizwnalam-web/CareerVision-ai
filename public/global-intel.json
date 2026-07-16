@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "label": "Global Intel",
+  "rotationMs": 4200,
+  "scheduling": {
+    "useRegionScheduling": true,
+    "useTimeScheduling": true
+  },
+  "categories": {
+    "ai-hiring": [
+      {
+        "flag": "🇺🇸",
+        "city": "SILICON VALLEY",
+        "stat": "AI SKILL REQUIREMENTS REACHED 75% OF ALL U.S. TECH JOB POSTINGS THIS MONTH",
+        "color": "emerald",
+        "regions": ["americas", "global"],
+        "timeWindows": ["morning", "day"],
+        "priority": 3
+      },
+      {
+        "flag": "🇬🇧",
+        "city": "LONDON",
+        "stat": "TECH JOB OPENINGS RISE 30% IN EARLY 2026 AS ENGINEERING ROLES LEAD THE MARKET REBOUND",
+        "color": "indigo",
+        "regions": ["europe", "africa", "global"],
+        "timeWindows": ["day", "evening"],
+        "priority": 2
+      },
+      {
+        "flag": "🇨🇦",
+        "city": "TORONTO",
+        "stat": "90% OF TECH WORKERS NATIONWIDE ARE NOW REPORTING INTEGRATION OF AI INTO DAILY WORKFLOWS",
+        "color": "amber",
+        "regions": ["americas", "global"],
+        "timeWindows": ["day", "evening"],
+        "priority": 1
+      },
+      {
+        "flag": "🇸🇬",
+        "city": "SINGAPORE",
+        "stat": "COMPANIES DEPLOYING CENTRALIZED AI HUBS SEE A 25% BOOST IN INDIVIDUAL PRODUCTIVITY",
+        "color": "purple",
+        "regions": ["asia", "oceania", "global"],
+        "timeWindows": ["morning", "day", "night"],
+        "priority": 3
+      }
+    ],
+    "entry-level": [
+      {
+        "flag": "🇩🇪",
+        "city": "BERLIN",
+        "stat": "EMPLOYERS REPORT 85% HIGHER ENGAGEMENT RATES FOR GRADUATES WITH PORTFOLIOS OVER TRADITIONAL RESUMES",
+        "color": "rose",
+        "regions": ["europe", "africa", "global"],
+        "timeWindows": ["morning", "day"],
+        "priority": 2
+      },
+      {
+        "flag": "🇮🇳",
+        "city": "MUMBAI",
+        "stat": "92% OF RECENT GRADUATES IN INDIA EXPRESS HIGH VALUE IN EXPERIENTIAL, SIMULATED WORK PROJECTS",
+        "color": "amber",
+        "regions": ["asia", "global"],
+        "timeWindows": ["day", "evening"],
+        "priority": 3
+      },
+      {
+        "flag": "🇦🇺",
+        "city": "SYDNEY",
+        "stat": "COMPANIES PRIORITIZING RESUME SKILL ALIGNMENT REPORT A 45% DROP IN INITIAL TIME-TO-HIRE",
+        "color": "emerald",
+        "regions": ["oceania", "asia", "global"],
+        "timeWindows": ["morning", "day"],
+        "priority": 2
+      },
+      {
+        "flag": "🌍",
+        "city": "GLOBAL",
+        "stat": "PwC REPORTS AI IS CREATING A TWO-TRACK LABOUR MARKET REWARDING PRACTICAL JUDGMENT AND LEADERSHIP",
+        "color": "indigo",
+        "regions": ["global"],
+        "timeWindows": ["night", "evening"],
+        "priority": 1
+      }
+    ],
+    "ats-success": [
+      {
+        "flag": "🇺🇸",
+        "city": "NEW YORK",
+        "stat": "RECRUITERS ESTIMATE THAT 70% OF GENERIC RESUMES ARE DISCARDED BY PARSING ALGORITHMS BEFORE HUMAN REVIEW",
+        "color": "rose",
+        "regions": ["americas", "global"],
+        "timeWindows": ["morning", "day"],
+        "priority": 3
+      },
+      {
+        "flag": "🌍",
+        "city": "GLOBAL",
+        "stat": "APPLICANTS REPORT A 3X HIGHER RESPONSE RATE WHEN SUBMITTING TAILORED, SINGLE-COLUMN ATS-FRIENDLY RESUMES",
+        "color": "emerald",
+        "regions": ["global"],
+        "timeWindows": ["day", "evening"],
+        "priority": 2
+      },
+      {
+        "flag": "🇬🇧",
+        "city": "LONDON",
+        "stat": "NEARLY 60% OF RECRUITERS ARE NOW UTILIZING GENERATIVE AI TO SPEED UP INITIAL RESUME SCREENING",
+        "color": "indigo",
+        "regions": ["europe", "africa", "global"],
+        "timeWindows": ["morning", "day", "evening"],
+        "priority": 2
+      }
+    ]
+  }
+}

@@ -41,6 +41,10 @@ import {
   Eye,
   Ban,
   Lock,
+  Rocket,
+  FileCheck,
+  Award,
+  Linkedin,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getTopFeedbacks, Feedback } from '../services/feedbackService';
@@ -304,6 +308,243 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, onShowPrivacy
                 <span className="text-[9px] font-black px-2.5 py-1 rounded-full bg-amber-500 text-white uppercase tracking-widest">Safe-Space Simulator</span>
               </div>
             </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Micro-Experiences — Sector Pivot Showcase ────────────────────────── */}
+      <section className="py-24 bg-white overflow-hidden">
+        <div className="max-w-7xl mx-auto px-8">
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-14">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.25em] text-white bg-indigo-600 px-3 py-1 rounded-full">
+                  <Rocket size={12} /> New
+                </span>
+              </div>
+              <h2 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight leading-tight">
+                EasyCareer <span className="text-indigo-600 italic">Micro-Experiences</span>
+              </h2>
+              <p className="text-slate-500 font-medium max-w-xl mt-4 text-sm leading-relaxed">
+                Pivot into different sectors with zero prior experience. Work on real projects, get AI-graded feedback, and earn verified credentials — all before your first interview.
+              </p>
+            </div>
+            <button
+              onClick={onStart}
+              className="shrink-0 inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-200 hover:shadow-xl"
+            >
+              Try It Free <ArrowRight size={14} />
+            </button>
+          </div>
+
+          {/* Feature cards grid */}
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+            {/* Card 1 */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="bg-slate-50 rounded-2xl border border-slate-100 p-6 hover:shadow-lg hover:border-indigo-100 transition-all group"
+            >
+              <div className="w-11 h-11 rounded-xl bg-indigo-100 border border-indigo-200 flex items-center justify-center mb-5">
+                <Briefcase size={20} className="text-indigo-600" />
+              </div>
+              <h3 className="text-base font-black text-slate-900 mb-2">Real-World Live Projects</h3>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                Don't just learn theory. Choose a target sector — Tech, Finance, Marketing, Data — and work on structured projects designed to mimic day-to-day corporate work.
+              </p>
+            </motion.div>
+
+            {/* Card 2 */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+              className="bg-slate-50 rounded-2xl border border-slate-100 p-6 hover:shadow-lg hover:border-emerald-100 transition-all group"
+            >
+              <div className="w-11 h-11 rounded-xl bg-emerald-100 border border-emerald-200 flex items-center justify-center mb-5">
+                <FileCheck size={20} className="text-emerald-600" />
+              </div>
+              <h3 className="text-base font-black text-slate-900 mb-2">AI-Graded Assignments</h3>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                Submit real deliverables and receive immediate, deep-dive feedback on your work based on real industry rubrics — no waiting for human reviewers.
+              </p>
+            </motion.div>
+
+            {/* Card 3 */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+              className="bg-slate-50 rounded-2xl border border-slate-100 p-6 hover:shadow-lg hover:border-amber-100 transition-all group"
+            >
+              <div className="w-11 h-11 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center mb-5">
+                <Award size={20} className="text-amber-600" />
+              </div>
+              <h3 className="text-base font-black text-slate-900 mb-2">Verified Credentials</h3>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                Earn a shareable Certificate of Completion with a unique verification ID to showcase your hands-on skills directly on LinkedIn and beyond.
+              </p>
+            </motion.div>
+
+            {/* Card 4 */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.3 }}
+              className="bg-slate-50 rounded-2xl border border-slate-100 p-6 hover:shadow-lg hover:border-violet-100 transition-all group"
+            >
+              <div className="w-11 h-11 rounded-xl bg-violet-100 border border-violet-200 flex items-center justify-center mb-5">
+                <Zap size={20} className="text-violet-600" />
+              </div>
+              <h3 className="text-base font-black text-slate-900 mb-2">Instant Resume Integration</h3>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                Once completed, our platform automatically translates your project work into bulletproof, ATS-optimized experience bullets on your resume.
+              </p>
+            </motion.div>
+          </div>
+
+          {/* How it works strip */}
+          <div className="mt-12 bg-gradient-to-r from-indigo-600 to-violet-600 rounded-2xl p-8 text-white">
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-indigo-200 mb-4">How It Works</p>
+            <div className="grid sm:grid-cols-5 gap-4">
+              {[
+                { step: "1", label: "Pick Your Sector", desc: "Choose a target industry to pivot into" },
+                { step: "2", label: "Get Your Project", desc: "AI generates a real-world capstone" },
+                { step: "3", label: "Submit Milestones", desc: "Complete 3 structured deliverables" },
+                { step: "4", label: "AI Review", desc: "Rubric-graded feedback in seconds" },
+                { step: "5", label: "Get Certified", desc: "Certificate + auto resume update" },
+              ].map((s, i) => (
+                <div key={s.step} className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center text-sm font-black shrink-0">{s.step}</div>
+                  <div>
+                    <p className="text-sm font-black">{s.label}</p>
+                    <p className="text-[11px] text-indigo-200 leading-snug">{s.desc}</p>
+                  </div>
+                  {i < 4 && <ArrowRight size={14} className="text-indigo-300 hidden sm:block mt-2 ml-auto shrink-0" />}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Code Audit Lab — Project Reviewer Showcase ────────────────────── */}
+      <section className="py-24 bg-slate-50 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-8">
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-14">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.25em] text-white bg-emerald-600 px-3 py-1 rounded-full">
+                  <Cpu size={12} /> Pro Tool
+                </span>
+              </div>
+              <h2 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight leading-tight">
+                AI Project Auditor &amp; <span className="text-emerald-600 italic">Code Reviewer</span>
+              </h2>
+              <p className="text-slate-500 font-medium max-w-xl mt-4 text-sm leading-relaxed">
+                Turn your side projects into verified, production-grade portfolio pieces. Link your GitHub repo or live deployment and get instant senior-architect-level feedback.
+              </p>
+            </div>
+            <button
+              onClick={onStart}
+              className="shrink-0 inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-200 hover:shadow-xl"
+            >
+              Audit My Project <ArrowRight size={14} />
+            </button>
+          </div>
+
+          {/* Feature cards */}
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="bg-white rounded-2xl border border-slate-100 p-6 hover:shadow-lg hover:border-emerald-100 transition-all"
+            >
+              <div className="w-11 h-11 rounded-xl bg-emerald-100 border border-emerald-200 flex items-center justify-center mb-5">
+                <ScanSearch size={20} className="text-emerald-600" />
+              </div>
+              <h3 className="text-base font-black text-slate-900 mb-2">Instant GitHub &amp; URL Evaluation</h3>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                Link your live repository or running web app and let our AI Senior Architect audit your work in seconds — no manual setup required.
+              </p>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+              className="bg-white rounded-2xl border border-slate-100 p-6 hover:shadow-lg hover:border-sky-100 transition-all"
+            >
+              <div className="w-11 h-11 rounded-xl bg-sky-100 border border-sky-200 flex items-center justify-center mb-5">
+                <Cpu size={20} className="text-sky-600" />
+              </div>
+              <h3 className="text-base font-black text-slate-900 mb-2">Deep-Dive Technical Feedback</h3>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                Professional-grade code reviews covering system architecture, security vulnerabilities, query optimization, and performance bottlenecks.
+              </p>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+              className="bg-white rounded-2xl border border-slate-100 p-6 hover:shadow-lg hover:border-amber-100 transition-all"
+            >
+              <div className="w-11 h-11 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center mb-5">
+                <Lightbulb size={20} className="text-amber-600" />
+              </div>
+              <h3 className="text-base font-black text-slate-900 mb-2">Interactive Refactoring Guides</h3>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                Follow structured, step-by-step PR recommendations generated by the AI to refactor your code and elevate your project to enterprise standards.
+              </p>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.3 }}
+              className="bg-white rounded-2xl border border-slate-100 p-6 hover:shadow-lg hover:border-teal-100 transition-all"
+            >
+              <div className="w-11 h-11 rounded-xl bg-teal-100 border border-teal-200 flex items-center justify-center mb-5">
+                <ShieldCheck size={20} className="text-teal-600" />
+              </div>
+              <h3 className="text-base font-black text-slate-900 mb-2">Architect Certified Badging</h3>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                Earn a verified &ldquo;Production-Ready&rdquo; certification to prove to hiring managers that your code is clean, secure, and ready for deployment.
+              </p>
+            </motion.div>
+          </div>
+
+          {/* How it works strip */}
+          <div className="mt-12 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-2xl p-8 text-white">
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-200 mb-4">How It Works</p>
+            <div className="grid sm:grid-cols-4 gap-6">
+              {[
+                { step: "1", label: "Connect Project", desc: "Link GitHub repo or paste a live URL" },
+                { step: "2", label: "AI Audit", desc: "Architecture, performance & security scan" },
+                { step: "3", label: "Refactor", desc: "Follow PR recommendations to improve" },
+                { step: "4", label: "Get Certified", desc: "Verified badge + auto resume update" },
+              ].map((s, i) => (
+                <div key={s.step} className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center text-sm font-black shrink-0">{s.step}</div>
+                  <div>
+                    <p className="text-sm font-black">{s.label}</p>
+                    <p className="text-[11px] text-emerald-200 leading-snug">{s.desc}</p>
+                  </div>
+                  {i < 3 && <ArrowRight size={14} className="text-emerald-300 hidden sm:block mt-2 ml-auto shrink-0" />}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -697,6 +938,9 @@ const COMPARISON_ROWS = [
   { feature: 'Institution & scholarship matching', us: true, competitor1: false, competitor2: false },
   { feature: 'Salary negotiation AI coach', us: true, competitor1: false, competitor2: false },
   { feature: 'Side hustle & freelance advisor', us: true, competitor1: false, competitor2: false },
+  { feature: 'Sector pivot micro-experiences', us: true, competitor1: false, competitor2: false },
+  { feature: 'AI-graded project certificates', us: true, competitor1: false, competitor2: false },
+  { feature: 'AI code audit & production certification', us: true, competitor1: false, competitor2: false },
   { feature: 'Multi-language support (5 langs)', us: true, competitor1: false, competitor2: true },
   { feature: 'Free tier available', us: true, competitor1: false, competitor2: true },
 ];

@@ -15,6 +15,10 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isAdminEmail() {
+      return isSignedIn() && request.auth.token.email == 'support@careervision.ai';
+    }
+
     function isValidId(id) {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
@@ -59,6 +63,13 @@ service cloud.firestore {
           'academicPerformance', 'financialProfile', 'updatedAt'
         ])
       );
+      allow delete: if false;
+    }
+
+    match /siteConfig/globalIntel {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if isAdminEmail();
       allow delete: if false;
     }
 

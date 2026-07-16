@@ -65,7 +65,10 @@ import {
   Bell,
   CalendarDays,
   GraduationCap,
-  GitBranch
+  GitBranch,
+  Compass,
+  Code,
+  Boxes
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle } from 'react-leaflet';
@@ -142,6 +145,9 @@ import CareerDigitalTwin from './components/CareerDigitalTwin';
 import CoachingHub from './components/CoachingHub';
 import WhyThisMatch from './components/WhyThisMatch';
 import ImpactLab from './components/ImpactLab';
+import SectorPivotLab from './components/SectorPivotLab';
+import CodeAuditLab from './components/CodeAuditLab';
+import ProjectBuilderLab from './components/ProjectBuilderLab';
 import OpportunitiesFeed from './components/OpportunitiesFeed';
 import CampusAccessDrawer from './components/CampusAccessDrawer';
 import CareerSpark, { SPARK_DONE_KEY } from './components/CareerSpark';
@@ -7791,8 +7797,8 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
     try { return !localStorage.getItem(onboardingKey); } catch { return false; }
   });
 
-  type AppView = 'dashboard' | 'roadmap' | 'digital-twin' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'applications' | 'resume' | 'job-match' | 'interview' | 'directory' | 'network' | 'coaching-hub' | 'impact-lab' | 'analytics' | 'pricing' | 'enterprise' | 'career-coach' | 'industry-sim' | 'soft-skills' | 'salary-coach' | 'side-hustle' | 'burnout' | 'skills-hub' | 'admin';
-  const VALID_VIEWS: AppView[] = ['dashboard', 'roadmap', 'digital-twin', 'institutions', 'materials', 'expenses', 'advisor', 'parent', 'heatmap', 'jobs', 'applications', 'resume', 'job-match', 'interview', 'directory', 'network', 'coaching-hub', 'impact-lab', 'analytics', 'pricing', 'enterprise', 'career-coach', 'industry-sim', 'soft-skills', 'salary-coach', 'side-hustle', 'burnout', 'skills-hub', 'admin'];
+  type AppView = 'dashboard' | 'roadmap' | 'digital-twin' | 'institutions' | 'materials' | 'expenses' | 'advisor' | 'parent' | 'heatmap' | 'jobs' | 'applications' | 'resume' | 'job-match' | 'interview' | 'directory' | 'network' | 'coaching-hub' | 'impact-lab' | 'analytics' | 'pricing' | 'enterprise' | 'career-coach' | 'industry-sim' | 'soft-skills' | 'salary-coach' | 'side-hustle' | 'burnout' | 'skills-hub' | 'sector-pivot' | 'code-audit' | 'project-builder' | 'admin';
+  const VALID_VIEWS: AppView[] = ['dashboard', 'roadmap', 'digital-twin', 'institutions', 'materials', 'expenses', 'advisor', 'parent', 'heatmap', 'jobs', 'applications', 'resume', 'job-match', 'interview', 'directory', 'network', 'coaching-hub', 'impact-lab', 'analytics', 'pricing', 'enterprise', 'career-coach', 'industry-sim', 'soft-skills', 'salary-coach', 'side-hustle', 'burnout', 'skills-hub', 'sector-pivot', 'code-audit', 'project-builder', 'admin'];
   // ── Pillar Definitions ──
   type PillarSub = { label: string; view: AppView; icon: React.ElementType; desc: string };
   type Pillar = { id: string; label: string; icon: React.ElementType; primaryView: AppView; views: AppView[]; accent: { bg: string; text: string }; subs: PillarSub[] };
@@ -7823,16 +7829,17 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
       ],
     },
     {
-      id: 'network', label: t('pillars.network'), icon: Users, primaryView: 'network', views: ['network', 'coaching-hub', 'impact-lab'],
+      id: 'network', label: t('pillars.network'), icon: Users, primaryView: 'network', views: ['network', 'coaching-hub', 'impact-lab', 'sector-pivot'],
       accent: { bg: 'bg-rose-600', text: 'text-white' },
       subs: [
         { label: t('pillars.subs.communities'),   view: 'network',       icon: MessageSquare, desc: 'Industry channels & peer groups' },
         { label: 'Coaching Hub',                   view: 'coaching-hub',  icon: UserCheck,     desc: 'Human coaches & mentor matching' },
         { label: 'Impact Lab',                     view: 'impact-lab',    icon: Globe,         desc: 'NGO projects & social impact work' },
+        { label: 'Sector Pivot Lab',                  view: 'sector-pivot',  icon: Compass,       desc: 'AI-certified sector transition projects' },
       ],
     },
     {
-      id: 'analytics', label: 'AI Insights', icon: BrainCircuit, primaryView: 'analytics', views: ['analytics', 'burnout', 'interview', 'resume', 'job-match', 'industry-sim', 'soft-skills', 'salary-coach'],
+      id: 'analytics', label: 'AI Insights', icon: BrainCircuit, primaryView: 'analytics', views: ['analytics', 'burnout', 'interview', 'resume', 'job-match', 'industry-sim', 'soft-skills', 'salary-coach', 'code-audit', 'project-builder'],
       accent: { bg: 'bg-indigo-600', text: 'text-white' },
       subs: [
         { label: t('pillars.subs.marketTrends'),  view: 'analytics', icon: TrendingUp, desc: 'AI-powered job market intelligence' },
@@ -7843,6 +7850,8 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
         { label: t('pillars.subs.industrySim'),    view: 'industry-sim', icon: Building2,      desc: 'Role-play industry scenarios' },
         { label: t('pillars.subs.softSkills'),     view: 'soft-skills',  icon: Users,          desc: 'Personality & communication' },
         { label: t('pillars.subs.salaryCoach'),    view: 'salary-coach', icon: DollarSign,     desc: 'Salary negotiation training' },
+        { label: 'Code Audit Lab',                 view: 'code-audit',      icon: Code,          desc: 'AI technical review & certification' },
+        { label: 'Project Builder Lab',            view: 'project-builder', icon: Boxes,         desc: 'AI roadmap for shipping production-grade projects' },
       ],
     },
     {
@@ -8900,6 +8909,9 @@ function AuthenticatedApp({ user, onExit }: { user: any, onExit: () => void }) {
                    {activeView === 'network' && <NetworkView profile={profile} />}
                    {activeView === 'coaching-hub' && <CoachingHub profile={profile} />}
                    {activeView === 'impact-lab' && <ImpactLab profile={profile} />}
+                   {activeView === 'sector-pivot' && <SectorPivotLab profile={profile} />}
+                   {activeView === 'code-audit' && <CodeAuditLab profile={profile} />}
+                   {activeView === 'project-builder' && <ProjectBuilderLab profile={profile} />}
                    {activeView === 'analytics' && <AnalyticsDashboard profile={profile} userId={(user?.id || (user as any)?.uid) as string} />}
                    {activeView === 'pricing' && <PricingPage userId={(user?.id || (user as any)?.uid) as string} onNavigate={(v) => setActiveView(v as AppView)} />}
                    {activeView === 'enterprise' && <EnterpriseView userId={(user?.id || (user as any)?.uid) as string} onNavigatePricing={() => setActiveView('pricing')} />}

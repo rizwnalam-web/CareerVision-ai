@@ -32,6 +32,10 @@ import stripeRouter, { stripeWebhookHandler } from "./routes/stripe.js";
 import innovativeRouter from "./routes/innovative.js";
 import applicationsRouter from "./routes/applications.js";
 import creditsRouter from "./routes/credits.js";
+import adminRouter from "./routes/admin.js";
+import sectorPivotRouter from "./routes/sector-pivot.js";
+import codeAuditRouter from "./routes/code-audit.js";
+import projectBuilderRouter from "./routes/project-builder.js";
 import { startJobAggregationScheduler, stopJobAggregationScheduler } from "./services/jobAggregationScheduler.js";
 import { startInterviewReengagementScheduler } from "./services/interviewReengagementScheduler.js";
 
@@ -130,6 +134,10 @@ app.use("/api/stripe", stripeRouter);
 app.use("/api/innovative", innovativeRouter);
 app.use("/api/applications", applicationsRouter);
 app.use("/api/credits", creditsRouter);
+app.use("/api/admin", adminRouter);
+app.use("/api/sector-pivot", sectorPivotRouter);
+app.use("/api/code-audit", codeAuditRouter);
+app.use("/api/project-builder", projectBuilderRouter);
 
 // 404 handler
 app.use(notFoundHandler);

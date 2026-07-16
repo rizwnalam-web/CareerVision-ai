@@ -12,6 +12,7 @@ import ScholarshipManager from "./admin/ScholarshipManager";
 import ApplicationManager from "./admin/ApplicationManager";
 import ScholarshipAnalytics from "./admin/ScholarshipAnalytics";
 import NotificationCenter from "./admin/NotificationCenter";
+import GlobalIntelEditor from "./admin/GlobalIntelEditor";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 interface AdminFeedback {
@@ -147,7 +148,7 @@ export default function AdminDashboard({ adminEmail }: {
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<"users" | "activity" | "feedback" | "scholarships" | "applications" | "analytics" | "communications">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "activity" | "feedback" | "scholarships" | "applications" | "analytics" | "communications" | "ticker">("users");
 
   // ── User edit/delete state ───────────────────────────────────────────────
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
@@ -622,6 +623,7 @@ export default function AdminDashboard({ adminEmail }: {
           { key: "applications",   label: "Applications",   icon: <FileText size={12} /> },
           { key: "analytics",      label: "Analytics",      icon: <BarChart3 size={12} /> },
           { key: "communications", label: "Communications", icon: <Bell size={12} /> },
+          { key: "ticker",         label: "Ticker CMS",     icon: <Globe size={12} /> },
           { key: "feedback",       label: "Feedback",       icon: <MessageSquare size={12} />, badge: feedbacks.filter(f => f.status === "pending").length },
         ] as const).map((tab) => (
           <button
@@ -1024,6 +1026,11 @@ export default function AdminDashboard({ adminEmail }: {
         {/* ── COMMUNICATIONS TAB ── */}
         {activeTab === "communications" && (
           <NotificationCenter adminEmail={adminEmail} />
+        )}
+
+        {/* ── TICKER CMS TAB ── */}
+        {activeTab === "ticker" && (
+          <GlobalIntelEditor adminEmail={adminEmail} />
         )}
       </div>
     </div>
